@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Início — Flixora</title>
+  <meta name="description" content="Explore o catálogo Flixora: filmes, séries, documentários e conteúdos originais." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>" />
+  <link rel="stylesheet" href="css/browse.css?v=2" />
+</head>
+<body>
+
+  <!-- ===================== NAVBAR ===================== -->
+  <nav class="browse-navbar" id="browse-navbar">
+    <div class="nav-left">
+      <a href="index.html" class="nav-logo">Flixora</a>
+      <ul class="nav-links">
+        <li><a href="browse.html" class="active">Início</a></li>
+        <li><a href="#">Séries</a></li>
+        <li><a href="#">Filmes</a></li>
+        <li><a href="#">Em Alta</a></li>
+        <li><a href="minha-lista.html">Minha Lista</a></li>
+        <li><a href="#">Navegar por Idiomas</a></li>
+      </ul>
+    </div>
+    <div class="nav-right">
+      <div class="nav-search-container" id="search-container">
+        <button class="nav-search-btn" title="Buscar" id="search-btn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+          </svg>
+        </button>
+        <input type="text" class="nav-search-input" id="search-input" placeholder="Títulos, gente e gêneros" />
+      </div>
+      <button class="nav-bell-btn" title="Notificações">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+        <span class="nav-bell-dot"></span>
+      </button>
+      <div class="nav-profile">
+        <div class="nav-avatar">P</div>
+        <span class="nav-caret">▼</span>
+        <div class="profile-dropdown">
+          <a href="perfis.html">Pedro</a>
+          <a href="perfis.html">+ Adicionar Perfil</a>
+          <hr/>
+          <a href="perfis.html">Gerenciar Perfis</a>
+          <a href="#">Conta</a>
+          <a href="#">Central de Ajuda</a>
+          <hr/>
+          <a href="login.html" onclick="sessionStorage.clear()">Sair do Flixora</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ===================== HERO BANNER ===================== -->
+  <section class="hero-banner">
+    <div class="hero-banner-bg"></div>
+    <div class="hero-banner-overlay"></div>
+    <div class="hero-banner-overlay-side"></div>
+
+    <div class="hero-content">
+      <div class="hero-badge">
+        <span>🔥</span> FLIXORA ORIGINAL
+      </div>
+      <h1 class="hero-title">Projeto Aurora</h1>
+      <div class="hero-meta">
+        <span class="hero-meta-match">98% relevante</span>
+        <span>2024</span>
+        <span class="hero-meta-rated">16+</span>
+        <span>2 Temporadas</span>
+      </div>
+      <p class="hero-description">
+        Em um futuro próximo, uma cientista descobre que o sol está se apagando. Com poucos anos até o colapso solar, uma missão internacional precisa reimaginar o futuro da humanidade — ou enfrentar o fim.
+      </p>
+      <div class="hero-actions">
+        <button class="btn-play" onclick="openModal('aurora')">
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5,3 19,12 5,21"/>
+          </svg>
+          Assistir
+        </button>
+        <button class="btn-more-info" onclick="openModal('aurora')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          Mais Informações
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== CONTENT ROWS ===================== -->
+  <main class="content-area">
+
+    <!-- ROW 1: Em Alta -->
+    <section class="row" id="row-trending">
+      <div class="row-header" onclick="scrollRow('track-trending', 'right')">
+        <h2 class="row-title">Em Alta no Flixora</h2>
+        <span class="row-explore">Explorar tudo <span class="row-explore-arrow">›</span></span>
+      </div>
+      <div class="slider-container">
+        <button class="slider-btn prev" onclick="scrollRow('track-trending','left')">‹</button>
+        <div class="cards-track" id="track-trending">
+          <!-- Cards com imagens reais -->
+          <div class="card" onclick="openModal('aurora')">
+            <img src="assets/browse-hero.jpg" class="card-image" alt="Projeto Aurora" />
+            <div class="card-hover-info">
+              <div class="card-hover-actions">
+                <button class="card-action-btn play" title="Assistir">▶</button>
+                <button class="card-action-btn" title="Adicionar à lista">+</button>
+                <button class="card-action-btn" title="Curtir">👍</button>
+                <button class="card-action-btn card-add-btn" title="Mais informações">⌄</button>
+              </div>
+              <div class="card-hover-title">Projeto Aurora</div>
+              <div class="card-hover-meta">
+                <span class="card-match">98%</span>
+                <span class="card-year">2024</span>
+                <span class="card-rated">16+</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" onclick="openModal('noir')">
+            <img src="assets/posters/poster1.jpg" class="card-image" alt="Sombra da Cidade" />
+            <div class="card-hover-info">
+              <div class="card-hover-actions">
+                <button class="card-action-btn play">▶</button>
+                <button class="card-action-btn">+</button>
+                <button class="card-action-btn">👍</button>
+                <button class="card-action-btn card-add-btn">⌄</button>
+              </div>
+              <div class="card-hover-title">Sombra da Cidade</div>
+              <div class="card-hover-meta">
+                <span class="card-match">95%</span>
+                <span class="card-year">2023</span>
+                <span class="card-rated">18+</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" onclick="openModal('space')">
+            <img src="assets/posters/poster2.jpg" class="card-image" alt="Cosmos Infinito" />
+            <div class="card-hover-info">
+              <div class="card-hover-actions">
+                <button class="card-action-btn play">▶</button>
+                <button class="card-action-btn">+</button>
+                <button class="card-action-btn">👍</button>
+                <button class="card-action-btn card-add-btn">⌄</button>
+              </div>
+              <div class="card-hover-title">Cosmos Infinito</div>
+              <div class="card-hover-meta">
+                <span class="card-match">92%</span>
+                <span class="card-year">2024</span>
+                <span class="card-rated">12+</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" onclick="openModal('fantasy')">
+            <img src="assets/posters/poster3.jpg" class="card-image" alt="A Última Guardiã" />
+            <div class="card-hover-info">
+              <div class="card-hover-actions">
+                <button class="card-action-btn play">▶</button>
+                <button class="card-action-btn">+</button>
+                <button class="card-action-btn">👍</button>
+                <button class="card-action-btn card-add-btn">⌄</button>
+              </div>
+              <div class="card-hover-title">A Última Guardiã</div>
+              <div class="card-hover-meta">
+                <span class="card-match">89%</span>
+                <span class="card-year">2024</span>
+                <span class="card-rated">14+</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" onclick="openModal('romance')">
+            <img src="assets/posters/poster4.jpg" class="card-image" alt="Paris Sempre" />
+            <div class="card-hover-info">
+              <div class="card-hover-actions">
+                <button class="card-action-btn play">▶</button>
+                <button class="card-action-btn">+</button>
+                <button class="card-action-btn">👍</button>
+                <button class="card-action-btn card-add-btn">⌄</button>
+              </div>
+              <div class="card-hover-title">Paris Sempre</div>
+              <div class="card-hover-meta">
+                <span class="card-match">85%</span>
+                <span class="card-year">2023</span>
+                <span class="card-rated">12+</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- CSS-only cards -->
+          <div class="card" onclick="openModal('crime')">
+            <div class="card-css" style="background:linear-gradient(135deg,#1a0a0a,#3a0000)">
+              <div class="card-css-icon">🔪</div>
+              <div class="card-css-title">Sangue Frio</div>
+              <div class="card-css-sub">Crime • Thriller</div>
+            </div>
+            <div class="card-hover-info">
+              <div class="card-hover-actions">
+                <button class="card-action-btn play">▶</button>
+                <button class="card-action-btn">+</button>
+                <button class="card-action-btn">👍</button>
+                <button class="card-action-btn card-add-btn">⌄</button>
+              </div>
+              <div class="card-hover-title">Sangue Frio</div>
+              <div class="card-hover-meta">
+                <span class="card-match">91%</span>
+                <span class="card-year">2024</span>
+                <span class="card-rated">18+</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" onclick="openModal('comedy')">
+            <div class="card-css" style="background:linear-gradient(135deg,#0a2a0a,#1a5a00)">
+              <div class="card-css-icon">😂</div>
+              <div class="card-css-title">Caos em Família</div>
+              <div class="card-css-sub">Comédia</div>
+            </div>
+            <div class="card-hover-info">
+              <div class="card-hover-actions">
+                <button class="card-action-btn play">▶</button>
+                <button class="card-action-btn">+</button>
+                <button class="card-action-btn">👍</button>
+                <button class="card-action-btn card-add-btn">⌄</button>
+              </div>
+              <div class="card-hover-title">Caos em Família</div>
+              <div class="card-hover-meta">
+                <span class="card-match">88%</span>
+                <span class="card-year">2024</span>
+                <span class="card-rated">12+</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" onclick="openModal('doc')">
+            <div class="card-css" style="background:linear-gradient(135deg,#0a0a2a,#00105a)">
+              <div class="card-css-icon">🌍</div>
+              <div class="card-css-title">Nosso Planeta</div>
+              <div class="card-css-sub">Documentário</div>
+            </div>
+            <div class="card-hover-info">
+              <div class="card-hover-actions">
+                <button class="card-action-btn play">▶</button>
+                <button class="card-action-btn">+</button>
+                <button class="card-action-btn">👍</button>
+                <button class="card-action-btn card-add-btn">⌄</button>
+              </div>
+              <div class="card-hover-title">Nosso Planeta</div>
+              <div class="card-hover-meta">
+                <span class="card-match">97%</span>
+                <span class="card-year">2023</span>
+                <span class="card-rated">L</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button class="slider-btn next" onclick="scrollRow('track-trending','right')">›</button>
+      </div>
+    </section>
+
+    <!-- ROW 2: Continuar Assistindo -->
+    <section class="row">
+      <div class="row-header">
+        <h2 class="row-title">Continuar Assistindo</h2>
+        <span class="row-explore">Explorar tudo <span class="row-explore-arrow">›</span></span>
+      </div>
+      <div class="slider-container">
+        <button class="slider-btn prev" onclick="scrollRow('track-continue','left')">‹</button>
+        <div class="cards-track" id="track-continue">
+          <div class="card" onclick="openModal('aurora')">
+            <img src="assets/browse-hero.jpg" class="card-image" alt="Projeto Aurora" />
+            <!-- progress bar -->
+            <div style="position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.2);border-radius:0 0 4px 4px;overflow:hidden">
+              <div style="height:100%;width:35%;background:#e50914;"></div>
+            </div>
+            <div class="card-hover-info">
+              <div class="card-hover-actions">
+                <button class="card-action-btn play">▶</button>
+                <button class="card-action-btn">+</button>
+                <button class="card-action-btn card-add-btn">⌄</button>
+              </div>
+              <div class="card-hover-title">Projeto Aurora • T1:E4</div>
+              <div class="card-hover-meta">
+                <span class="card-match">35 min restantes</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" onclick="openModal('noir')">
+            <img src="assets/posters/poster1.jpg" class="card-image" alt="Sombra da Cidade" />
+            <div style="position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.2);border-radius:0 0 4px 4px;overflow:hidden">
+              <div style="height:100%;width:68%;background:#e50914;"></div>
+            </div>
+            <div class="card-hover-info">
+              <div class="card-hover-actions">
+                <button class="card-action-btn play">▶</button>
+                <button class="card-action-btn">+</button>
+                <button class="card-action-btn card-add-btn">⌄</button>
+              </div>
+              <div class="card-hover-title">Sombra da Cidade • T2:E1</div>
+              <div class="card-hover-meta">
+                <span class="card-match">18 min restantes</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" onclick="openModal('space')">
+            <img src="assets/posters/poster2.jpg" class="card-image" alt="Cosmos Infinito" />
+            <div style="position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.2);border-radius:0 0 4px 4px;overflow:hidden">
+              <div style="height:100%;width:12%;background:#e50914;"></div>
+            </div>
+            <div class="card-hover-info">
+              <div class="card-hover-actions">
+                <button class="card-action-btn play">▶</button>
+                <button class="card-action-btn">+</button>
+                <button class="card-action-btn card-add-btn">⌄</button>
+              </div>
+              <div class="card-hover-title">Cosmos Infinito</div>
+              <div class="card-hover-meta">
+                <span class="card-match">1h42 restantes</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-css" style="background:linear-gradient(135deg,#1a1a0a,#3a3a00)">
+              <div class="card-css-icon">⚔️</div>
+              <div class="card-css-title">Império em Chamas</div>
+              <div class="card-css-sub">Épico Histórico</div>
+            </div>
+            <div style="position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.2);border-radius:0 0 4px 4px;overflow:hidden">
+              <div style="height:100%;width:80%;background:#e50914;"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-css" style="background:linear-gradient(135deg,#0a1a2a,#0a2a3a)">
+              <div class="card-css-icon">🌊</div>
+              <div class="card-css-title">Abismo</div>
+              <div class="card-css-sub">Ficção Científica</div>
+            </div>
+            <div style="position:absolute;bottom:0;left:0;right:0;height:3px;background:rgba(255,255,255,0.2);border-radius:0 0 4px 4px;overflow:hidden">
+              <div style="height:100%;width:55%;background:#e50914;"></div>
+            </div>
+          </div>
+        </div>
+        <button class="slider-btn next" onclick="scrollRow('track-continue','right')">›</button>
+      </div>
+    </section>
+
+    <!-- ROW 3: Originais Flixora -->
+    <section class="row">
+      <div class="row-header">
+        <h2 class="row-title" style="color:#e50914">🔴 Originais Flixora</h2>
+        <span class="row-explore">Explorar tudo <span class="row-explore-arrow">›</span></span>
+      </div>
+      <div class="slider-container">
+        <button class="slider-btn prev" onclick="scrollRow('track-originals','left')">‹</button>
+        <div class="cards-track" id="track-originals">
+          <div class="card" onclick="openModal('space')">
+            <img src="assets/posters/poster2.jpg" class="card-image" alt="Cosmos Infinito" />
+            <div class="card-hover-info">
+              <div class="card-hover-actions"><button class="card-action-btn play">▶</button><button class="card-action-btn">+</button><button class="card-action-btn">👍</button><button class="card-action-btn card-add-btn">⌄</button></div>
+              <div class="card-hover-title">Cosmos Infinito</div>
+              <div class="card-hover-meta"><span class="card-match">92%</span><span class="card-year">2024</span><span class="card-rated">12+</span></div>
+            </div>
+          </div>
+          <div class="card" onclick="openModal('fantasy')">
+            <img src="assets/posters/poster3.jpg" class="card-image" alt="A Última Guardiã" />
+            <div class="card-hover-info">
+              <div class="card-hover-actions"><button class="card-action-btn play">▶</button><button class="card-action-btn">+</button><button class="card-action-btn">👍</button><button class="card-action-btn card-add-btn">⌄</button></div>
+              <div class="card-hover-title">A Última Guardiã</div>
+              <div class="card-hover-meta"><span class="card-match">89%</span><span class="card-year">2024</span><span class="card-rated">14+</span></div>
+            </div>
+          </div>
+          <div class="card" onclick="openModal('romance')">
+            <img src="assets/posters/poster4.jpg" class="card-image" alt="Paris Sempre" />
+            <div class="card-hover-info">
+              <div class="card-hover-actions"><button class="card-action-btn play">▶</button><button class="card-action-btn">+</button><button class="card-action-btn">👍</button><button class="card-action-btn card-add-btn">⌄</button></div>
+              <div class="card-hover-title">Paris Sempre</div>
+              <div class="card-hover-meta"><span class="card-match">85%</span><span class="card-year">2023</span><span class="card-rated">12+</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-css" style="background:linear-gradient(135deg,#2a0a2a,#5a005a)"><div class="card-css-icon">🔮</div><div class="card-css-title">Além do Véu</div><div class="card-css-sub">Sobrenatural</div></div>
+          </div>
+          <div class="card">
+            <div class="card-css" style="background:linear-gradient(135deg,#0a2a1a,#005a2a)"><div class="card-css-icon">🌿</div><div class="card-css-title">Raízes</div><div class="card-css-sub">Drama</div></div>
+          </div>
+          <div class="card">
+            <div class="card-css" style="background:linear-gradient(135deg,#1a1a2a,#00007a)"><div class="card-css-icon">🤖</div><div class="card-css-title">Nexus</div><div class="card-css-sub">Sci-Fi</div></div>
+          </div>
+        </div>
+        <button class="slider-btn next" onclick="scrollRow('track-originals','right')">›</button>
+      </div>
+    </section>
+
+    <!-- ROW 4: Dramas Premiados -->
+    <section class="row">
+      <div class="row-header">
+        <h2 class="row-title">🏆 Dramas Premiados</h2>
+        <span class="row-explore">Explorar tudo <span class="row-explore-arrow">›</span></span>
+      </div>
+      <div class="slider-container">
+        <button class="slider-btn prev" onclick="scrollRow('track-drama','left')">‹</button>
+        <div class="cards-track" id="track-drama">
+          <div class="card" onclick="openModal('noir')"><img src="assets/posters/poster1.jpg" class="card-image" alt="Sombra da Cidade" /><div class="card-hover-info"><div class="card-hover-actions"><button class="card-action-btn play">▶</button><button class="card-action-btn">+</button><button class="card-action-btn">👍</button><button class="card-action-btn card-add-btn">⌄</button></div><div class="card-hover-title">Sombra da Cidade</div><div class="card-hover-meta"><span class="card-match">95%</span><span class="card-year">2023</span><span class="card-rated">18+</span></div></div></div>
+          <div class="card" onclick="openModal('aurora')"><img src="assets/browse-hero.jpg" class="card-image" alt="Projeto Aurora" /><div class="card-hover-info"><div class="card-hover-actions"><button class="card-action-btn play">▶</button><button class="card-action-btn">+</button><button class="card-action-btn">👍</button><button class="card-action-btn card-add-btn">⌄</button></div><div class="card-hover-title">Projeto Aurora</div><div class="card-hover-meta"><span class="card-match">98%</span><span class="card-year">2024</span><span class="card-rated">16+</span></div></div></div>
+          <div class="card"><div class="card-css" style="background:linear-gradient(135deg,#2a1a0a,#5a3000)"><div class="card-css-icon">👑</div><div class="card-css-title">A Corte</div><div class="card-css-sub">Drama Histórico</div></div></div>
+          <div class="card"><div class="card-css" style="background:linear-gradient(135deg,#0a0a1a,#1a005a)"><div class="card-css-icon">🎭</div><div class="card-css-title">Máscaras</div><div class="card-css-sub">Drama</div></div></div>
+          <div class="card"><div class="card-css" style="background:linear-gradient(135deg,#1a0a0a,#4a0000)"><div class="card-css-icon">💔</div><div class="card-css-title">Cicatrizes</div><div class="card-css-sub">Drama</div></div></div>
+          <div class="card"><div class="card-css" style="background:linear-gradient(135deg,#0a1a0a,#004a00)"><div class="card-css-icon">🌲</div><div class="card-css-title">Refúgio</div><div class="card-css-sub">Drama</div></div></div>
+        </div>
+        <button class="slider-btn next" onclick="scrollRow('track-drama','right')">›</button>
+      </div>
+    </section>
+
+    <!-- ROW 5: Comédias -->
+    <section class="row">
+      <div class="row-header">
+        <h2 class="row-title">😂 Comédias</h2>
+        <span class="row-explore">Explorar tudo <span class="row-explore-arrow">›</span></span>
+      </div>
+      <div class="slider-container">
+        <button class="slider-btn prev" onclick="scrollRow('track-comedy','left')">‹</button>
+        <div class="cards-track" id="track-comedy">
+          <div class="card"><div class="card-css" style="background:linear-gradient(135deg,#0a2a0a,#1a5a00)"><div class="card-css-icon">😂</div><div class="card-css-title">Caos em Família</div><div class="card-css-sub">Comédia</div></div></div>
+          <div class="card"><div class="card-css" style="background:linear-gradient(135deg,#2a2a0a,#5a4a00)"><div class="card-css-icon">🎪</div><div class="card-css-title">Circo Total</div><div class="card-css-sub">Comédia</div></div></div>
+          <div class="card"><div class="card-css" style="background:linear-gradient(135deg,#2a0a2a,#4a0050)"><div class="card-css-icon">🎭</div><div class="card-css-title">O Ator</div><div class="card-css-sub">Comédia Dramática</div></div></div>
+          <div class="card"><div class="card-css" style="background:linear-gradient(135deg,#0a1a2a,#003a5a)"><div class="card-css-icon">🏖️</div><div class="card-css-title">Verão sem Fim</div><div class="card-css-sub">Comédia Romântica</div></div></div>
+          <div class="card"><div class="card-css" style="background:linear-gradient(135deg,#1a0a1a,#3a003a)"><div class="card-css-icon">🐾</div><div class="card-css-title">Bicho Grilo</div><div class="card-css-sub">Comédia</div></div></div>
+          <div class="card"><div class="card-css" style="background:linear-gradient(135deg,#0a1a0a,#1a3a00)"><div class="card-css-icon">🍕</div><div class="card-css-title">Só uma Fatia</div><div class="card-css-sub">Comédia</div></div></div>
+        </div>
+        <button class="slider-btn next" onclick="scrollRow('track-comedy','right')">›</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ===================== MODAL ===================== -->
+  <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+    <div class="modal" id="modal">
+      <button class="modal-close" onclick="closeModal(null, true)">✕</button>
+      <div class="modal-hero">
+        <div class="modal-hero-bg" id="modal-hero-bg"></div>
+        <div class="modal-hero-overlay"></div>
+        <div class="modal-hero-content">
+          <h2 class="modal-title" id="modal-title"></h2>
+          <div class="modal-actions">
+            <button class="btn-play" onclick="alert('Recurso demonstrativo — portfólio!')">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="22" height="22"><polygon points="5,3 19,12 5,21"/></svg>
+              Assistir
+            </button>
+            <button class="btn-more-info" style="padding:12px 20px">
+              + Minha Lista
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="modal-body">
+        <div>
+          <div class="hero-meta" style="margin-bottom:12px" id="modal-meta"></div>
+          <p class="modal-description" id="modal-desc"></p>
+        </div>
+        <div class="modal-meta" id="modal-extra"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="js/browse.js"></script>
+</body>
+</html>

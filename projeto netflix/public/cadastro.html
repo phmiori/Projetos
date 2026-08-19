@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Criar Conta — Flixora</title>
+  <meta name="description" content="Crie sua conta Flixora e comece a assistir filmes e séries ilimitados agora mesmo." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>" />
+  <link rel="stylesheet" href="css/login.css" />
+  <style>
+    /* Estilos extras para a página de cadastro */
+    .step-indicator {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 28px;
+    }
+    .step-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #444;
+      transition: background 0.3s ease;
+    }
+    .step-dot.active {
+      background: var(--red);
+      transform: scale(1.3);
+    }
+    .step-dot.done {
+      background: #4caf50;
+    }
+    .password-strength {
+      height: 4px;
+      border-radius: 2px;
+      margin-top: 8px;
+      background: #333;
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+    .password-strength-bar {
+      height: 100%;
+      width: 0%;
+      border-radius: 2px;
+      transition: width 0.4s ease, background 0.4s ease;
+    }
+    .strength-weak   { background: #e50914; }
+    .strength-medium { background: #ff9800; }
+    .strength-strong { background: #4caf50; }
+    .strength-label {
+      font-size: 0.72rem;
+      color: #888;
+      margin-top: 4px;
+      display: block;
+    }
+    .success-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0,0,0,0.9);
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .success-overlay.show {
+      display: flex;
+      animation: fadeIn 0.4s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    .success-checkmark {
+      font-size: 5rem;
+      animation: pop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    @keyframes pop {
+      from { transform: scale(0); opacity: 0; }
+      to   { transform: scale(1); opacity: 1; }
+    }
+    .success-title {
+      font-size: 1.8rem;
+      font-weight: 800;
+      text-align: center;
+    }
+    .success-sub {
+      color: #aaa;
+      font-size: 1rem;
+      text-align: center;
+    }
+    .btn-success {
+      padding: 14px 40px;
+      background: var(--red);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: background 0.3s ease;
+    }
+    .btn-success:hover { background: var(--red-hover); }
+    .terms-check {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 16px 0;
+      font-size: 0.82rem;
+      color: #888;
+    }
+    .terms-check input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      min-width: 16px;
+      margin-top: 2px;
+      accent-color: var(--red);
+      cursor: pointer;
+    }
+    .terms-check a {
+      color: #0071eb;
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Success Overlay -->
+  <div class="success-overlay" id="success-overlay">
+    <div class="success-checkmark">✅</div>
+    <div class="success-title">Conta criada com sucesso!</div>
+    <div class="success-sub" id="success-name-msg">Bem-vindo ao Flixora!</div>
+    <button class="btn-success" onclick="window.location.href='perfis.html'">Escolher Perfil</button>
+  </div>
+
+  <!-- Background -->
+  <div class="login-bg"></div>
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <a href="index.html" class="navbar-logo">Flixora</a>
+  </nav>
+
+  <!-- Main -->
+  <main class="login-main">
+    <div class="login-card">
+      <div class="step-indicator">
+        <div class="step-dot active" id="dot-1"></div>
+        <div class="step-dot" id="dot-2"></div>
+        <div class="step-dot" id="dot-3"></div>
+      </div>
+
+      <h1>Criar Conta</h1>
+
+      <form id="register-form" novalidate>
+        <!-- Nome -->
+        <div class="form-group">
+          <input
+            type="text"
+            id="reg-name"
+            name="name"
+            placeholder=" "
+            autocomplete="name"
+            required
+          />
+          <label for="reg-name">Seu nome</label>
+        </div>
+
+        <!-- E-mail -->
+        <div class="form-group">
+          <input
+            type="email"
+            id="reg-email"
+            name="email"
+            placeholder=" "
+            autocomplete="email"
+            required
+          />
+          <label for="reg-email">E-mail</label>
+        </div>
+
+        <!-- Senha -->
+        <div class="form-group">
+          <input
+            type="password"
+            id="reg-password"
+            name="password"
+            placeholder=" "
+            autocomplete="new-password"
+            required
+          />
+          <label for="reg-password">Senha</label>
+          <div class="password-strength">
+            <div class="password-strength-bar" id="strength-bar"></div>
+          </div>
+          <span class="strength-label" id="strength-label"></span>
+        </div>
+
+        <!-- Confirmar Senha -->
+        <div class="form-group">
+          <input
+            type="password"
+            id="reg-confirm"
+            name="confirm"
+            placeholder=" "
+            autocomplete="new-password"
+            required
+          />
+          <label for="reg-confirm">Confirmar senha</label>
+        </div>
+
+        <!-- Termos -->
+        <div class="terms-check">
+          <input type="checkbox" id="terms-check" />
+          <label for="terms-check">
+            Concordo com os <a href="#">Termos de Uso</a> e a <a href="#">Política de Privacidade</a> da Flixora.
+          </label>
+        </div>
+
+        <!-- Error Message -->
+        <div id="reg-error" style="
+          display:none;
+          background: rgba(229,9,20,0.15);
+          border: 1px solid var(--red);
+          border-radius: 4px;
+          padding: 10px 14px;
+          font-size: 0.85rem;
+          margin-bottom: 12px;
+          color: #ff8080;
+        "></div>
+
+        <button type="submit" class="btn-login" id="reg-btn">Criar Conta</button>
+
+        <p class="signup-cta">
+          Já tem uma conta? <a href="login.html">Entrar</a>.
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="login-footer">
+    <p>Dúvidas? Ligue 0800-000-0000</p>
+    <nav class="footer-links">
+      <a href="#">Perguntas frequentes</a>
+      <a href="#">Central de Ajuda</a>
+      <a href="#">Termos de Uso</a>
+      <a href="#">Privacidade</a>
+    </nav>
+  </footer>
+
+  <script>
+    // Pré-preencher email vindo do CTA da homepage
+    const urlParams = new URLSearchParams(window.location.search);
+    const preEmail = urlParams.get('email');
+    if (preEmail) {
+      document.getElementById('reg-email').value = preEmail;
+    }
+
+    // Indicador de força da senha
+    const pwdInput = document.getElementById('reg-password');
+    const strengthBar = document.getElementById('strength-bar');
+    const strengthLabel = document.getElementById('strength-label');
+    const dot1 = document.getElementById('dot-1');
+    const dot2 = document.getElementById('dot-2');
+    const dot3 = document.getElementById('dot-3');
+
+    pwdInput.addEventListener('input', function () {
+      const val = this.value;
+      let score = 0;
+      if (val.length >= 6) score++;
+      if (/[A-Z]/.test(val)) score++;
+      if (/[0-9]/.test(val)) score++;
+      if (/[^A-Za-z0-9]/.test(val)) score++;
+
+      const pct = Math.min(100, score * 25);
+      strengthBar.style.width = pct + '%';
+      dot2.className = 'step-dot active';
+
+      if (score <= 1) {
+        strengthBar.className = 'password-strength-bar strength-weak';
+        strengthLabel.textContent = val.length > 0 ? 'Senha fraca' : '';
+      } else if (score <= 2) {
+        strengthBar.className = 'password-strength-bar strength-medium';
+        strengthLabel.textContent = 'Senha média';
+      } else {
+        strengthBar.className = 'password-strength-bar strength-strong';
+        strengthLabel.textContent = 'Senha forte 💪';
+        dot3.className = 'step-dot active';
+      }
+    });
+
+    // Envio do formulário
+    const form = document.getElementById('register-form');
+    const errorEl = document.getElementById('reg-error');
+    const btn = document.getElementById('reg-btn');
+
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const name     = document.getElementById('reg-name').value.trim();
+      const email    = document.getElementById('reg-email').value.trim();
+      const password = document.getElementById('reg-password').value;
+      const confirm  = document.getElementById('reg-confirm').value;
+      const terms    = document.getElementById('terms-check').checked;
+
+      errorEl.style.display = 'none';
+
+      if (!name)                       return showError('Por favor, informe seu nome.');
+      if (!email || !email.includes('@')) return showError('Por favor, informe um e-mail válido.');
+      if (password.length < 4)         return showError('A senha deve ter pelo menos 4 caracteres.');
+      if (password !== confirm)         return showError('As senhas não coincidem.');
+      if (!terms)                       return showError('Você precisa aceitar os Termos de Uso para continuar.');
+
+      btn.textContent = 'Criando conta...';
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password, name })
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          showError(data.error || 'Erro ao criar conta. Tente novamente.');
+          btn.textContent = 'Criar Conta';
+          btn.disabled = false;
+          return;
+        }
+
+        // Salvar dados do usuário na sessão
+        sessionStorage.setItem('flixora_user', JSON.stringify({ name, email }));
+
+        // Mostrar tela de sucesso
+        const overlay = document.getElementById('success-overlay');
+        document.getElementById('success-name-msg').textContent =
+          `Bem-vindo(a), ${name}! Sua conta foi criada.`;
+        overlay.classList.add('show');
+
+      } catch (err) {
+        showError('Erro de conexão. Verifique se o servidor está rodando.');
+        btn.textContent = 'Criar Conta';
+        btn.disabled = false;
+      }
+    });
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.style.display = 'block';
+      errorEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quem está assistindo? — Flixora</title>
+  <meta name="description" content="Selecione seu perfil Flixora para começar a assistir." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Bebas+Neue&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after {
+      margin: 0; padding: 0; box-sizing: border-box;
+    }
+    :root {
+      --red: #E50914;
+      --red-hover: #f40612;
+      --dark: #141414;
+      --font-main: 'Inter', sans-serif;
+      --font-display: 'Bebas Neue', cursive;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: var(--font-main);
+      background: var(--dark);
+      color: #fff;
+      overflow-x: hidden;
+    }
+
+    /* ---- NAVBAR ---- */
+    .profiles-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 48px;
+      border-bottom: 1px solid rgba(255,255,255,0.07);
+    }
+    .nav-logo {
+      font-family: var(--font-display);
+      font-size: 2.5rem;
+      color: var(--red);
+      letter-spacing: 4px;
+      text-decoration: none;
+    }
+    .nav-logo:hover { opacity: 0.9; }
+
+    /* ---- MAIN ---- */
+    .profiles-main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: calc(100vh - 90px);
+      padding: 60px 24px;
+    }
+
+    .profiles-title {
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 400;
+      letter-spacing: 2px;
+      margin-bottom: 48px;
+      text-align: center;
+      animation: slideDown 0.6s ease both;
+    }
+
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ---- PROFILES GRID ---- */
+    .profiles-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 28px;
+      justify-content: center;
+      margin-bottom: 56px;
+    }
+
+    .profile-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      animation: fadeUp 0.6s ease both;
+    }
+    .profile-card:nth-child(1) { animation-delay: 0.1s; }
+    .profile-card:nth-child(2) { animation-delay: 0.2s; }
+    .profile-card:nth-child(3) { animation-delay: 0.3s; }
+    .profile-card:nth-child(4) { animation-delay: 0.4s; }
+    .profile-card:nth-child(5) { animation-delay: 0.5s; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(32px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .profile-avatar {
+      width: 140px;
+      height: 140px;
+      border-radius: 8px;
+      font-size: 4rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 3px solid transparent;
+      transition: border-color 0.25s ease, transform 0.25s ease, box-shadow 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .profile-card:hover .profile-avatar {
+      border-color: #fff;
+      transform: scale(1.06);
+      box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    }
+
+    .profile-name {
+      font-size: 0.95rem;
+      color: #aaa;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+      transition: color 0.25s ease;
+      text-align: center;
+    }
+
+    .profile-card:hover .profile-name {
+      color: #fff;
+    }
+
+    /* Add Profile */
+    .profile-add .profile-avatar {
+      background: #222;
+      color: #555;
+      border: 2px dashed #444;
+      font-size: 3rem;
+    }
+    .profile-add:hover .profile-avatar {
+      border-color: #fff;
+      color: #fff;
+    }
+    .profile-add .profile-name { color: #555; }
+    .profile-add:hover .profile-name { color: #fff; }
+
+    /* ---- MANAGE BTN ---- */
+    .btn-manage {
+      padding: 13px 36px;
+      border: 1px solid rgba(255,255,255,0.4);
+      background: transparent;
+      color: #aaa;
+      font-family: var(--font-main);
+      font-size: 1rem;
+      font-weight: 500;
+      letter-spacing: 1.5px;
+      cursor: pointer;
+      border-radius: 2px;
+      transition: border-color 0.3s ease, color 0.3s ease, background 0.3s ease;
+      animation: fadeUp 0.6s 0.6s ease both;
+    }
+    .btn-manage:hover {
+      border-color: #fff;
+      color: #fff;
+      background: rgba(255,255,255,0.05);
+    }
+
+    /* ---- LOADING TRANSITION ---- */
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: #000;
+      align-items: center;
+      justify-content: center;
+    }
+    .loading-overlay.show { display: flex; }
+    .loading-logo {
+      font-family: var(--font-display);
+      font-size: 5rem;
+      color: var(--red);
+      letter-spacing: 8px;
+      animation: pulse 0.8s ease-in-out infinite alternate;
+    }
+    @keyframes pulse {
+      from { opacity: 0.4; transform: scale(0.95); }
+      to   { opacity: 1;   transform: scale(1.05); }
+    }
+
+    /* ---- RESPONSIVE ---- */
+    @media (max-width: 600px) {
+      .profiles-nav { padding: 16px 24px; }
+      .profile-avatar { width: 100px; height: 100px; font-size: 3rem; }
+      .profiles-grid { gap: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Loading overlay -->
+  <div class="loading-overlay" id="loading-overlay">
+    <div class="loading-logo">Flixora</div>
+  </div>
+
+  <!-- Navbar -->
+  <nav class="profiles-nav">
+    <a href="index.html" class="nav-logo">Flixora</a>
+  </nav>
+
+  <!-- Main -->
+  <main class="profiles-main">
+    <h1 class="profiles-title">Quem está assistindo?</h1>
+
+    <div class="profiles-grid" id="profiles-grid">
+      <!-- Perfis são inseridos pelo JS -->
+    </div>
+
+    <button class="btn-manage" onclick="alert('Gerenciar perfis — funcionalidade demonstrativa!')">
+      GERENCIAR PERFIS
+    </button>
+  </main>
+
+  <script>
+    // Perfis padrão
+    const defaultProfiles = [
+      { name: 'Principal',   emoji: '🎬', bg: 'linear-gradient(135deg, #1a0a2e, #4a0050)' },
+      { name: 'Crianças',   emoji: '🦁', bg: 'linear-gradient(135deg, #0f3460, #16213e)' },
+      { name: 'Visitante',  emoji: '🎭', bg: 'linear-gradient(135deg, #1a1a1a, #333)' },
+    ];
+
+    // Sobrescrever nome do 1º perfil com o usuário logado, se disponível
+    const stored = sessionStorage.getItem('flixora_user');
+    if (stored) {
+      try {
+        const user = JSON.parse(stored);
+        if (user.name) defaultProfiles[0].name = user.name.split(' ')[0];
+      } catch(e) {}
+    }
+
+    const grid = document.getElementById('profiles-grid');
+
+    defaultProfiles.forEach((profile, index) => {
+      const card = document.createElement('div');
+      card.className = 'profile-card';
+      card.id = `profile-${index}`;
+      card.innerHTML = `
+        <div class="profile-avatar" style="background:${profile.bg}">${profile.emoji}</div>
+        <div class="profile-name">${profile.name}</div>
+      `;
+      card.addEventListener('click', () => selectProfile(profile.name));
+      grid.appendChild(card);
+    });
+
+    // Botão de adicionar perfil
+    const addCard = document.createElement('div');
+    addCard.className = 'profile-card profile-add';
+    addCard.id = 'profile-add';
+    addCard.innerHTML = `
+      <div class="profile-avatar">+</div>
+      <div class="profile-name">Adicionar Perfil</div>
+    `;
+    addCard.addEventListener('click', () => alert('Adicionar perfil — funcionalidade demonstrativa!'));
+    grid.appendChild(addCard);
+
+    function selectProfile(name) {
+      sessionStorage.setItem('flixora_active_profile', name);
+      document.getElementById('loading-overlay').classList.add('show');
+      setTimeout(() => {
+        window.location.href = 'browse.html';
+      }, 1400);
+    }
+  </script>
+</body>
+</html>
