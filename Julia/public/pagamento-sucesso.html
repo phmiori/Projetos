@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reserva Confirmada! - Baúso</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; background: #fafafa; }
+    .font-cinzel { font-family: 'Cinzel', serif; }
+    .gold-btn { background: #B8860B; color: white; transition: background .2s; }
+    .gold-btn:hover { background: #9A7009; }
+    @keyframes checkmark { 0% { transform: scale(0); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    .checkmark-anim { animation: checkmark 0.5s ease-out forwards; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+  <div id="navbar-root"></div>
+
+  <main class="flex-grow flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl border shadow-sm p-10 w-full max-w-md text-center" style="border-color:#EBD182">
+      <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center text-4xl mx-auto mb-6 checkmark-anim">✅</div>
+      <h1 class="font-cinzel text-3xl font-bold mb-3" style="color:#2C1A08" id="titulo-status">Reserva Confirmada!</h1>
+      <p class="text-gray-500 mb-8" id="msg-status">Seu pagamento foi processado com sucesso. O anunciante será notificado e entrará em contato para combinar a entrega.</p>
+
+      <div id="detalhes-reserva" class="bg-yellow-50 rounded-2xl p-4 text-sm text-left mb-8 border" style="border-color:#EBD182">
+        <p class="text-gray-500 text-center">Carregando detalhes da reserva...</p>
+      </div>
+
+      <div class="flex flex-col gap-3">
+        <a href="/minha-conta.html" class="gold-btn w-full font-bold py-3 rounded-xl shadow-md">Ver Minhas Reservas</a>
+        <a href="/explorar.html" class="w-full font-bold py-3 rounded-xl border text-gray-700 hover:bg-gray-50" style="border-color:#EBD182">Explorar mais itens</a>
+      </div>
+    </div>
+  </main>
+
+  <div id="footer-root" class="mt-auto"></div>
+
+  <script src="/js/app.js"></script>
+  <script>
+    document.getElementById('navbar-root').innerHTML = navbarHTML();
+    document.getElementById('footer-root').innerHTML = footerHTML();
+
+    const params = new URLSearchParams(window.location.search);
+    const reservaId = params.get('reserva');
+    const status = params.get('status');
+
+    if (status === 'pendente') {
+      document.getElementById('titulo-status').innerText = 'Pagamento em Análise';
+      document.getElementById('msg-status').innerText = 'Seu pagamento está sendo processado. Assim que confirmado, sua reserva será ativada. Verifique Minhas Reservas para acompanhar.';
+      document.querySelector('.checkmark-anim').innerText = '⏳';
+      document.querySelector('.checkmark-anim').classList.replace('bg-green-100', 'bg-yellow-100');
+    }
+
+    const token = localStorage.getItem('bauso_token');
+    if (reservaId && token) {
+      fetch(`/api/reservas/${reservaId}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      .then(r => r.json())
+      .then(reserva => {
+        const inicio = new Date(reserva.dataInicio).toLocaleDateString('pt-BR');
+        const fim = new Date(reserva.dataFim).toLocaleDateString('pt-BR');
+        document.getElementById('detalhes-reserva').innerHTML = `
+          <div class="space-y-2">
+            <div class="flex justify-between"><span class="text-gray-500">Item</span><span class="font-semibold">${reserva.item.titulo}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Período</span><span class="font-semibold">${inicio} → ${fim}</span></div>
+            <div class="flex justify-between"><span class="text-gray-500">Dias</span><span class="font-semibold">${reserva.totalDias} dia${reserva.totalDias > 1 ? 's' : ''}</span></div>
+            <div class="border-t my-2" style="border-color:#EBD182"></div>
+            <div class="flex justify-between text-base font-bold" style="color:#2C1A08"><span>Total Pago</span><span>R$ ${reserva.valorTotal.toFixed(2).replace('.',',')}</span></div>
+          </div>
+        `;
+      })
+      .catch(() => {
+        document.getElementById('detalhes-reserva').innerHTML = `<p class="text-gray-400 text-center text-xs">Não foi possível carregar os detalhes.</p>`;
+      });
+    }
+  </script>
+</body>
+</html>

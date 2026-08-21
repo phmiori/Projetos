@@ -1,0 +1,66 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Usuario {
+  id        Int        @id @default(autoincrement())
+  nome      String
+  email     String     @unique
+  senha     String
+  telefone  String?
+  createdAt DateTime   @default(now())
+  itens     Item[]
+  reservas  Reserva[]
+}
+
+model Item {
+  id           Int       @id @default(autoincrement())
+  titulo       String
+  descricao    String
+  precoDiario  Float
+  categoria    String
+  imagemUrl    String?
+  ativo        Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+
+  anuncianteId Int
+  anunciante   Usuario   @relation(fields: [anuncianteId], references: [id])
+  reservas     Reserva[]
+}
+
+model Reserva {
+  id            Int        @id @default(autoincrement())
+  dataInicio    DateTime
+  dataFim       DateTime
+  totalDias     Int
+  valorTotal    Float
+  comissao      Float
+  valorAnunciante Float
+  status        String     @default("pendente") // pendente | pago | cancelado
+  createdAt     DateTime   @default(now())
+
+  itemId        Int
+  item          Item       @relation(fields: [itemId], references: [id])
+  locatarioId   Int
+  locatario     Usuario    @relation(fields: [locatarioId], references: [id])
+  pagamento     Pagamento?
+}
+
+model Pagamento {
+  id              Int      @id @default(autoincrement())
+  mercadoPagoId   String?
+  status          String   @default("pendente") // pendente | aprovado | rejeitado
+  valor           Float
+  createdAt       DateTime @default(now())
+
+  reservaId       Int      @unique
+  reserva         Reserva  @relation(fields: [reservaId], references: [id])
+}

@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Baúso — Descubra e alugue de quem está perto de você</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .font-cinzel { font-family: 'Cinzel', serif; }
+    .line-clamp-2 { display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden }
+    .bg-tile {
+      background-color: #0D0800;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cpath d='M50 0L100 50 50 100 0 50z' fill='none' stroke='%23D4AA47' stroke-opacity='0.08' stroke-width='0.7'/%3E%3Cpath d='M50 22L78 50 50 78 22 50z' fill='none' stroke='%23D4AA47' stroke-opacity='0.13' stroke-width='0.5'/%3E%3Cpath d='M50 40 56 44 60 50 56 56 50 60 44 56 40 50 44 44z' fill='%23D4AA47' fill-opacity='0.11'/%3E%3Ccircle cx='50' cy='0' r='1.8' fill='%23D4AA47' fill-opacity='0.13'/%3E%3Ccircle cx='100' cy='50' r='1.8' fill='%23D4AA47' fill-opacity='0.13'/%3E%3Ccircle cx='50' cy='100' r='1.8' fill='%23D4AA47' fill-opacity='0.13'/%3E%3Ccircle cx='0' cy='50' r='1.8' fill='%23D4AA47' fill-opacity='0.13'/%3E%3C/svg%3E");
+      background-size: 100px 100px;
+      background-repeat: repeat;
+    }
+    .hero-overlay {
+      background:
+        radial-gradient(ellipse 130% 55% at 50% -5%, rgba(184,134,11,0.38) 0%, rgba(100,58,5,0.06) 45%, transparent 65%),
+        linear-gradient(170deg, rgba(13,8,0,0.22) 0%, rgba(22,11,2,0.68) 55%, rgba(8,4,0,0.94) 100%);
+    }
+    @keyframes goldglow {
+      0%, 100% { opacity: 0.85; }
+      50% { opacity: 0.45; }
+    }
+    .hero-shimmer {
+      background:
+        radial-gradient(ellipse 60% 55% at 12% 88%, rgba(212,170,71,0.08) 0%, transparent 70%),
+        radial-gradient(ellipse 45% 40% at 88% 12%, rgba(184,134,11,0.07) 0%, transparent 70%);
+      animation: goldglow 10s ease-in-out infinite;
+    }
+    .gold-btn {
+      background: #B8860B;
+      color: white;
+      transition: background .2s;
+    }
+    .gold-btn:hover { background: #9A7009; }
+    .gold-outline {
+      border: 2px solid #B8860B;
+      color: #B8860B;
+      transition: all .2s;
+    }
+    .gold-outline:hover { background: #B8860B; color: white; }
+    .text-gold { color: #B8860B; }
+    .text-gold-light { color: #D4AA47; }
+    .bg-gold-pale { background: #FDF5E6; }
+    .border-gold { border-color: #EBD182; }
+    .section-alt { background: #FDF5E6; }
+  </style>
+</head>
+<body class="bg-white">
+
+  <div id="navbar-root"></div>
+
+  <!-- ── HERO ── -->
+  <section class="relative text-white overflow-hidden" style="min-height:90vh;display:flex;align-items:center">
+    <!-- Fundo Art Deco -->
+    <div class="absolute inset-0 bg-tile"></div>
+    <!-- Overlay com glow dourado -->
+    <div class="absolute inset-0 hero-overlay"></div>
+    <!-- Brilho animado nos cantos -->
+    <div class="absolute inset-0 hero-shimmer"></div>
+
+    <div class="relative z-10 w-full py-20 px-4">
+      <div class="max-w-4xl mx-auto text-center">
+
+        <!-- Logo principal (composição baú + nome) -->
+        <img src="bauso-completo.png" alt="Baúso"
+          class="h-52 sm:h-64 mx-auto mb-8 drop-shadow-2xl object-contain"
+          onerror="this.style.display='none';document.getElementById('hero-logo-txt').style.display='block'">
+        <div id="hero-logo-txt" style="display:none;font-family:'Cinzel',serif;font-weight:900;color:#D4AA47;letter-spacing:0.3em;font-size:3.5rem;margin-bottom:1.5rem">BAÚSO</div>
+
+        <!-- Badge -->
+        <div class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium mb-6 border"
+          style="background:rgba(212,170,71,0.15);border-color:rgba(212,170,71,0.35);color:#D4AA47">
+          ✨ Mais de 18.000 itens disponíveis
+        </div>
+
+        <h1 class="font-cinzel text-4xl sm:text-5xl md:text-6xl font-bold leading-tight mb-4"
+          style="color:#D4AA47">
+          Alugue tudo que imaginar
+        </h1>
+        <p class="font-cinzel text-xl sm:text-2xl mb-8 font-semibold"
+          style="color:rgba(253,245,230,0.80)">
+          Descubra tesouros perto de você
+        </p>
+        <p class="text-base sm:text-lg mb-10 max-w-2xl mx-auto leading-relaxed"
+          style="color:rgba(253,245,230,0.65)">
+          De pratos para festas a câmeras profissionais — alugue de pessoas da sua cidade.<br class="hidden sm:block"> Seguro, simples e acessível.
+        </p>
+
+        <!-- Barra de busca -->
+        <div class="bg-white rounded-2xl p-2 flex gap-2 max-w-2xl mx-auto shadow-2xl">
+          <select id="hero-categoria" class="text-sm text-gray-600 border-none outline-none bg-transparent pl-3 pr-2 shrink-0 font-medium hidden sm:block">
+            <option value="">Todas as categorias</option>
+            <option value="festas">🎉 Festas & Eventos</option>
+            <option value="roupas">👗 Roupas & Acessórios</option>
+            <option value="eletronicos">💻 Eletrônicos</option>
+            <option value="casa">🏠 Casa & Jardim</option>
+            <option value="viagem">🧳 Viagem</option>
+            <option value="esportes">⚽ Esportes & Lazer</option>
+            <option value="bebes">🍼 Bebês & Crianças</option>
+            <option value="ferramentas">🔧 Ferramentas</option>
+          </select>
+          <div class="w-px bg-gray-200 hidden sm:block"></div>
+          <input id="hero-search" type="text"
+            placeholder="O que você precisa alugar? Ex: projetor, vestido, mala..."
+            class="flex-1 text-gray-700 outline-none text-sm px-3 min-w-0">
+          <button id="hero-btn" class="gold-btn font-bold px-5 py-3 rounded-xl shrink-0 text-sm">
+            🔍 Buscar
+          </button>
+        </div>
+
+        <!-- Stats -->
+        <div class="flex flex-wrap justify-center gap-8 mt-10 text-sm">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl font-black" style="color:#D4AA47">18k+</span>
+            <span style="color:rgba(212,170,71,0.7)">itens disponíveis</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-2xl font-black" style="color:#D4AA47">320+</span>
+            <span style="color:rgba(212,170,71,0.7)">cidades</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-2xl font-black" style="color:#D4AA47">4.8★</span>
+            <span style="color:rgba(212,170,71,0.7)">avaliação média</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seta scroll -->
+    <div class="absolute bottom-6 left-1/2 -translate-x-1/2 animate-bounce" style="color:#D4AA47;opacity:0.7">
+      <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+    </div>
+  </section>
+
+  <!-- ── CATEGORIAS ── -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <div class="text-center mb-10">
+      <h2 class="font-cinzel text-2xl font-bold mb-2" style="color:#2C1A08">Explorar por categoria</h2>
+      <p class="text-gray-500 text-sm">O que você está procurando hoje?</p>
+    </div>
+    <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3" id="categorias-grid"></div>
+  </section>
+
+  <!-- ── COMO FUNCIONA ── -->
+  <section class="section-alt py-16 px-4">
+    <div class="max-w-5xl mx-auto">
+      <div class="text-center mb-12">
+        <h2 class="font-cinzel text-2xl font-bold mb-2" style="color:#2C1A08">Como funciona?</h2>
+        <p class="text-gray-500 text-sm">Em 3 passos simples você já está alugando</p>
+      </div>
+      <div class="grid md:grid-cols-3 gap-8">
+        <div class="text-center group">
+          <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4 group-hover:scale-110 transition-all duration-200"
+            style="background:rgba(184,134,11,0.12)">🔍</div>
+          <div class="text-xs font-bold uppercase tracking-widest mb-1" style="color:#B8860B">Passo 1</div>
+          <h3 class="text-lg font-bold mb-2" style="color:#2C1A08">Busque o que precisa</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">Pesquise por nome ou navegue pelas categorias. Filtre por localidade e preço para encontrar a opção ideal.</p>
+        </div>
+        <div class="text-center group">
+          <div class="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4 group-hover:bg-emerald-500 group-hover:scale-110 transition-all duration-200">📅</div>
+          <div class="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-1">Passo 2</div>
+          <h3 class="text-lg font-bold text-gray-900 mb-2">Reserve as datas</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">Escolha o período, veja o total e envie uma solicitação ao anunciante. Ele confirma em até 24 horas.</p>
+        </div>
+        <div class="text-center group">
+          <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4 group-hover:scale-110 transition-all duration-200"
+            style="background:rgba(184,134,11,0.12)">🎁</div>
+          <div class="text-xs font-bold uppercase tracking-widest mb-1" style="color:#B8860B">Passo 3</div>
+          <h3 class="text-lg font-bold mb-2" style="color:#2C1A08">Receba e aproveite!</h3>
+          <p class="text-gray-500 text-sm leading-relaxed">Combine a retirada ou entrega com o anunciante. Use, devolva e deixe sua avaliação.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── ITENS EM DESTAQUE ── -->
+  <section class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+    <div class="flex items-center justify-between mb-8">
+      <div>
+        <h2 class="font-cinzel text-2xl font-bold mb-1" style="color:#2C1A08">Em destaque</h2>
+        <p class="text-gray-500 text-sm">Os mais procurados da semana</p>
+      </div>
+      <a href="explorar.html" class="text-sm font-semibold hover:underline" style="color:#B8860B">Ver todos →</a>
+    </div>
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5" id="itens-destaque"></div>
+  </section>
+
+  <!-- ── BANNER ANUNCIAR ── -->
+  <section class="relative py-16 px-4 overflow-hidden">
+    <div class="absolute inset-0 bg-tile"></div>
+    <div class="absolute inset-0 hero-overlay"></div>
+    <div class="relative z-10 max-w-3xl mx-auto text-center">
+      <h2 class="font-cinzel text-2xl sm:text-3xl font-bold mb-4 leading-snug" style="color:#FDF5E6">
+        Algo que está parado na sua casa<br class="hidden sm:block">
+        pode ser o tesouro de outra pessoa
+      </h2>
+      <p class="text-lg mb-8" style="color:rgba(212,170,71,0.8)">Anuncie de graça e comece a ganhar dinheiro com o que você já tem!</p>
+      <a href="anunciar.html" class="inline-flex items-center gap-2 font-bold px-8 py-4 rounded-2xl hover:opacity-90 transition-opacity shadow-lg text-lg"
+        style="background:#D4AA47;color:#2C1A08">
+        📦 Anunciar meu item grátis
+      </a>
+      <p class="text-sm mt-4" style="color:rgba(212,170,71,0.6)">Sem mensalidade. Você só paga quando alugar.</p>
+    </div>
+  </section>
+
+  <!-- ── POR QUE CONFIAR ── -->
+  <section class="bg-white py-16 px-4">
+    <div class="max-w-5xl mx-auto">
+      <div class="text-center mb-12">
+        <h2 class="font-cinzel text-2xl font-bold mb-2" style="color:#2C1A08">Por que confiar no Baúso?</h2>
+        <p class="text-gray-500 text-sm">Sua segurança é nossa prioridade</p>
+      </div>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="rounded-2xl p-6 hover:shadow-md transition-shadow" style="background:#FDF5E6">
+          <div class="text-3xl mb-3">🛡️</div>
+          <h3 class="font-bold mb-2" style="color:#2C1A08">Proteção Baúso</h3>
+          <p class="text-sm text-gray-500 leading-relaxed">Seguro de até R$ 5.000 incluso em cada aluguel. Você aluga com tranquilidade.</p>
+        </div>
+        <div class="rounded-2xl p-6 hover:shadow-md transition-shadow" style="background:#FDF5E6">
+          <div class="text-3xl mb-3">✅</div>
+          <h3 class="font-bold mb-2" style="color:#2C1A08">Perfis verificados</h3>
+          <p class="text-sm text-gray-500 leading-relaxed">Anunciantes passam por verificação de CPF e documento de identidade.</p>
+        </div>
+        <div class="rounded-2xl p-6 hover:shadow-md transition-shadow" style="background:#FDF5E6">
+          <div class="text-3xl mb-3">⭐</div>
+          <h3 class="font-bold mb-2" style="color:#2C1A08">Avaliações reais</h3>
+          <p class="text-sm text-gray-500 leading-relaxed">Sistema de avaliações bidirecional após cada aluguel. Sem avaliações falsas.</p>
+        </div>
+        <div class="rounded-2xl p-6 hover:shadow-md transition-shadow" style="background:#FDF5E6">
+          <div class="text-3xl mb-3">💬</div>
+          <h3 class="font-bold mb-2" style="color:#2C1A08">Suporte 24 horas</h3>
+          <p class="text-sm text-gray-500 leading-relaxed">Nossa equipe está disponível todos os dias para resolver qualquer problema.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── DEPOIMENTOS ── -->
+  <section class="py-16 px-4" style="background:#FDF5E6">
+    <div class="max-w-5xl mx-auto">
+      <h2 class="font-cinzel text-2xl font-bold text-center mb-10" style="color:#2C1A08">O que dizem nossos usuários</h2>
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="bg-white rounded-2xl p-6 shadow-sm border" style="border-color:#EBD182">
+          <div class="text-lg mb-3" style="color:#D4AA47">★★★★★</div>
+          <p class="text-gray-600 text-sm leading-relaxed mb-4">"Precisei de um projetor para uma apresentação importante e achei um perfeito pelo Baúso. Muito mais barato que alugar numa locadora!"</p>
+          <div class="flex items-center gap-3">
+            <img src="https://i.pravatar.cc/40?u=depo1" class="w-10 h-10 rounded-full object-cover" alt="">
+            <div><p class="text-sm font-semibold" style="color:#2C1A08">Fernanda A.</p><p class="text-xs text-gray-400">São Paulo, SP</p></div>
+          </div>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border" style="border-color:#EBD182">
+          <div class="text-lg mb-3" style="color:#D4AA47">★★★★★</div>
+          <p class="text-gray-600 text-sm leading-relaxed mb-4">"Anunciei meus pratos de festa que ficavam parados e já paguei a fatura de luz desse mês! Plataforma fácil e o suporte respondeu rápido."</p>
+          <div class="flex items-center gap-3">
+            <img src="https://i.pravatar.cc/40?u=depo2" class="w-10 h-10 rounded-full object-cover" alt="">
+            <div><p class="text-sm font-semibold" style="color:#2C1A08">Maria S.</p><p class="text-xs text-gray-400">Belo Horizonte, MG</p></div>
+          </div>
+        </div>
+        <div class="bg-white rounded-2xl p-6 shadow-sm border" style="border-color:#EBD182">
+          <div class="text-lg mb-3" style="color:#D4AA47">★★★★☆</div>
+          <p class="text-gray-600 text-sm leading-relaxed mb-4">"Fui numa viagem de intercâmbio e aluguei uma mochila de 60L por R$30/dia. Não precisei carregar mala extra nem pagar excesso de bagagem!"</p>
+          <div class="flex items-center gap-3">
+            <img src="https://i.pravatar.cc/40?u=depo3" class="w-10 h-10 rounded-full object-cover" alt="">
+            <div><p class="text-sm font-semibold" style="color:#2C1A08">Bruno K.</p><p class="text-xs text-gray-400">Porto Alegre, RS</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div id="footer-root"></div>
+
+  <script src="js/app.js"></script>
+  <script>
+    document.getElementById('navbar-root').innerHTML = navbarHTML();
+    document.getElementById('footer-root').innerHTML = footerHTML();
+
+    // Categorias
+    CATEGORIAS.forEach(cat => {
+      document.getElementById('categorias-grid').innerHTML += `
+        <a href="explorar.html?categoria=${cat.id}"
+           class="bg-white rounded-2xl p-4 text-center hover:shadow-md hover:-translate-y-1 transition-all duration-200 group block"
+           style="border:1px solid #EBD182">
+          <div class="text-3xl mb-2 group-hover:scale-110 transition-transform">${cat.emoji}</div>
+          <div class="text-xs font-semibold leading-tight" style="color:#5C3A1E">${cat.nome}</div>
+        </a>`;
+    });
+
+    // Itens em destaque
+    async function carregarDestaques() {
+      const itens = await getItens();
+      const container = document.getElementById('itens-destaque');
+      if (itens.length === 0) {
+        container.innerHTML = '<p class="col-span-full text-gray-500">Nenhum item anunciado ainda.</p>';
+      } else {
+        itens.slice(0, 8).forEach(item => {
+          container.innerHTML += renderizarCard(item);
+        });
+      }
+    }
+    carregarDestaques();
+
+    // Busca hero
+    document.getElementById('hero-btn').addEventListener('click', function() {
+      const q = document.getElementById('hero-search').value.trim();
+      const cat = document.getElementById('hero-categoria').value;
+      let url = 'explorar.html?';
+      if (q) url += 'q=' + encodeURIComponent(q) + '&';
+      if (cat) url += 'categoria=' + cat;
+      window.location.href = url;
+    });
+    document.getElementById('hero-search').addEventListener('keydown', e => {
+      if (e.key === 'Enter') document.getElementById('hero-btn').click();
+    });
+  </script>
+</body>
+</html>
