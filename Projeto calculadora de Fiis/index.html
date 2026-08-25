@@ -47,6 +47,11 @@
                     <span class="nav-icon">🚗</span>
                     <span>Carros de Leilão</span>
                 </button>
+
+                <button type="button" class="main-nav-btn cdb-btn" id="btnNavCDB" data-target="cdbModule">
+                    <span class="nav-icon">🐷</span>
+                    <span>Investimento CDB</span>
+                </button>
             </nav>
 
             <!-- Rodapé da Sidebar com Login / Perfil -->
@@ -705,7 +710,356 @@
                     </div>
                 </div>
             </section>
+
+            <!-- ========================================================= -->
+            <!-- MÓDULO 3: INVESTIMENTOS CDB -->
+            <!-- ========================================================= -->
+            <section id="cdbModule" class="view-section">
+                <header class="view-header cdb">
+                    <div>
+                        <h1>Investimentos em Renda Fixa (CDB)</h1>
+                        <p class="subtitle">Gerencie suas aplicações em CDB, projete rendimentos líquidos reais e simule juros compostos com aportes mensais.</p>
+                    </div>
+                </header>
+
+                <!-- Sub-Navegação interna de CDB -->
+                <div class="sub-nav-container">
+                    <button type="button" class="sub-nav-btn cdb-sub-btn active" data-cdb-subtarget="cdbSubPortfolio">
+                        <span>💼</span> Minhas Aplicações
+                    </button>
+                    <button type="button" class="sub-nav-btn cdb-sub-btn" data-cdb-subtarget="cdbSubCalculator">
+                        <span>🧮</span> Simulador Renda Fixa
+                    </button>
+                </div>
+
+                <!-- Banner deslogado CDB -->
+                <div id="cdbGuestPrompt" class="guest-banner" style="display: none;">
+                    <h2>Faça login para gerenciar suas aplicações em CDB</h2>
+                    <p>Acesse sua conta para salvar suas aplicações pós e pré-fixadas, acompanhar a projeção do IR regressivo e o rendimento líquido real da sua carteira.</p>
+                    <div class="guest-banner-actions">
+                        <button class="btn-primary cdb" style="width: auto;" id="btnCdbPromptLogin">
+                            <span>🔐</span> Entrar na Minha Conta
+                        </button>
+                        <button class="btn-secondary" id="btnCdbPromptDemo">
+                            <span>🚀</span> Testar com Conta Demo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Conteúdo de CDB logado -->
+                <div id="cdbContent" style="display: none;">
+                    <!-- SUB-ABA 3.1: MINHAS APLICAÇÕES -->
+                    <div id="cdbSubPortfolio" class="cdb-subview active">
+                        <!-- Cards de Métricas CDB -->
+                        <div class="portfolio-metrics-grid">
+                            <div class="portfolio-stat-card">
+                                <div class="stat-icon-wrapper stat-icon-green">
+                                    <span>💰</span>
+                                </div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Total Aplicado</span>
+                                    <span class="stat-value" id="cdbTotalInvested">R$ 0,00</span>
+                                </div>
+                            </div>
+                            <div class="portfolio-stat-card">
+                                <div class="stat-icon-wrapper stat-icon-purple">
+                                    <span>📈</span>
+                                </div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Rendimento Bruto Acumulado</span>
+                                    <span class="stat-value text-success" id="cdbTotalGrossReturn">R$ 0,00</span>
+                                </div>
+                            </div>
+                            <div class="portfolio-stat-card">
+                                <div class="stat-icon-wrapper stat-icon-orange">
+                                    <span>💸</span>
+                                </div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Imposto de Renda Estimado</span>
+                                    <span class="stat-value text-danger" id="cdbTotalTax">R$ 0,00</span>
+                                </div>
+                            </div>
+                            <div class="portfolio-stat-card">
+                                <div class="stat-icon-wrapper stat-icon-cyan">
+                                    <span>💵</span>
+                                </div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Saldo Líquido Estimado</span>
+                                    <span class="stat-value" id="cdbTotalNetValue">R$ 0,00</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Gráficos de CDB -->
+                        <div class="portfolio-charts-grid">
+                            <div class="glass-panel">
+                                <div class="chart-header">
+                                    <h3 class="chart-title">Distribuição por Emissor</h3>
+                                </div>
+                                <div style="position: relative; height: 260px; width: 100%;">
+                                    <canvas id="cdbIssuerChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="glass-panel">
+                                <div class="chart-header">
+                                    <h3 class="chart-title">Bruto vs Líquido por Título</h3>
+                                </div>
+                                <div style="position: relative; height: 260px; width: 100%;">
+                                    <canvas id="cdbIncomeChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tabela de CDBs Cadastrados -->
+                        <section class="glass-panel table-panel" style="margin-top: 0;">
+                            <div class="table-header-row">
+                                <h3 class="table-title">Aplicações em CDB Cadastradas</h3>
+                                <div class="table-actions">
+                                    <button id="btnExportCdbCsv" class="export-btn">
+                                        📥 Exportar Carteira (CSV)
+                                    </button>
+                                    <button id="btnOpenAddCdb" class="btn-primary cdb" style="width: auto; padding: 0.6rem 1.25rem;">
+                                        <span>➕</span> Adicionar CDB
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="table-container">
+                                <table id="cdbTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Banco Emissor</th>
+                                            <th>Indexador</th>
+                                            <th>Taxa</th>
+                                            <th>Valor Aplicado</th>
+                                            <th>Data Início</th>
+                                            <th>Vencimento</th>
+                                            <th>Rendimento Bruto</th>
+                                            <th>IR Provisório</th>
+                                            <th>Saldo Líquido</th>
+                                            <th style="text-align: right;">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="cdbTableBody">
+                                        <!-- Preenchido dinamicamente via JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- SUB-ABA 3.2: SIMULADOR CDB -->
+                    <div id="cdbSubCalculator" class="cdb-subview">
+                        <div class="app-grid">
+                            <section class="glass-panel">
+                                <h2 class="form-title">Configurar Simulação CDB</h2>
+                                <form id="cdbSimulatorForm" onsubmit="event.preventDefault();">
+                                    <div class="form-group">
+                                        <label for="cdbSimInitial">Aporte Inicial</label>
+                                        <div class="input-wrapper prefix-pad">
+                                            <span class="input-prefix">R$</span>
+                                            <input type="number" id="cdbSimInitial" step="100" min="0" placeholder="Ex: 10.000" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="cdbSimMonthly">Aporte Mensal</label>
+                                        <div class="input-wrapper prefix-pad">
+                                            <span class="input-prefix">R$</span>
+                                            <input type="number" id="cdbSimMonthly" step="10" min="0" placeholder="Ex: 500" required>
+                                        </div>
+                                    </div>
+                                    <div class="input-grid-2">
+                                        <div class="form-group">
+                                            <label for="cdbSimRateType">Indexador</label>
+                                            <select id="cdbSimRateType" required>
+                                                <option value="CDI">Pós-fixado (% do CDI)</option>
+                                                <option value="PRE">Pré-fixado (% a.a.)</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cdbSimRate">Taxa de Rendimento</label>
+                                            <div class="input-wrapper">
+                                                <input type="number" id="cdbSimRate" step="0.01" min="0.01" placeholder="Ex: 100 ou 12.5" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="input-grid-2">
+                                        <div class="form-group">
+                                            <label for="cdbSimDuration">Prazo</label>
+                                            <input type="number" id="cdbSimDuration" min="1" placeholder="Ex: 24" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cdbSimDurationUnit">Unidade</label>
+                                            <select id="cdbSimDurationUnit" required>
+                                                <option value="months">Meses</option>
+                                                <option value="years">Anos</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="cdbSimCdiBase">Taxa de Referência CDI (% a.a.)</label>
+                                        <div class="input-wrapper suffix-pad">
+                                            <input type="number" id="cdbSimCdiBase" step="0.01" min="0.01" value="10.75" required>
+                                            <span class="input-suffix">%</span>
+                                        </div>
+                                    </div>
+                                    <button type="submit" id="cdbCalculateBtn" class="btn-primary cdb">
+                                        <span>⚡</span> Calcular Simulação
+                                    </button>
+                                </form>
+                            </section>
+
+                            <section class="results-container">
+                                <div class="equity-banner">
+                                    <div class="equity-card">
+                                        <div class="label">Total Aportado</div>
+                                        <div class="value" id="cdbSimTotalDepositedText">R$ 0,00</div>
+                                    </div>
+                                    <div class="equity-card final">
+                                        <div class="label">Valor Líquido Final</div>
+                                        <div class="value text-success" id="cdbSimNetValueText">R$ 0,00</div>
+                                    </div>
+                                </div>
+                                <div class="highlight-panel">
+                                    <div class="grid-highlights">
+                                        <div class="highlight-item">
+                                            <span class="label">Prazo Simulado</span>
+                                            <span class="value" id="cdbSimResultDurationText">--</span>
+                                        </div>
+                                        <div class="highlight-item">
+                                            <span class="label">Rendimento Bruto</span>
+                                            <span class="value text-success" id="cdbSimResultGrossProfitText">R$ 0,00</span>
+                                        </div>
+                                        <div class="highlight-item">
+                                            <span class="label">Imposto de Renda (IR)</span>
+                                            <span class="value text-danger" id="cdbSimResultTaxText">R$ 0,00</span>
+                                        </div>
+                                        <div class="highlight-item">
+                                            <span class="label">Rentabilidade Líquida</span>
+                                            <span class="value" id="cdbSimResultNetYieldText">--</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="glass-panel chart-panel">
+                                    <div class="chart-header">
+                                        <h3 class="chart-title">Evolução do Saldo Bruto, Líquido e Aportado</h3>
+                                    </div>
+                                    <div style="position: relative; height: 300px; width: 100%;">
+                                        <canvas id="cdbEquityChart"></canvas>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+
+                        <section class="glass-panel table-panel">
+                            <div class="table-header-row">
+                                <h3 class="table-title">Evolução Detalhada Mês a Mês</h3>
+                                <div class="table-actions">
+                                    <button id="cdbExportCsvBtn" class="export-btn" style="display: none;">
+                                        📥 Exportar Simulação (CSV)
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="table-container">
+                                <table id="cdbSimulationTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Mês</th>
+                                            <th>Aportado Acumulado</th>
+                                            <th>Saldo Bruto</th>
+                                            <th>Rendimento Bruto</th>
+                                            <th>Imposto Provisório</th>
+                                            <th>Saldo Líquido</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="cdbSimulationTableBody">
+                                        <tr>
+                                            <td colspan="6" class="empty-state">
+                                                <span class="empty-state-icon">⚡</span>
+                                                Preencha os campos e clique em Calcular para visualizar a evolução.
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </section>
         </main>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL DE ADICIONAR / EDITAR INVESTIMENTO EM CDB -->
+    <!-- ========================================================= -->
+    <div class="modal-overlay" id="cdbModal">
+        <div class="modal-card">
+            <button class="modal-close-btn" id="closeCdbModalBtn">&times;</button>
+            <h2 class="form-title cdb" id="cdbModalTitle">Adicionar CDB à Carteira</h2>
+            
+            <form id="cdbForm">
+                <input type="hidden" id="cdbEditId" value="">
+
+                <div class="form-group">
+                    <label for="cdbBank">Banco / Emissor</label>
+                    <input type="text" id="cdbBank" placeholder="Ex: Banco Itaú, Inter, Sofisa..." required>
+                </div>
+
+                <div class="input-grid-2">
+                    <div class="form-group">
+                        <label for="cdbRateType">Indexador</label>
+                        <select id="cdbRateType" required>
+                            <option value="CDI">Pós-fixado (% do CDI)</option>
+                            <option value="PRE">Pré-fixado (% a.a.)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cdbRate">Taxa de Rendimento</label>
+                        <input type="number" id="cdbRate" step="0.01" min="0.01" placeholder="Ex: 100 ou 12.5" required>
+                    </div>
+                </div>
+
+                <div class="input-grid-2">
+                    <div class="form-group">
+                        <label for="cdbInvestmentAmount">Valor Aplicado</label>
+                        <div class="input-wrapper prefix-pad">
+                            <span class="input-prefix">R$</span>
+                            <input type="number" id="cdbInvestmentAmount" step="100" min="0.01" placeholder="Ex: 10.000" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cdbMonthlyContribution">Aporte Mensal</label>
+                        <div class="input-wrapper prefix-pad">
+                            <span class="input-prefix">R$</span>
+                            <input type="number" id="cdbMonthlyContribution" step="10" min="0" value="0" placeholder="Ex: 500">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-grid-2">
+                    <div class="form-group">
+                        <label for="cdbStartDate">Data da Aplicação</label>
+                        <input type="date" id="cdbStartDate" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cdbTermMonths">Prazo (Meses)</label>
+                        <input type="number" id="cdbTermMonths" min="1" step="1" placeholder="Ex: 24" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="cdbNotes">Anotações (Opcional)</label>
+                    <textarea id="cdbNotes" placeholder="Objetivo, liquidez diária ou observações..."></textarea>
+                </div>
+
+                <button type="submit" class="btn-primary cdb" style="margin-top: 0.5rem;" id="btnSaveCdb">
+                    <span>💾</span> Salvar Investimento em CDB
+                </button>
+            </form>
+        </div>
     </div>
 
     <!-- ========================================================= -->

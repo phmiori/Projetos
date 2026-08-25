@@ -1,0 +1,134 @@
+/* ── Footer — Navy Dark Anchor ── */
+/* Footer mantém tom escuro (navy) como âncora visual — contraste com o branco do site */
+
+.footer {
+  background: var(--color-navy);
+  border-top: 3px solid var(--color-gold);
+}
+
+.footer-top {
+  padding: var(--space-4xl) var(--space-xl);
+}
+
+.footer-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: var(--space-3xl);
+}
+
+/* Brand */
+.footer-brand { display: flex; flex-direction: column; gap: var(--space-lg); }
+
+.footer-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.footer-logo-icon {
+  font-size: 1.8rem;
+  color: var(--color-gold-light);
+}
+
+.footer-logo-text { display: flex; flex-direction: column; }
+
+.footer-logo-name {
+  font-family: var(--font-serif);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #FFFFFF;
+}
+
+.footer-logo-tagline {
+  font-size: 0.63rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-gold-light);
+}
+
+.footer-brand-desc {
+  font-size: 0.87rem;
+  color: rgba(255,255,255,0.52);
+  line-height: 1.75;
+  max-width: 320px;
+}
+
+.footer-oab-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--color-gold-light);
+  border: 1px solid rgba(176,125,42,0.35);
+  background: rgba(176,125,42,0.10);
+  padding: 0.35rem 0.85rem;
+  border-radius: var(--radius-full);
+}
+
+/* Columns */
+.footer-col-title {
+  font-family: var(--font-sans);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #FFFFFF;
+  margin-bottom: var(--space-lg);
+}
+
+.footer-col-links { display: flex; flex-direction: column; gap: var(--space-sm); }
+
+.footer-link {
+  font-size: 0.87rem;
+  color: rgba(255,255,255,0.48);
+  transition: color var(--transition-fast);
+  padding: 2px 0;
+}
+
+.footer-link:hover { color: var(--color-gold-light); }
+
+/* Bottom */
+.footer-bottom {
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding: var(--space-lg) var(--space-xl);
+}
+
+.footer-bottom-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-lg);
+  flex-wrap: wrap;
+}
+
+.footer-copy {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.38);
+}
+
+.footer-disclaimer {
+  font-size: 0.73rem;
+  color: rgba(255,255,255,0.22);
+  max-width: 440px;
+  text-align: right;
+}
+
+@media (max-width: 1024px) {
+  .footer-inner { grid-template-columns: 1fr 1fr; gap: var(--space-2xl); }
+  .footer-brand { grid-column: 1 / -1; }
+}
+
+@media (max-width: 580px) {
+  .footer-inner { grid-template-columns: 1fr; }
+  .footer-bottom-inner { flex-direction: column; text-align: center; }
+  .footer-disclaimer { text-align: center; }
+}

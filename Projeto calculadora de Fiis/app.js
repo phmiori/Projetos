@@ -170,6 +170,10 @@ function switchMainModule(targetModuleId) {
         const activeSub = document.querySelector('.car-subview.active');
         if (!activeSub) switchCarSubView('carSubCards');
         renderCarCardsListView();
+    } else if (targetModuleId === 'cdbModule') {
+        const activeSub = document.querySelector('.cdb-subview.active');
+        if (!activeSub) switchCdbSubView('cdbSubPortfolio');
+        renderCdbPortfolioView();
     }
 
     closeMobileSidebar();
@@ -257,6 +261,7 @@ function updateAuthUI() {
             updateAuthUI();
             renderPortfolioView();
             renderCarCardsListView();
+            renderCdbPortfolioView();
         });
     } else {
         container.innerHTML = `
@@ -1822,6 +1827,553 @@ function exportConsolidatedCarsCsv() {
 }
 
 // =========================================================
+// CDB FUNCTIONS (RENDA FIXA)
+// =========================================================
+
+let cdbIssuerChartInstance = null;
+let cdbIncomeChartInstance = null;
+let cdbEquityChartInstance = null;
+let cdbSimulationData = [];
+
+function switchCdbSubView(targetSubViewId) {
+    document.querySelectorAll('.cdb-subview').forEach(sub => {
+        sub.classList.remove('active');
+    });
+
+    document.querySelectorAll('.sub-nav-btn.cdb-sub-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('data-cdb-subtarget') === targetSubViewId) {
+            btn.classList.add('active');
+        }
+    });
+
+    const target = document.getElementById(targetSubViewId);
+    if (target) target.classList.add('active');
+
+    if (targetSubViewId === 'cdbSubPortfolio') {
+        renderCdbPortfolioView();
+    }
+}
+
+function getCdbIRRate(days) {
+    if (days <= 180) return 0.225;
+    if (days <= 360) return 0.20;
+    if (days <= 720) return 0.175;
+    return 0.15;
+}
+
+function getCdbIRRateByMonths(months) {
+    return getCdbIRRate(months * 30.4368);
+}
+
+function getCdbMonthlyRate(rateType, rateValue, cdiBase = 10.75) {
+    let annualRate = 0;
+    if (rateType === 'CDI') {
+        annualRate = (cdiBase / 100) * (rateValue / 100);
+    } else {
+        annualRate = rateValue / 100;
+    }
+    return Math.pow(1 + annualRate, 1 / 12) - 1;
+}
+
+function getCdbCurrentStatus(cdb, cdiBase = 10.75) {
+    const start = new Date(cdb.startDate);
+    const today = new Date();
+    
+    let diffMonths = (today.getFullYear() - start.getFullYear()) * 12 + today.getMonth() - start.getMonth();
+    if (diffMonths < 0) diffMonths = 0;
+    if (diffMonths > cdb.termMonths) diffMonths = cdb.termMonths;
+
+    const monthlyRate = getCdbMonthlyRate(cdb.rentabilityType, cdb.rentabilityRate, cdiBase);
+    let balanceGross = cdb.investmentAmount;
+    let totalDeposited = cdb.investmentAmount;
+    const monthlyContribution = parseFloat(cdb.monthlyContribution) || 0;
+    
+    for (let m = 1; m <= diffMonths; m++) {
+        balanceGross = (balanceGross * (1 + monthlyRate)) + monthlyContribution;
+        totalDeposited += monthlyContribution;
+    }
+    
+    const profit = balanceGross - totalDeposited;
+    const irRate = getCdbIRRateByMonths(diffMonths || 1);
+    const tax = profit > 0 ? profit * irRate : 0;
+    const balanceNet = balanceGross - tax;
+    
+    return {
+        elapsedMonths: diffMonths,
+        totalDeposited,
+        balanceGross,
+        profit,
+        tax,
+        balanceNet
+    };
+}
+
+function runCdbSimulation(initial, monthly, rateType, rateValue, durationMonths, cdiBase = 10.75) {
+    const monthlyRate = getCdbMonthlyRate(rateType, rateValue, cdiBase);
+    let balanceGross = initial;
+    let totalDeposited = initial;
+    const monthsData = [];
+
+    for (let m = 1; m <= durationMonths; m++) {
+        const prevBalanceGross = balanceGross;
+        const interest = prevBalanceGross * monthlyRate;
+        balanceGross = prevBalanceGross + interest + monthly;
+        totalDeposited += monthly;
+
+        const totalProfit = balanceGross - totalDeposited;
+        const irRate = getCdbIRRateByMonths(m);
+        const irPaid = totalProfit > 0 ? totalProfit * irRate : 0;
+        const balanceNet = balanceGross - irPaid;
+
+        monthsData.push({
+            month: m,
+            deposited: totalDeposited,
+            balanceGross: balanceGross,
+            interest: interest,
+            profit: totalProfit,
+            tax: irPaid,
+            balanceNet: balanceNet
+        });
+    }
+    return monthsData;
+}
+
+function renderCdbPortfolioView() {
+    const user = window.db.getCurrentUser();
+    const guestPrompt = document.getElementById('cdbGuestPrompt');
+    const content = document.getElementById('cdbContent');
+
+    if (!user) {
+        guestPrompt.style.display = 'block';
+        content.style.display = 'none';
+        return;
+    }
+
+    guestPrompt.style.display = 'none';
+    content.style.display = 'block';
+
+    const cdbs = window.db.getUserCDBs(user.id);
+
+    let totalApplied = 0;
+    let totalGrossReturn = 0;
+    let totalTax = 0;
+    let totalNetValue = 0;
+
+    const issuerDistribution = {};
+    const cdbIncomeData = [];
+
+    cdbs.forEach(cdb => {
+        const status = getCdbCurrentStatus(cdb);
+        totalApplied += cdb.investmentAmount;
+        totalGrossReturn += status.profit;
+        totalTax += status.tax;
+        totalNetValue += status.balanceNet;
+
+        issuerDistribution[cdb.bank] = (issuerDistribution[cdb.bank] || 0) + status.balanceNet;
+
+        cdbIncomeData.push({
+            bank: cdb.bank,
+            rate: cdb.rentabilityType === 'CDI' ? `${cdb.rentabilityRate}% CDI` : `${cdb.rentabilityRate}% a.a.`,
+            gross: status.balanceGross,
+            net: status.balanceNet
+        });
+    });
+
+    document.getElementById('cdbTotalInvested').textContent = formatCurrency(totalApplied);
+    document.getElementById('cdbTotalGrossReturn').textContent = formatCurrency(totalGrossReturn);
+    document.getElementById('cdbTotalTax').textContent = formatCurrency(totalTax);
+    document.getElementById('cdbTotalNetValue').textContent = formatCurrency(totalNetValue);
+
+    renderCdbTable(cdbs);
+    renderCdbCharts(issuerDistribution, cdbIncomeData);
+}
+
+function renderCdbTable(cdbs) {
+    const tbody = document.getElementById('cdbTableBody');
+    tbody.innerHTML = '';
+
+    if (!cdbs || cdbs.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="10" class="empty-state">
+                    <span class="empty-state-icon">📂</span>
+                    Nenhum CDB cadastrado ainda. Clique em "<strong>+ Adicionar CDB</strong>" acima para começar!
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    cdbs.forEach(cdb => {
+        const status = getCdbCurrentStatus(cdb);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>
+                <strong>${cdb.bank}</strong>
+                ${cdb.notes ? `<div style="font-size: 0.75rem; color: var(--text-muted);">${cdb.notes}</div>` : ''}
+            </td>
+            <td><span class="segment-tag ${cdb.rentabilityType === 'CDI' ? 'badge-fiagro' : 'badge-logistica'}">${cdb.rentabilityType === 'CDI' ? 'Pós-fixado' : 'Pré-fixado'}</span></td>
+            <td><strong>${cdb.rentabilityRate}%</strong></td>
+            <td>${formatCurrency(cdb.investmentAmount)}</td>
+            <td>${formatDateBR(cdb.startDate)}</td>
+            <td>${cdb.termMonths} meses</td>
+            <td class="text-success"><strong>+ ${formatCurrency(status.profit)}</strong></td>
+            <td class="text-danger">${formatCurrency(status.tax)}</td>
+            <td><strong>${formatCurrency(status.balanceNet)}</strong></td>
+            <td style="text-align: right;">
+                <div class="table-actions-cell" style="justify-content: flex-end;">
+                    <button class="btn-table-action" title="Editar CDB" data-action="edit-cdb" data-id="${cdb.id}">
+                        ✏️
+                    </button>
+                    <button class="btn-table-action delete" title="Excluir CDB" data-action="delete-cdb" data-id="${cdb.id}">
+                        🗑️
+                    </button>
+                </div>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll('button[data-action]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const action = btn.getAttribute('data-action');
+            const id = btn.getAttribute('data-id');
+            const cdb = cdbs.find(item => item.id === id);
+
+            if (action === 'edit-cdb' && cdb) {
+                openEditCdbModal(cdb);
+            } else if (action === 'delete-cdb' && cdb) {
+                deleteCdbConfirm(cdb);
+            }
+        });
+    });
+}
+
+function renderCdbCharts(issuerData, cdbIncomeData) {
+    const issuerCanvas = document.getElementById('cdbIssuerChart');
+    const incomeCanvas = document.getElementById('cdbIncomeChart');
+
+    if (!issuerCanvas || !incomeCanvas) return;
+
+    const issuerLabels = Object.keys(issuerData);
+    const issuerValues = Object.values(issuerData);
+
+    if (cdbIssuerChartInstance) {
+        cdbIssuerChartInstance.destroy();
+    }
+
+    if (issuerLabels.length === 0) {
+        issuerLabels.push('Sem dados');
+        issuerValues.push(1);
+    }
+
+    cdbIssuerChartInstance = new Chart(issuerCanvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: issuerLabels,
+            datasets: [{
+                data: issuerValues,
+                backgroundColor: [
+                    '#10B981', '#34D399', '#059669', '#6EE7B7', 
+                    '#047857', '#A7F3D0', '#111827', '#64748B'
+                ],
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: { color: '#F3F4F6', font: { family: 'Plus Jakarta Sans', size: 11 } }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.label}: ${formatCurrency(context.parsed)}`;
+                        }
+                    }
+                }
+            },
+            cutout: '68%'
+        }
+    });
+
+    const cdbLabels = cdbIncomeData.map(i => `${i.bank} (${i.rate})`);
+    const cdbGrossValues = cdbIncomeData.map(i => i.gross);
+    const cdbNetValues = cdbIncomeData.map(i => i.net);
+
+    if (cdbIncomeChartInstance) {
+        cdbIncomeChartInstance.destroy();
+    }
+
+    cdbIncomeChartInstance = new Chart(incomeCanvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: cdbLabels.length ? cdbLabels : ['Sem dados'],
+            datasets: [
+                {
+                    label: 'Bruto (R$)',
+                    data: cdbGrossValues.length ? cdbGrossValues : [0],
+                    backgroundColor: 'rgba(107, 114, 128, 0.6)',
+                    borderColor: '#9CA3AF',
+                    borderWidth: 1,
+                    borderRadius: 6
+                },
+                {
+                    label: 'Líquido (R$)',
+                    data: cdbNetValues.length ? cdbNetValues : [0],
+                    backgroundColor: 'rgba(16, 185, 129, 0.75)',
+                    borderColor: '#10B981',
+                    borderWidth: 1,
+                    borderRadius: 6
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: '#FFF' } },
+                tooltip: {
+                    callbacks: {
+                        label: (c) => `${c.dataset.label}: ${formatCurrency(c.raw)}`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false },
+                    ticks: { color: '#9CA3AF', font: { family: 'Plus Jakarta Sans' } }
+                },
+                y: {
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: {
+                        color: '#9CA3AF',
+                        font: { family: 'Plus Jakarta Sans' },
+                        callback: (v) => formatCurrency(v)
+                    }
+                }
+            }
+        }
+    });
+}
+
+function openAddCdbModal() {
+    document.getElementById('cdbModalTitle').textContent = 'Adicionar CDB à Carteira';
+    document.getElementById('cdbEditId').value = '';
+    document.getElementById('cdbForm').reset();
+    document.getElementById('cdbStartDate').value = new Date().toISOString().split('T')[0];
+    document.getElementById('cdbModal').classList.add('open');
+}
+
+function openEditCdbModal(cdb) {
+    document.getElementById('cdbModalTitle').textContent = 'Editar Investimento CDB';
+    document.getElementById('cdbEditId').value = cdb.id;
+    document.getElementById('cdbBank').value = cdb.bank;
+    document.getElementById('cdbRateType').value = cdb.rentabilityType;
+    document.getElementById('cdbRate').value = cdb.rentabilityRate;
+    document.getElementById('cdbInvestmentAmount').value = cdb.investmentAmount;
+    document.getElementById('cdbMonthlyContribution').value = cdb.monthlyContribution || 0;
+    document.getElementById('cdbStartDate').value = cdb.startDate;
+    document.getElementById('cdbTermMonths').value = cdb.termMonths;
+    document.getElementById('cdbNotes').value = cdb.notes || '';
+    document.getElementById('cdbModal').classList.add('open');
+}
+
+function closeCdbModal() {
+    document.getElementById('cdbModal').classList.remove('open');
+}
+
+function deleteCdbConfirm(cdb) {
+    if (confirm(`Deseja realmente remover o CDB do ${cdb.bank} (${cdb.rentabilityRate}%) da sua carteira?`)) {
+        try {
+            window.db.deleteCDB(cdb.id);
+            renderCdbPortfolioView();
+            showToast('CDB removido com sucesso!', 'success');
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    }
+}
+
+function calculateCdbSimulation() {
+    const initial = parseFloat(document.getElementById('cdbSimInitial').value) || 0;
+    const monthly = parseFloat(document.getElementById('cdbSimMonthly').value) || 0;
+    const rateType = document.getElementById('cdbSimRateType').value;
+    const rateValue = parseFloat(document.getElementById('cdbSimRate').value) || 0;
+    const durationInput = parseInt(document.getElementById('cdbSimDuration').value) || 0;
+    const durationUnit = document.getElementById('cdbSimDurationUnit').value;
+    const cdiBase = parseFloat(document.getElementById('cdbSimCdiBase').value) || 10.75;
+
+    const termMonths = durationUnit === 'years' ? durationInput * 12 : durationInput;
+
+    if (termMonths <= 0 || rateValue <= 0) {
+        showToast('Preencha os campos com valores válidos.', 'error');
+        return;
+    }
+
+    const simulation = runCdbSimulation(initial, monthly, rateType, rateValue, termMonths, cdiBase);
+    cdbSimulationData = simulation;
+
+    const finalRow = simulation[simulation.length - 1];
+    const totalDeposited = finalRow.deposited;
+    const finalNet = finalRow.balanceNet;
+    const finalGross = finalRow.balanceGross;
+    const finalTax = finalRow.tax;
+    const grossProfit = finalGross - totalDeposited;
+
+    document.getElementById('cdbSimTotalDepositedText').textContent = formatCurrency(totalDeposited);
+    document.getElementById('cdbSimNetValueText').textContent = formatCurrency(finalNet);
+    document.getElementById('cdbSimResultDurationText').textContent = `${termMonths} meses (${(termMonths/12).toFixed(1)} anos)`;
+    document.getElementById('cdbSimResultGrossProfitText').textContent = `+ ${formatCurrency(grossProfit)}`;
+    document.getElementById('cdbSimResultTaxText').textContent = `- ${formatCurrency(finalTax)}`;
+
+    const netYield = totalDeposited > 0 ? (finalNet - totalDeposited) / totalDeposited * 100 : 0;
+    document.getElementById('cdbSimResultNetYieldText').textContent = formatPercent(netYield);
+
+    // Tabela
+    const tbody = document.getElementById('cdbSimulationTableBody');
+    tbody.innerHTML = '';
+    simulation.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>Mês ${row.month}</td>
+            <td>${formatCurrency(row.deposited)}</td>
+            <td><strong>${formatCurrency(row.balanceGross)}</strong></td>
+            <td class="text-success">+ ${formatCurrency(row.profit)}</td>
+            <td class="text-danger">${formatCurrency(row.tax)}</td>
+            <td><strong>${formatCurrency(row.balanceNet)}</strong></td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    document.getElementById('cdbExportCsvBtn').style.display = 'inline-block';
+
+    // Gráfico
+    const ctx = document.getElementById('cdbEquityChart');
+    if (!ctx) return;
+
+    const labels = simulation.map(r => `Mês ${r.month}`);
+    const grossData = simulation.map(r => r.balanceGross);
+    const netData = simulation.map(r => r.balanceNet);
+    const investedData = simulation.map(r => r.deposited);
+
+    if (cdbEquityChartInstance) {
+        cdbEquityChartInstance.destroy();
+    }
+
+    cdbEquityChartInstance = new Chart(ctx.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: 'Saldo Bruto',
+                    data: grossData,
+                    borderColor: '#A7F3D0',
+                    backgroundColor: 'rgba(167, 243, 208, 0.05)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true
+                },
+                {
+                    label: 'Saldo Líquido',
+                    data: netData,
+                    borderColor: '#10B981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    borderWidth: 3,
+                    tension: 0.3,
+                    fill: true
+                },
+                {
+                    label: 'Total Investido',
+                    data: investedData,
+                    borderColor: '#9CA3AF',
+                    borderDash: [5, 5],
+                    borderWidth: 2,
+                    fill: false
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { labels: { color: '#FFF' } },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        label: (context) => `${context.dataset.label}: ${formatCurrency(context.raw)}`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: { color: '#9CA3AF' }
+                },
+                y: {
+                    grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                    ticks: {
+                        color: '#9CA3AF',
+                        callback: (v) => formatCurrency(v)
+                    }
+                }
+            }
+        }
+    });
+}
+
+function exportCdbSimulationCSV() {
+    if (!cdbSimulationData || cdbSimulationData.length === 0) return;
+
+    let csvContent = "data:text/csv;charset=utf-8,";
+    csvContent += "Mes,Aportado Acumulado,Saldo Bruto,Rendimento Bruto,Imposto Provisorio,Saldo Liquido\n";
+
+    cdbSimulationData.forEach(row => {
+        csvContent += `${row.month},${row.deposited.toFixed(2)},${row.balanceGross.toFixed(2)},${row.profit.toFixed(2)},${row.tax.toFixed(2)},${row.balanceNet.toFixed(2)}\n`;
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "simulacao_cdb.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+function exportCdbPortfolioCSV() {
+    const user = window.db.getCurrentUser();
+    if (!user) return;
+
+    const cdbs = window.db.getUserCDBs(user.id);
+    if (!cdbs.length) {
+        showToast('Nenhum CDB cadastrado para exportar.', 'info');
+        return;
+    }
+
+    let csvContent = 'data:text/csv;charset=utf-8,';
+    csvContent += 'Banco Emissor,Indexador,Taxa,Valor Aplicado,Data Inicio,Prazo (Meses),Rendimento Bruto,IR Provisorio,Saldo Liquido\n';
+
+    cdbs.forEach(cdb => {
+        const status = getCdbCurrentStatus(cdb);
+        csvContent += `"${cdb.bank}","${cdb.rentabilityType}",${cdb.rentabilityRate},${cdb.investmentAmount.toFixed(2)},"${cdb.startDate}",${cdb.termMonths},${status.profit.toFixed(2)},${status.tax.toFixed(2)},${status.balanceNet.toFixed(2)}\n`;
+    });
+
+    const link = document.createElement('a');
+    link.setAttribute('href', encodeURI(csvContent));
+    link.setAttribute('download', 'carteira_cdb.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// =========================================================
 // 12. INICIALIZAÇÃO & EVENT LISTENERS
 // =========================================================
 
@@ -1841,7 +2393,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Sub-Navegação interna de FIIs
-    document.querySelectorAll('.sub-nav-btn:not(.car-sub-btn)').forEach(btn => {
+    document.querySelectorAll('.sub-nav-btn:not(.car-sub-btn):not(.cdb-sub-btn)').forEach(btn => {
         btn.addEventListener('click', () => {
             const target = btn.getAttribute('data-subtarget');
             switchFiiSubView(target);
@@ -1853,6 +2405,14 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', () => {
             const target = btn.getAttribute('data-car-subtarget');
             switchCarSubView(target);
+        });
+    });
+
+    // Sub-Navegação interna de CDB
+    document.querySelectorAll('.sub-nav-btn.cdb-sub-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const target = btn.getAttribute('data-cdb-subtarget');
+            switchCdbSubView(target);
         });
     });
 
@@ -1930,6 +2490,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateAuthUI();
             renderPortfolioView();
             renderCarCardsListView();
+            renderCdbPortfolioView();
             showToast(`Bem-vindo de volta, ${user.name}!`, 'success');
         } catch (err) {
             showToast(err.message, 'error');
@@ -1947,6 +2508,7 @@ document.addEventListener('DOMContentLoaded', () => {
             updateAuthUI();
             renderPortfolioView();
             renderCarCardsListView();
+            renderCdbPortfolioView();
             showToast(`Conta criada com sucesso! Olá, ${user.name}!`, 'success');
         } catch (err) {
             showToast(err.message, 'error');
@@ -1960,7 +2522,8 @@ document.addEventListener('DOMContentLoaded', () => {
             updateAuthUI();
             renderPortfolioView();
             renderCarCardsListView();
-            showToast('Conectado à Conta Demo com dados de FIIs e Carros!', 'success');
+            renderCdbPortfolioView();
+            showToast('Conectado à Conta Demo com dados de FIIs, Carros e CDBs!', 'success');
         } catch (err) {
             showToast(err.message, 'error');
         }
@@ -1969,6 +2532,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('btnDemoLogin').addEventListener('click', handleDemoLogin);
     document.getElementById('btnPromptDemo').addEventListener('click', handleDemoLogin);
     document.getElementById('btnCarPromptDemo').addEventListener('click', handleDemoLogin);
+    document.getElementById('btnCdbPromptDemo').addEventListener('click', handleDemoLogin);
 
     // FII Portfolio
     document.getElementById('btnOpenAddInvestment').addEventListener('click', () => openAddInvestmentModal());
@@ -2162,6 +2726,44 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // CDB Event Listeners
+    document.getElementById('btnOpenAddCdb')?.addEventListener('click', openAddCdbModal);
+    document.getElementById('closeCdbModalBtn')?.addEventListener('click', closeCdbModal);
+    document.getElementById('btnCdbPromptLogin')?.addEventListener('click', () => openAuthModal('login'));
+
+    document.getElementById('cdbForm')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const editId = document.getElementById('cdbEditId').value;
+        const cdbData = {
+            id: editId || undefined,
+            bank: document.getElementById('cdbBank').value,
+            rentabilityType: document.getElementById('cdbRateType').value,
+            rentabilityRate: parseFloat(document.getElementById('cdbRate').value),
+            investmentAmount: parseFloat(document.getElementById('cdbInvestmentAmount').value),
+            monthlyContribution: parseFloat(document.getElementById('cdbMonthlyContribution').value) || 0,
+            startDate: document.getElementById('cdbStartDate').value,
+            termMonths: parseInt(document.getElementById('cdbTermMonths').value) || 12,
+            notes: document.getElementById('cdbNotes').value
+        };
+
+        try {
+            window.db.saveCDB(cdbData);
+            closeCdbModal();
+            renderCdbPortfolioView();
+            showToast(editId ? 'Investimento CDB atualizado!' : 'Investimento CDB cadastrado!', 'success');
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
+    });
+
+    document.getElementById('cdbSimulatorForm')?.addEventListener('submit', (e) => {
+        e.preventDefault();
+        calculateCdbSimulation();
+    });
+
+    document.getElementById('cdbExportCsvBtn')?.addEventListener('click', exportCdbSimulationCSV);
+    document.getElementById('btnExportCdbCsv')?.addEventListener('click', exportCdbPortfolioCSV);
+
     // Fechar modais ao clicar fora
     window.addEventListener('click', (e) => {
         const authModal = document.getElementById('authModal');
@@ -2169,16 +2771,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const buyModal = document.getElementById('buySharesModal');
         const carModal = document.getElementById('carModal');
         const carSaleModal = document.getElementById('carSaleModal');
+        const cdbModal = document.getElementById('cdbModal');
 
         if (e.target === authModal) closeAuthModal();
         if (e.target === invModal) closeInvestmentModal();
         if (e.target === buyModal) closeBuySharesModal();
         if (e.target === carModal) closeCarModal();
         if (e.target === carSaleModal) closeCarSaleModal();
+        if (e.target === cdbModal) closeCdbModal();
     });
 
     // Exportar relatório consolidado de carros
     document.getElementById('btnExportConsolidatedCarsCsv')?.addEventListener('click', exportConsolidatedCarsCsv);
+
+    // Inicializar visualizações se houver usuário
+    const initialUser = window.db.getCurrentUser();
+    if (initialUser) {
+        renderCdbPortfolioView();
+    }
 
     if (document.getElementById('sharePrice').value) {
         calculateSimulation();

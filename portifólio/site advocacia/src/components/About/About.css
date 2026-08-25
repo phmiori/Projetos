@@ -1,0 +1,180 @@
+/* ── About — Light Theme ── */
+
+.about-section {
+  background: var(--color-bg);
+  position: relative;
+}
+
+.about-decoration {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(176,125,42,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.about-inner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4xl);
+  align-items: start;
+}
+
+.about-text { display: flex; flex-direction: column; }
+
+.about-desc { margin-bottom: var(--space-lg); }
+
+.about-desc-2 {
+  font-size: 0.95rem;
+  color: var(--color-text-muted);
+  line-height: 1.8;
+  margin-bottom: var(--space-2xl);
+}
+
+.about-title-em {
+  font-style: italic;
+  color: var(--color-gold);
+  -webkit-text-fill-color: unset;
+}
+
+/* Signature */
+.about-signature {
+  display: flex;
+  align-items: center;
+  gap: var(--space-lg);
+}
+
+.about-sig-line {
+  width: 36px;
+  height: 2px;
+  background: var(--color-gold);
+  flex-shrink: 0;
+}
+
+.about-sig-name {
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-navy);
+}
+
+.about-sig-role {
+  font-size: 0.72rem;
+  color: var(--color-gold);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+/* Value cards */
+.about-values { display: flex; flex-direction: column; gap: var(--space-md); }
+
+.about-value-card {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-lg);
+  padding: var(--space-lg) var(--space-xl);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: border-color var(--transition-base), transform var(--transition-base), box-shadow var(--transition-base);
+}
+
+.about-value-card:hover {
+  border-color: var(--color-border);
+  transform: translateX(4px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.about-value-icon {
+  font-size: 1.4rem;
+  color: var(--color-gold);
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-gold-glow);
+  border: 1px solid var(--color-gold-border);
+  border-radius: var(--radius-md);
+}
+
+.about-value-title {
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-navy);
+  margin-bottom: 4px;
+}
+
+.about-value-desc {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.65;
+}
+
+/* Quote box */
+.about-image-box {
+  background: linear-gradient(135deg, var(--color-navy) 0%, var(--color-navy-mid) 100%);
+  border-radius: var(--radius-lg);
+  padding: var(--space-xl) var(--space-2xl);
+  position: relative;
+  overflow: hidden;
+}
+
+.about-image-box::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-gold-light), var(--color-gold), transparent);
+}
+
+.about-image-box::after {
+  content: '';
+  position: absolute;
+  bottom: -40px;
+  right: -40px;
+  width: 160px;
+  height: 160px;
+  border-radius: 50%;
+  background: rgba(176,125,42,0.10);
+}
+
+.about-image-content { position: relative; z-index: 1; }
+
+.about-image-quote {
+  font-family: var(--font-serif);
+  font-size: 5rem;
+  color: var(--color-gold-light);
+  opacity: 0.3;
+  line-height: 0.8;
+  display: block;
+  margin-bottom: -1rem;
+}
+
+.about-image-text {
+  font-family: var(--font-serif);
+  font-size: 1.08rem;
+  font-style: italic;
+  color: rgba(255,255,255,0.88);
+  line-height: 1.75;
+  margin-bottom: var(--space-lg);
+}
+
+.about-image-bar {
+  width: 40px;
+  height: 2px;
+  background: var(--color-gold-light);
+  border-radius: 2px;
+}
+
+@media (max-width: 900px) {
+  .about-inner { grid-template-columns: 1fr; gap: var(--space-3xl); }
+}

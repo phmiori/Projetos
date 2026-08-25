@@ -10,6 +10,7 @@ class Database {
             USERS: 'fiimaster_users',
             INVESTMENTS: 'fiimaster_investments',
             CARS: 'fiimaster_auction_cars',
+            CDBS: 'fiimaster_cdbs',
             CURRENT_USER: 'fiimaster_current_session'
         };
         this.init();
@@ -24,6 +25,9 @@ class Database {
         }
         if (!localStorage.getItem(this.STORAGE_KEYS.CARS)) {
             localStorage.setItem(this.STORAGE_KEYS.CARS, JSON.stringify([]));
+        }
+        if (!localStorage.getItem(this.STORAGE_KEYS.CDBS)) {
+            localStorage.setItem(this.STORAGE_KEYS.CDBS, JSON.stringify([]));
         }
     }
 
@@ -221,6 +225,39 @@ class Database {
             const allCars = this.getAllCarsRaw();
             allCars.push(...initialCars);
             localStorage.setItem(this.STORAGE_KEYS.CARS, JSON.stringify(allCars));
+
+            // CDBs Demo
+            const initialCDBs = [
+                {
+                    id: this.generateId(),
+                    userId: demoUser.id,
+                    bank: 'Banco Inter',
+                    investmentAmount: 15000,
+                    monthlyContribution: 400,
+                    rentabilityType: 'CDI',
+                    rentabilityRate: 102,
+                    startDate: '2026-01-10',
+                    termMonths: 18,
+                    notes: 'Fundo de emergência',
+                    updatedAt: new Date().toISOString()
+                },
+                {
+                    id: this.generateId(),
+                    userId: demoUser.id,
+                    bank: 'XP Investimentos',
+                    investmentAmount: 25000,
+                    monthlyContribution: 0,
+                    rentabilityType: 'PRE',
+                    rentabilityRate: 12.8,
+                    startDate: '2026-03-15',
+                    termMonths: 36,
+                    notes: 'CDB Prefixado de médio prazo',
+                    updatedAt: new Date().toISOString()
+                }
+            ];
+            const allCDBs = this.getAllCDBsRaw();
+            allCDBs.push(...initialCDBs);
+            localStorage.setItem(this.STORAGE_KEYS.CDBS, JSON.stringify(allCDBs));
         }
 
         this.setCurrentUser(demoUser);
@@ -456,6 +493,79 @@ class Database {
         all = all.filter(car => !(car.id === carId && car.userId === currentUser.id));
         localStorage.setItem(this.STORAGE_KEYS.CARS, JSON.stringify(all));
         return this.getUserCars(currentUser.id);
+    }
+
+    // --- MÉTODOS DE INVESTIMENTOS CDB ---
+
+    getAllCDBsRaw() {
+        try {
+            return JSON.parse(localStorage.getItem(this.STORAGE_KEYS.CDBS)) || [];
+        } catch (e) {
+            console.error('Erro ao ler CDBs:', e);
+            return [];
+        }
+    }
+
+    getUserCDBs(userId) {
+        if (!userId) return [];
+        const all = this.getAllCDBsRaw();
+        return all.filter(cdb => cdb.userId === userId);
+    }
+
+    saveCDB(cdbData) {
+        const currentUser = this.getCurrentUser();
+        if (!currentUser) throw new Error('Você precisa estar logado para salvar seus CDBs.');
+
+        let all = this.getAllCDBsRaw();
+
+        if (cdbData.id) {
+            const index = all.findIndex(cdb => cdb.id === cdbData.id && cdb.userId === currentUser.id);
+            if (index !== -1) {
+                all[index] = {
+                    ...all[index],
+                    bank: (cdbData.bank || '').trim(),
+                    investmentAmount: parseFloat(cdbData.investmentAmount) || 0,
+                    monthlyContribution: parseFloat(cdbData.monthlyContribution) || 0,
+                    rentabilityType: cdbData.rentabilityType || 'CDI',
+                    rentabilityRate: parseFloat(cdbData.rentabilityRate) || 0,
+                    startDate: cdbData.startDate || new Date().toISOString().split('T')[0],
+                    termMonths: parseInt(cdbData.termMonths) || 12,
+                    notes: (cdbData.notes || '').trim(),
+                    updatedAt: new Date().toISOString()
+                };
+            } else {
+                throw new Error('Investimento em CDB não encontrado para edição.');
+            }
+        } else {
+            const newCdb = {
+                id: this.generateId(),
+                userId: currentUser.id,
+                bank: (cdbData.bank || '').trim(),
+                investmentAmount: parseFloat(cdbData.investmentAmount) || 0,
+                monthlyContribution: parseFloat(cdbData.monthlyContribution) || 0,
+                rentabilityType: cdbData.rentabilityType || 'CDI',
+                rentabilityRate: parseFloat(cdbData.rentabilityRate) || 0,
+                startDate: cdbData.startDate || new Date().toISOString().split('T')[0],
+                termMonths: parseInt(cdbData.termMonths) || 12,
+                notes: (cdbData.notes || '').trim(),
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
+            all.push(newCdb);
+        }
+
+        localStorage.setItem(this.STORAGE_KEYS.CDBS, JSON.stringify(all));
+        return this.getUserCDBs(currentUser.id);
+    }
+
+    deleteCDB(cdbId) {
+        const currentUser = this.getCurrentUser();
+        if (!currentUser) throw new Error('Você precisa estar logado.');
+
+        let all = this.getAllCDBsRaw();
+        all = all.filter(cdb => !(cdb.id === cdbId && cdb.userId === currentUser.id));
+        localStorage.setItem(this.STORAGE_KEYS.CDBS, JSON.stringify(all));
+        return this.getUserCDBs(currentUser.id);
     }
 }
 
