@@ -20,6 +20,8 @@ model Veiculo {
   placa           String?
   chassi          String?
   origem          String    @default("Seguradora") // Seguradora, Banco, Frota, etc.
+  leiloeiro       String?   // Ex: Sodré Santoro, Freitas, Copart
+  dataCompra      DateTime? // Data de aquisição/arremate
   status          String    @default("Em Trânsito") // Em Trânsito, Em Preparação, Regularização, Anunciado, Vendido
   observacoes     String?
 
@@ -45,7 +47,26 @@ model Veiculo {
   lucroBruto      Float?
   roiPct          Float?
 
+  // Relacionamento com Gastos Detalhados
+  gastos          GastoVeiculo[]
+
   // Timestamps
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }
+
+model GastoVeiculo {
+  id          Int      @id @default(autoincrement())
+  veiculoId   Int
+  veiculo     Veiculo  @relation(fields: [veiculoId], references: [id], onDelete: Cascade)
+  
+  data        DateTime @default(now())
+  categoria   String   // Taxa Leiloeiro / Pátio, Guincho, Mecânica, Funilaria / Pintura, Documentação, Estética, Outros
+  descricao   String   // Ex: Revisão geral: troca de óleo 0W20 e pastilhas
+  oficina     String?  // Ex: Auto Mecânica Paulista
+  valor       Float    @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+

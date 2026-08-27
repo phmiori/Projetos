@@ -87,10 +87,19 @@ function initEventListeners() {
     const vehicleModalOverlay = document.getElementById('vehicleModalOverlay');
     const detailsModalOverlay = document.getElementById('detailsModalOverlay');
 
+    const vendaCloseBtn = document.getElementById('vendaCloseBtn');
+    const btnVendaCancel = document.getElementById('btnVendaCancel');
+    const vendaModalOverlay = document.getElementById('vendaModalOverlay');
+    const vendaForm = document.getElementById('vendaForm');
+
     if (modalCloseBtn) modalCloseBtn.addEventListener('click', fecharModalCadastro);
     if (btnModalCancel) btnModalCancel.addEventListener('click', fecharModalCadastro);
     if (detailsCloseBtn) detailsCloseBtn.addEventListener('click', fecharModalDetalhes);
     if (btnDetailsClose) btnDetailsClose.addEventListener('click', fecharModalDetalhes);
+
+    if (vendaCloseBtn) vendaCloseBtn.addEventListener('click', fecharModalVenda);
+    if (btnVendaCancel) btnVendaCancel.addEventListener('click', fecharModalVenda);
+    if (vendaForm) vendaForm.addEventListener('submit', salvarVendaRapida);
 
     if (vehicleModalOverlay) {
         vehicleModalOverlay.addEventListener('click', (e) => {
@@ -104,10 +113,17 @@ function initEventListeners() {
         });
     }
 
+    if (vendaModalOverlay) {
+        vendaModalOverlay.addEventListener('click', (e) => {
+            if (e.target === vendaModalOverlay) fecharModalVenda();
+        });
+    }
+
     const vehicleForm = document.getElementById('vehicleForm');
     if (vehicleForm) {
         vehicleForm.addEventListener('submit', salvarVeiculo);
     }
+
 
     const statusPills = document.querySelectorAll('.status-pill');
     statusPills.forEach(pill => {
@@ -430,17 +446,16 @@ function criarCardVeiculoHTML(v) {
             </div>
 
             <footer class="car-card-footer">
-                <button class="btn-card-action btn-view-details" data-id="${v.id}" title="Ver Extrato Analítico">
+                <button class="btn-card-action btn-view-details" data-id="${v.id}" title="Ver Planilha de Gastos e Serviços">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <line x1="12" y1="16" x2="12" y2="12"></line>
-                        <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                        <rect width="20" height="14" x="2" y="5" rx="2"></rect>
+                        <line x1="2" y1="10" x2="22" y2="10"></line>
                     </svg>
-                    <span>Extrato</span>
+                    <span>Gastos & Planilha</span>
                 </button>
 
                 <div style="display: flex; gap: 6px;">
-                    <button class="btn-card-action btn-edit-car" data-id="${v.id}" title="Editar Despesas">
+                    <button class="btn-card-action btn-edit-car" data-id="${v.id}" title="Editar Dados do Veículo">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M12 20h9"></path>
                             <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
@@ -458,6 +473,7 @@ function criarCardVeiculoHTML(v) {
             </footer>
         </article>
     `;
+
 }
 
 function abrirModalCadastro() {
@@ -486,7 +502,7 @@ function abrirModalEdicao(id) {
     if (!veiculo) return;
 
     state.veiculoEmEdicao = veiculo;
-    document.getElementById('modalTitle').textContent = `Editar: ${veiculo.marca} ${veiculo.modelo}`;
+    document.getElementById('modalTitle').textContent = `Editar Dados: ${veiculo.marca} ${veiculo.modelo}`;
     document.getElementById('formVehicleId').value = veiculo.id;
 
     document.getElementById('inputMarca').value = veiculo.marca || '';
@@ -494,6 +510,15 @@ function abrirModalEdicao(id) {
     document.getElementById('inputAno').value = veiculo.ano || new Date().getFullYear();
     document.getElementById('inputPlaca').value = veiculo.placa || '';
     document.getElementById('inputChassi').value = veiculo.chassi || '';
+    document.getElementById('inputLeiloeiro').value = veiculo.leiloeiro || '';
+    
+    if (veiculo.dataCompra) {
+        const d = new Date(veiculo.dataCompra);
+        document.getElementById('inputDataCompra').value = d.toISOString().split('T')[0];
+    } else {
+        document.getElementById('inputDataCompra').value = '';
+    }
+
     document.getElementById('inputOrigem').value = veiculo.origem || 'Seguradora';
     document.getElementById('inputStatus').value = veiculo.status || 'Em Trânsito';
     document.getElementById('inputObservacoes').value = veiculo.observacoes || '';
@@ -553,6 +578,7 @@ async function salvarVeiculo(e) {
     const valorVenda = valorVendaVal !== '' ? parseFloat(valorVendaVal) : null;
 
     const dataVendaVal = document.getElementById('inputDataVenda').value;
+    const dataCompraVal = document.getElementById('inputDataCompra').value;
 
     let lucroBruto = null;
     let roiPct = null;
@@ -568,6 +594,8 @@ async function salvarVeiculo(e) {
         ano: parseInt(document.getElementById('inputAno').value, 10),
         placa: document.getElementById('inputPlaca').value.trim().toUpperCase() || null,
         chassi: document.getElementById('inputChassi').value.trim().toUpperCase() || null,
+        leiloeiro: document.getElementById('inputLeiloeiro').value.trim() || null,
+        dataCompra: dataCompraVal ? new Date(dataCompraVal) : null,
         origem: document.getElementById('inputOrigem').value,
         status: document.getElementById('inputStatus').value,
         observacoes: document.getElementById('inputObservacoes').value.trim() || null,
@@ -609,7 +637,7 @@ async function salvarVeiculo(e) {
                 }
             } else {
                 const novoId = state.veiculos.length > 0 ? Math.max(...state.veiculos.map(v => Number(v.id) || 0)) + 1 : 1;
-                state.veiculos.unshift({ id: novoId, ...payload, createdAt: new Date(), updatedAt: new Date() });
+                state.veiculos.unshift({ id: novoId, ...payload, gastos: [], createdAt: new Date(), updatedAt: new Date() });
             }
             salvarLocal();
         }
@@ -646,83 +674,180 @@ async function confirmarExclusao(id) {
     }
 }
 
+/**
+ * Renderiza o Extrato Completo e Planilha de Gastos (Design da Imagem de Referência)
+ */
 function abrirModalDetalhes(id) {
     const v = state.veiculos.find(item => String(item.id) === String(id));
     if (!v) return;
 
-    document.getElementById('detailsTitle').textContent = `${v.marca} ${v.modelo} (${v.ano})`;
-    document.getElementById('detailsSubtitle').textContent = `Placa: ${v.placa || 'Sem placa'} | Origem: ${v.origem || 'Leilão'} | Status: ${v.status}`;
+    document.getElementById('detailsTitle').textContent = `${v.marca} ${v.modelo}`;
+    document.getElementById('detailsSubtitle').textContent = `Placa: ${v.placa || 'Sem placa'} | Ano: ${v.ano} | Status: ${v.status}`;
 
-    const valorComissaoRS = (v.valorArremate || 0) * ((v.comissaoPct || 5) / 100);
+    const gastos = v.gastos || [];
+    let totalGastosPlanilha = 0;
+    gastos.forEach(g => {
+        totalGastosPlanilha += (Number(g.valor) || 0);
+    });
+
+    const isVendido = v.status === 'Vendido';
+    const lucroExibido = isVendido 
+        ? (v.lucroBruto !== null ? v.lucroBruto : (v.valorVenda ? v.valorVenda - v.custoTotal : 0))
+        : (v.precoAnuncio ? v.precoAnuncio - v.custoTotal : 0);
+
+    const statusBadgeClass = isVendido ? 'status-vendido-tag' : (v.status === 'Anunciado' ? 'status-venda' : 'status-preparando');
+    const statusTexto = isVendido ? 'VENDIDO' : (v.status === 'Anunciado' ? 'À VENDA' : v.status.toUpperCase());
+
+    const hojeStr = new Date().toISOString().split('T')[0];
 
     const html = `
-        <div class="details-grid-cards">
-            
-            <div class="details-card">
-                <h4 class="details-card-title">1. Custos de Aquisição no Leilão</h4>
-                <table class="details-table">
-                    <tr><td>Valor do Lance (Arremate):</td><td>${formatarMoeda(v.valorArremate || 0)}</td></tr>
-                    <tr><td>Comissão Leiloeiro (${v.comissaoPct || 5}%):</td><td>${formatarMoeda(valorComissaoRS)}</td></tr>
-                    <tr><td>Taxas Administrativas / Pátio:</td><td>${formatarMoeda(v.taxasPatio || 0)}</td></tr>
-                    <tr><td>Custo do Guincho:</td><td>${formatarMoeda(v.custoGuincho || 0)}</td></tr>
-                    <tr style="border-top: 1px solid var(--border-color);">
-                        <td><strong style="color: var(--text-main);">Subtotal Aquisição:</strong></td>
-                        <td><strong style="color: var(--accent-color);">${formatarMoeda(v.totalAquisicao || 0)}</strong></td>
-                    </tr>
-                </table>
+        <!-- 1. Header do Veículo com Indicadores -->
+        <div class="expense-vehicle-header">
+            <div class="expense-header-top">
+                <div class="expense-vehicle-title-wrap">
+                    <h2 class="expense-vehicle-name">${escapeHTML(v.marca)} ${escapeHTML(v.modelo)}</h2>
+                    <span class="status-badge-inline ${statusBadgeClass}">${statusTexto}</span>
+                </div>
+            </div>
+            <div class="expense-vehicle-meta">
+                <span>Ano: <strong>${v.ano}/${v.ano}</strong></span>
+                <span>Placa: <strong>${v.placa ? escapeHTML(v.placa) : 'Não emplacado'}</strong></span>
+                <span>Leiloeiro / Origem: <strong>${escapeHTML(v.leiloeiro || v.origem || 'Leilão')}</strong></span>
+                <span>Compra: <strong>${v.dataCompra ? formatarData(v.dataCompra) : (v.createdAt ? formatarData(v.createdAt) : '--')}</strong></span>
             </div>
 
-            <div class="details-card">
-                <h4 class="details-card-title">2. Gastos de Reforma e Regularização</h4>
-                <table class="details-table">
-                    <tr><td>Oficina / Mecânica:</td><td>${formatarMoeda(v.gastoMecanica || 0)}</td></tr>
-                    <tr><td>Funilaria e Pintura:</td><td>${formatarMoeda(v.gastoFunilaria || 0)}</td></tr>
-                    <tr><td>Estética / Higienização:</td><td>${formatarMoeda(v.gastoEstetica || 0)}</td></tr>
-                    <tr><td>Detran / IPVA / Multas:</td><td>${formatarMoeda(v.gastoDocumentacao || 0)}</td></tr>
-                    <tr style="border-top: 1px solid var(--border-color);">
-                        <td><strong style="color: var(--text-main);">Subtotal Preparação:</strong></td>
-                        <td><strong style="color: var(--accent-color);">${formatarMoeda(v.totalPreparacao || 0)}</strong></td>
-                    </tr>
-                </table>
+            <!-- 4 Cards de Métricas -->
+            <div class="expense-kpis-grid">
+                <div class="expense-kpi-box">
+                    <span class="expense-kpi-label">Lance / Arrematação</span>
+                    <span class="expense-kpi-val">${formatarMoeda(v.valorArremate || 0)}</span>
+                </div>
+                <div class="expense-kpi-box">
+                    <span class="expense-kpi-label">Gastos na Planilha</span>
+                    <span class="expense-kpi-val accent">${formatarMoeda(totalGastosPlanilha > 0 ? totalGastosPlanilha : v.totalPreparacao + (v.taxasPatio || 0) + (v.custoGuincho || 0))}</span>
+                </div>
+                <div class="expense-kpi-box">
+                    <span class="expense-kpi-label">Custo Total do Carro</span>
+                    <span class="expense-kpi-val accent">${formatarMoeda(v.custoTotal || 0)}</span>
+                </div>
+                <div class="expense-kpi-box highlight">
+                    <span class="expense-kpi-label">${isVendido ? 'Lucro Realizado (Venda)' : 'Lucro Estimado (Anúncio)'}</span>
+                    <span class="expense-kpi-val ${lucroExibido >= 0 ? 'income' : 'expense'}">${formatarMoeda(lucroExibido)}</span>
+                </div>
             </div>
-
         </div>
 
-        <div class="form-group-card highlight-card">
-            <h4 class="details-card-title" style="color: var(--text-main); font-size: 1rem;">
-                3. Balanço Financeiro Acumulado
-            </h4>
-            <div class="profit-preview-box">
-                <div class="profit-item">
-                    <span class="profit-label">Custo Total Investido</span>
-                    <strong class="profit-value">${formatarMoeda(v.custoTotal || 0)}</strong>
+        <!-- 2. Formulário Horizontal de Lançamento de Novo Gasto -->
+        <div class="expense-form-card">
+            <h3 class="expense-form-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span>Lançar Novo Gasto / Serviço Realizado</span>
+            </h3>
+
+            <form id="formNovoGasto" data-veiculo-id="${v.id}">
+                <div class="expense-inputs-bar">
+                    <input type="date" id="gastoInputData" class="input-missao" value="${hojeStr}" required title="Data do serviço ou taxa">
+                    
+                    <select id="gastoInputCategoria" class="input-missao" required>
+                        <option value="Taxa Leiloeiro / Pátio">Taxa Leilão / Pátio</option>
+                        <option value="Guincho">Guincho</option>
+                        <option value="Mecânica" selected>Mecânica</option>
+                        <option value="Funilaria / Pintura">Funilaria / Pintura</option>
+                        <option value="Documentação">Documentação</option>
+                        <option value="Estética / Higienização">Estética / Higienização</option>
+                        <option value="Outros">Outros</option>
+                    </select>
+
+                    <input type="text" id="gastoInputDescricao" class="input-missao" placeholder="O que foi feito? (Ex: Troca de óleo e pastilhas)" required>
+                    
+                    <input type="text" id="gastoInputOficina" class="input-missao" placeholder="Oficina / Loja (Ex: Mecânica Silva)">
+                    
+                    <input type="number" id="gastoInputValor" class="input-missao" step="0.01" min="0" placeholder="R$ 0,00" required>
+                    
+                    <button type="submit" class="btn-lancar-gasto">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <rect width="20" height="14" x="2" y="5" rx="2"></rect>
+                            <line x1="2" y1="10" x2="22" y2="10"></line>
+                        </svg>
+                        <span>Lançar</span>
+                    </button>
                 </div>
-                <div class="profit-item">
-                    <span class="profit-label">${v.status === 'Vendido' ? 'Valor Final de Venda' : 'Preço de Anúncio'}</span>
-                    <strong class="profit-value text-accent">${formatarMoeda(v.status === 'Vendido' ? (v.valorVenda || 0) : (v.precoAnuncio || 0))}</strong>
-                </div>
-                <div class="profit-item">
-                    <span class="profit-label">${v.status === 'Vendido' ? 'Lucro Bruto Realizado' : 'Lucro Potencial'}</span>
-                    <strong class="profit-value ${v.lucroBruto >= 0 ? 'text-income' : 'text-expense'}">
-                        ${v.status === 'Vendido' ? formatarMoeda(v.lucroBruto || 0) : (v.precoAnuncio ? formatarMoeda(v.precoAnuncio - v.custoTotal) : 'N/A')}
-                    </strong>
-                </div>
-                <div class="profit-item">
-                    <span class="profit-label">Retorno % (ROI)</span>
-                    <strong class="profit-value text-accent">
-                        ${v.status === 'Vendido' && v.roiPct !== null ? v.roiPct.toFixed(1) + '%' : (v.precoAnuncio && v.custoTotal > 0 ? (((v.precoAnuncio - v.custoTotal) / v.custoTotal) * 100).toFixed(1) + '%' : 'N/A')}
-                    </strong>
+            </form>
+        </div>
+
+        <!-- 3. Planilha de Gastos e Serviços do Veículo -->
+        <div class="expense-table-container">
+            <div class="expense-table-header">
+                <h3 class="expense-table-title">Planilha de Gastos & Serviços do Veículo</h3>
+                <div class="expense-table-actions">
+                    <button type="button" class="btn-export-csv" id="btnExportarCsv" data-id="${v.id}">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        <span>Exportar Planilha (CSV)</span>
+                    </button>
+
+                    <button type="button" class="btn-mark-sold" id="btnMarcarVendido" data-id="${v.id}">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                        <span>Marcar como Vendido / Preço</span>
+                    </button>
                 </div>
             </div>
-            ${v.observacoes ? `
-                <div style="margin-top: 10px; font-size: 0.85rem; color: var(--text-sub);">
-                    <strong>Observações:</strong> ${escapeHTML(v.observacoes)}
-                </div>
-            ` : ''}
+
+            <div class="expense-table-wrapper">
+                <table class="expense-data-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;">#</th>
+                            <th style="width: 110px;">DATA</th>
+                            <th style="width: 160px;">CATEGORIA</th>
+                            <th>DESCRIÇÃO DO QUE FOI FEITO</th>
+                            <th style="width: 200px;">OFICINA / FORNECEDOR</th>
+                            <th style="width: 140px; text-align: right;">VALOR (R$)</th>
+                            <th style="width: 60px; text-align: center;">EXCLUIR</th>
+                        </tr>
+                    </thead>
+                    <tbody id="expenseTableBody">
+                        ${renderizarLinhasGastos(gastos, v)}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="expense-table-footer">
+                <span class="expense-footer-label">TOTAL DE GASTOS NA PLANILHA:</span>
+                <span class="expense-footer-total">${formatarMoeda(totalGastosPlanilha > 0 ? totalGastosPlanilha : v.totalPreparacao + (v.taxasPatio || 0) + (v.custoGuincho || 0))}</span>
+            </div>
         </div>
     `;
 
     document.getElementById('detailsBody').innerHTML = html;
+
+    // Vincular Eventos do Extrato de Gastos
+    const formNovoGasto = document.getElementById('formNovoGasto');
+    if (formNovoGasto) {
+        formNovoGasto.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            await adicionarNovoGasto(v.id);
+        });
+    }
+
+    const btnExportarCsv = document.getElementById('btnExportarCsv');
+    if (btnExportarCsv) {
+        btnExportarCsv.addEventListener('click', () => exportarPlanilhaCsv(v));
+    }
+
+    const btnMarcarVendido = document.getElementById('btnMarcarVendido');
+    if (btnMarcarVendido) {
+        btnMarcarVendido.addEventListener('click', () => abrirModalVenda(v));
+    }
 
     const btnEdit = document.getElementById('btnDetailsEdit');
     if (btnEdit) {
@@ -732,8 +857,306 @@ function abrirModalDetalhes(id) {
         };
     }
 
+    // Vincular eventos de exclusão de gastos
+    vincularEventosExclusaoGasto(v.id);
+
     document.getElementById('detailsModalOverlay').classList.add('active');
     document.body.style.overflow = 'hidden';
+}
+
+function renderizarLinhasGastos(gastos, v) {
+    if (!gastos || gastos.length === 0) {
+        // Se ainda não tiver registros detalhados na tabela, cria linhas base dos custos fixos informados
+        const linhasIniciais = [];
+        let index = 1;
+
+        if (v.taxasPatio > 0) {
+            linhasIniciais.push(`
+                <tr>
+                    <td>${index++}</td>
+                    <td>${v.dataCompra ? formatarData(v.dataCompra) : formatarData(v.createdAt)}</td>
+                    <td><span class="cat-badge cat-leilao">TAXA LEILOEIRO</span></td>
+                    <td>Taxa administrativa e estadia do lote</td>
+                    <td>${escapeHTML(v.leiloeiro || 'Pátio')}</td>
+                    <td style="text-align: right; font-weight: 700;">${formatarMoeda(v.taxasPatio)}</td>
+                    <td style="text-align: center;">--</td>
+                </tr>
+            `);
+        }
+
+        if (v.custoGuincho > 0) {
+            linhasIniciais.push(`
+                <tr>
+                    <td>${index++}</td>
+                    <td>${v.dataCompra ? formatarData(v.dataCompra) : formatarData(v.createdAt)}</td>
+                    <td><span class="cat-badge cat-guincho">GUINCHO</span></td>
+                    <td>Frete e transporte do pátio até oficina</td>
+                    <td>Transporte Guincho</td>
+                    <td style="text-align: right; font-weight: 700;">${formatarMoeda(v.custoGuincho)}</td>
+                    <td style="text-align: center;">--</td>
+                </tr>
+            `);
+        }
+
+        if (v.gastoMecanica > 0) {
+            linhasIniciais.push(`
+                <tr>
+                    <td>${index++}</td>
+                    <td>${v.createdAt ? formatarData(v.createdAt) : '--'}</td>
+                    <td><span class="cat-badge cat-mecanica">MECÂNICA</span></td>
+                    <td>Revisão e manutenção mecânica geral</td>
+                    <td>Oficina Mecânica</td>
+                    <td style="text-align: right; font-weight: 700;">${formatarMoeda(v.gastoMecanica)}</td>
+                    <td style="text-align: center;">--</td>
+                </tr>
+            `);
+        }
+
+        if (v.gastoFunilaria > 0) {
+            linhasIniciais.push(`
+                <tr>
+                    <td>${index++}</td>
+                    <td>${v.createdAt ? formatarData(v.createdAt) : '--'}</td>
+                    <td><span class="cat-badge cat-funilaria">FUNILARIA / PINTURA</span></td>
+                    <td>Reparos de lataria e pintura</td>
+                    <td>Oficina de Pintura</td>
+                    <td style="text-align: right; font-weight: 700;">${formatarMoeda(v.gastoFunilaria)}</td>
+                    <td style="text-align: center;">--</td>
+                </tr>
+            `);
+        }
+
+        if (v.gastoDocumentacao > 0) {
+            linhasIniciais.push(`
+                <tr>
+                    <td>${index++}</td>
+                    <td>${v.createdAt ? formatarData(v.createdAt) : '--'}</td>
+                    <td><span class="cat-badge cat-documentacao">DOCUMENTAÇÃO</span></td>
+                    <td>Transferência, taxas Detran e laudos</td>
+                    <td>Despachante</td>
+                    <td style="text-align: right; font-weight: 700;">${formatarMoeda(v.gastoDocumentacao)}</td>
+                    <td style="text-align: center;">--</td>
+                </tr>
+            `);
+        }
+
+        if (linhasIniciais.length > 0) {
+            return linhasIniciais.join('');
+        }
+
+        return `
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 24px; color: var(--text-sub);">
+                    Nenhum gasto lançado para este veículo ainda. Use o formulário acima para lançar serviços!
+                </td>
+            </tr>
+        `;
+    }
+
+    return gastos.map((g, idx) => {
+        const catClass = getCategoryBadgeClass(g.categoria);
+        return `
+            <tr>
+                <td>${idx + 1}</td>
+                <td>${formatarData(g.data)}</td>
+                <td><span class="cat-badge ${catClass}">${escapeHTML(g.categoria)}</span></td>
+                <td>${escapeHTML(g.descricao)}</td>
+                <td>${g.oficina ? escapeHTML(g.oficina) : '--'}</td>
+                <td style="text-align: right; font-weight: 700;">${formatarMoeda(g.valor)}</td>
+                <td style="text-align: center;">
+                    <button class="btn-delete-expense-row" data-gasto-id="${g.id}" title="Excluir Lançamento">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="3 6 5 6 21 6"></polyline>
+                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        </svg>
+                    </button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function getCategoryBadgeClass(categoria) {
+    const c = String(categoria).toLowerCase();
+    if (c.includes('leilao') || c.includes('leilão') || c.includes('pátio') || c.includes('patio') || c.includes('taxa')) return 'cat-leilao';
+    if (c.includes('guincho')) return 'cat-guincho';
+    if (c.includes('mecanica') || c.includes('mecânica')) return 'cat-mecanica';
+    if (c.includes('funilaria') || c.includes('pintura')) return 'cat-funilaria';
+    if (c.includes('document') || c.includes('detran') || c.includes('ipva')) return 'cat-documentacao';
+    if (c.includes('estet') || c.includes('higieniz')) return 'cat-estetica';
+    return 'cat-outros';
+}
+
+function vincularEventosExclusaoGasto(veiculoId) {
+    const botoesExcluir = document.querySelectorAll('.btn-delete-expense-row');
+    botoesExcluir.forEach(btn => {
+        btn.addEventListener('click', async () => {
+            const gastoId = btn.getAttribute('data-gasto-id');
+            if (!gastoId) return;
+
+            if (!confirm('Deseja realmente remover este lançamento de gasto?')) return;
+
+            try {
+                if (state.modoApi) {
+                    const res = await fetch(`${API_BASE}/veiculos/${veiculoId}/gastos/${gastoId}`, {
+                        method: 'DELETE'
+                    });
+                    if (!res.ok) throw new Error('Erro ao excluir gasto');
+                } else {
+                    const veiculo = state.veiculos.find(v => String(v.id) === String(veiculoId));
+                    if (veiculo && veiculo.gastos) {
+                        veiculo.gastos = veiculo.gastos.filter(g => String(g.id) !== String(gastoId));
+                        salvarLocal();
+                    }
+                }
+
+                await carregarVeiculos();
+                abrirModalDetalhes(veiculoId);
+            } catch (err) {
+                console.error('Erro ao excluir gasto:', err);
+                alert('Erro ao excluir gasto do veículo.');
+            }
+        });
+    });
+}
+
+async function adicionarNovoGasto(veiculoId) {
+    const dataVal = document.getElementById('gastoInputData').value;
+    const categoria = document.getElementById('gastoInputCategoria').value;
+    const descricao = document.getElementById('gastoInputDescricao').value.trim();
+    const oficina = document.getElementById('gastoInputOficina').value.trim();
+    const valor = parseFloat(document.getElementById('gastoInputValor').value) || 0;
+
+    if (!descricao || valor <= 0) {
+        alert('Por favor, informe a descrição e o valor do gasto.');
+        return;
+    }
+
+    const payload = {
+        data: dataVal ? new Date(dataVal) : new Date(),
+        categoria,
+        descricao,
+        oficina: oficina || null,
+        valor
+    };
+
+    try {
+        if (state.modoApi) {
+            const res = await fetch(`${API_BASE}/veiculos/${veiculoId}/gastos`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) throw new Error('Falha ao adicionar gasto');
+        } else {
+            const veiculo = state.veiculos.find(v => String(v.id) === String(veiculoId));
+            if (veiculo) {
+                if (!veiculo.gastos) veiculo.gastos = [];
+                const novoId = veiculo.gastos.length > 0 ? Math.max(...veiculo.gastos.map(g => Number(g.id) || 0)) + 1 : 1;
+                veiculo.gastos.push({ id: novoId, ...payload, createdAt: new Date() });
+                veiculo.custoTotal = (veiculo.custoTotal || 0) + valor;
+                veiculo.totalPreparacao = (veiculo.totalPreparacao || 0) + valor;
+                salvarLocal();
+            }
+        }
+
+        await carregarVeiculos();
+        abrirModalDetalhes(veiculoId);
+
+    } catch (err) {
+        console.error('Erro ao cadastrar gasto:', err);
+        alert('Erro ao salvar novo gasto.');
+    }
+}
+
+function abrirModalVenda(veiculo) {
+    document.getElementById('vendaVehicleId').value = veiculo.id;
+    document.getElementById('vendaModalSubtitle').textContent = `${veiculo.marca} ${veiculo.modelo} (${veiculo.placa || 'Sem placa'})`;
+    document.getElementById('vendaPrecoAnuncio').value = veiculo.precoAnuncio || '';
+    document.getElementById('vendaValorFinal').value = veiculo.valorVenda || veiculo.precoAnuncio || '';
+    
+    const hojeStr = new Date().toISOString().split('T')[0];
+    document.getElementById('vendaData').value = veiculo.dataVenda ? new Date(veiculo.dataVenda).toISOString().split('T')[0] : hojeStr;
+    document.getElementById('vendaStatus').value = veiculo.status === 'Vendido' ? 'Vendido' : 'Vendido';
+
+    document.getElementById('vendaModalOverlay').classList.add('active');
+}
+
+function fecharModalVenda() {
+    document.getElementById('vendaModalOverlay').classList.remove('active');
+}
+
+async function salvarVendaRapida(e) {
+    e.preventDefault();
+
+    const veiculoId = document.getElementById('vendaVehicleId').value;
+    const precoAnuncio = document.getElementById('vendaPrecoAnuncio').value;
+    const valorVenda = document.getElementById('vendaValorFinal').value;
+    const dataVenda = document.getElementById('vendaData').value;
+    const status = document.getElementById('vendaStatus').value;
+
+    const payload = {
+        precoAnuncio: precoAnuncio ? parseFloat(precoAnuncio) : null,
+        valorVenda: valorVenda ? parseFloat(valorVenda) : null,
+        dataVenda: dataVenda ? new Date(dataVenda) : new Date(),
+        status
+    };
+
+    try {
+        if (state.modoApi) {
+            const res = await fetch(`${API_BASE}/veiculos/${veiculoId}/vender`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!res.ok) throw new Error('Falha ao registrar venda');
+        } else {
+            const veiculo = state.veiculos.find(v => String(v.id) === String(veiculoId));
+            if (veiculo) {
+                veiculo.precoAnuncio = payload.precoAnuncio;
+                veiculo.valorVenda = payload.valorVenda;
+                veiculo.dataVenda = payload.dataVenda;
+                veiculo.status = payload.status;
+                if (payload.valorVenda) {
+                    veiculo.lucroBruto = payload.valorVenda - veiculo.custoTotal;
+                    veiculo.roiPct = veiculo.custoTotal > 0 ? (veiculo.lucroBruto / veiculo.custoTotal) * 100 : 0;
+                }
+                salvarLocal();
+            }
+        }
+
+        fecharModalVenda();
+        await carregarVeiculos();
+        abrirModalDetalhes(veiculoId);
+
+    } catch (err) {
+        console.error('Erro na venda rápida:', err);
+        alert('Erro ao registrar venda do veículo.');
+    }
+}
+
+function exportarPlanilhaCsv(veiculo) {
+    const headers = ['ID', 'Data', 'Categoria', 'Descricao', 'Oficina_Fornecedor', 'Valor_RS'];
+    const rows = (veiculo.gastos || []).map(g => [
+        g.id,
+        formatarData(g.data),
+        `"${g.categoria}"`,
+        `"${g.descricao.replace(/"/g, '""')}"`,
+        `"${(g.oficina || '').replace(/"/g, '""')}"`,
+        (g.valor || 0).toFixed(2).replace('.', ',')
+    ]);
+
+    const csvContent = '\uFEFF' + [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `gastos_${veiculo.marca}_${veiculo.modelo}_${veiculo.placa || veiculo.id}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 function fecharModalDetalhes() {
@@ -769,3 +1192,4 @@ function escapeHTML(str) {
 function salvarLocal() {
     localStorage.setItem('autoleilao_veiculos', JSON.stringify(state.veiculos));
 }
+

@@ -346,7 +346,7 @@
                             </div>
                         </div>
 
-                        <div class="form-grid-3">
+                        <div class="form-grid-4">
                             <div class="input-field">
                                 <label for="inputPlaca">Placa</label>
                                 <input type="text" id="inputPlaca" class="input-missao" placeholder="Ex: BRA2E19" maxlength="8">
@@ -356,7 +356,18 @@
                                 <input type="text" id="inputChassi" class="input-missao" placeholder="Número do Chassi">
                             </div>
                             <div class="input-field">
-                                <label for="inputOrigem">Origem / Leiloeiro *</label>
+                                <label for="inputLeiloeiro">Leiloeiro / Empresa</label>
+                                <input type="text" id="inputLeiloeiro" class="input-missao" placeholder="Ex: Sodré Santoro, Copart">
+                            </div>
+                            <div class="input-field">
+                                <label for="inputDataCompra">Data da Compra</label>
+                                <input type="date" id="inputDataCompra" class="input-missao">
+                            </div>
+                        </div>
+
+                        <div class="form-grid-3">
+                            <div class="input-field">
+                                <label for="inputOrigem">Origem do Lote *</label>
                                 <select id="inputOrigem" class="input-missao" required>
                                     <option value="Seguradora">Seguradora</option>
                                     <option value="Banco / Financeira">Banco / Financeira</option>
@@ -366,9 +377,6 @@
                                     <option value="Outro">Outro</option>
                                 </select>
                             </div>
-                        </div>
-
-                        <div class="form-grid-2">
                             <div class="input-field">
                                 <label for="inputStatus">Status Atual *</label>
                                 <select id="inputStatus" class="input-missao" required>
@@ -381,10 +389,11 @@
                             </div>
                             <div class="input-field">
                                 <label for="inputObservacoes">Observações / Descrição das Avarias</label>
-                                <input type="text" id="inputObservacoes" class="input-missao" placeholder="Ex: Colisão leve na traseira, mecânica ok">
+                                <input type="text" id="inputObservacoes" class="input-missao" placeholder="Ex: Colisão leve, mecânica ok">
                             </div>
                         </div>
                     </div>
+
 
                     <!-- 2. CUSTOS DE AQUISIÇÃO -->
                     <div class="form-group-card">
@@ -499,25 +508,67 @@
         </div>
     </div>
 
-    <!-- MODAL: Visualização Completa de Detalhes -->
+    <!-- MODAL: Extrato Analítico & Planilha de Gastos do Veículo -->
     <div class="modal-overlay" id="detailsModalOverlay">
-        <div class="modal-dialog modal-dialog-wide">
+        <div class="modal-dialog modal-dialog-extra-wide">
             <header class="modal-header">
                 <div>
-                    <h2 class="modal-title" id="detailsTitle">Detalhes do Veículo</h2>
-                    <p class="modal-subtitle" id="detailsSubtitle">Extrato analítico de custos e resultados</p>
+                    <h2 class="modal-title" id="detailsTitle">Planilha de Gastos & Serviços</h2>
+                    <p class="modal-subtitle" id="detailsSubtitle">Gestão completa de despesas, reformas e resultado financeiro</p>
                 </div>
                 <button class="modal-close-btn" id="detailsCloseBtn" aria-label="Fechar">&times;</button>
             </header>
             <div class="modal-body" id="detailsBody">
-                <!-- Conteúdo dinâmico -->
+                <!-- Conteúdo dinâmico com o layout idêntico à imagem -->
             </div>
             <footer class="modal-footer">
                 <button type="button" class="btn-cancel" id="btnDetailsClose">Fechar</button>
-                <button type="button" class="btn-missao-primary" id="btnDetailsEdit">Editar Gastos</button>
+                <button type="button" class="btn-missao-primary" id="btnDetailsEdit">Editar Dados do Veículo</button>
             </footer>
         </div>
     </div>
+
+    <!-- MODAL: Marcar como Vendido / Definir Preço Rápido -->
+    <div class="modal-overlay" id="vendaModalOverlay">
+        <div class="modal-dialog" style="max-width: 500px;">
+            <header class="modal-header">
+                <div>
+                    <h2 class="modal-title">Registrar Venda / Preço</h2>
+                    <p class="modal-subtitle" id="vendaModalSubtitle">Defina o valor e feche o ciclo financeiro</p>
+                </div>
+                <button class="modal-close-btn" id="vendaCloseBtn" aria-label="Fechar">&times;</button>
+            </header>
+            <form id="vendaForm">
+                <input type="hidden" id="vendaVehicleId">
+                <div class="form-sections-wrapper" style="padding: 20px;">
+                    <div class="input-field">
+                        <label for="vendaPrecoAnuncio">Preço de Anúncio (R$)</label>
+                        <input type="number" id="vendaPrecoAnuncio" class="input-missao" step="0.01" min="0" placeholder="Ex: 89.900,00">
+                    </div>
+                    <div class="input-field" style="margin-top: 12px;">
+                        <label for="vendaValorFinal">Valor Final de Venda (R$) *</label>
+                        <input type="number" id="vendaValorFinal" class="input-missao" step="0.01" min="0" required placeholder="Ex: 88.000,00">
+                    </div>
+                    <div class="input-field" style="margin-top: 12px;">
+                        <label for="vendaData">Data da Venda *</label>
+                        <input type="date" id="vendaData" class="input-missao" required>
+                    </div>
+                    <div class="input-field" style="margin-top: 12px;">
+                        <label for="vendaStatus">Status do Veículo</label>
+                        <select id="vendaStatus" class="input-missao">
+                            <option value="Vendido" selected>Vendido</option>
+                            <option value="Anunciado">Anunciado (Apenas atualizar preço)</option>
+                        </select>
+                    </div>
+                </div>
+                <footer class="modal-footer">
+                    <button type="button" class="btn-cancel" id="btnVendaCancel">Cancelar</button>
+                    <button type="submit" class="btn-missao-primary" style="background-color: #f59e0b; color: #000;">Salvar Venda</button>
+                </footer>
+            </form>
+        </div>
+    </div>
+
 
 </body>
 </html>

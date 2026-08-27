@@ -794,8 +794,8 @@
     display: none;
     position: fixed;
     inset: 0;
-    background-color: var(--missao-black);
-    opacity: 0.9;
+    background-color: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(4px);
     z-index: 2000;
     align-items: center;
     justify-content: center;
@@ -808,24 +808,27 @@
 .modal-dialog {
     background-color: var(--bg-surface);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-suth);
+    border-radius: 12px;
     width: 100%;
-    max-width: 860px;
+    max-width: 880px;
     max-height: 90vh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
     position: relative;
     z-index: 2001;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border-color);
     animation: modalFadeIn 0.2s ease-out;
 }
 
-.modal-dialog-wide { max-width: 960px; }
+.modal-dialog-wide { max-width: 1100px; }
+.modal-dialog-extra-wide { max-width: 1240px; }
 
 @keyframes modalFadeIn {
     from { opacity: 0; transform: translateY(12px) scale(0.98); }
     to { opacity: 1; transform: translateY(0) scale(1); }
 }
+
 
 .modal-header {
     padding: 20px 24px;
@@ -974,13 +977,332 @@
     background-color: var(--bg-main);
 }
 
-/* Modal Detalhes */
+/* Modal Detalhes & Planilha de Gastos */
 .modal-body {
     padding: 24px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
     gap: 20px;
+}
+
+/* Header do Veículo no Lançador de Gastos */
+.expense-vehicle-header {
+    background: linear-gradient(135deg, rgba(28, 28, 30, 0.95), rgba(18, 18, 18, 0.98));
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.expense-header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.expense-vehicle-title-wrap {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.expense-vehicle-name {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: var(--text-main);
+    letter-spacing: -0.5px;
+}
+
+.status-badge-inline {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.status-venda { background: rgba(30, 144, 255, 0.2); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.4); }
+.status-preparando { background: rgba(238, 187, 0, 0.2); color: #facc15; border: 1px solid rgba(250, 204, 21, 0.4); }
+.status-vendido-tag { background: rgba(46, 125, 50, 0.2); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4); }
+
+.expense-vehicle-meta {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 0.85rem;
+    color: var(--text-sub);
+    flex-wrap: wrap;
+}
+
+.expense-vehicle-meta span strong {
+    color: var(--text-main);
+}
+
+/* 4 Cards de Métricas no Header */
+.expense-kpis-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.expense-kpi-box {
+    background-color: rgba(0, 0, 0, 0.35);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.expense-kpi-box.highlight {
+    border-color: rgba(238, 187, 0, 0.4);
+    background: linear-gradient(180deg, rgba(238, 187, 0, 0.08), rgba(0, 0, 0, 0.4));
+}
+
+.expense-kpi-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-sub);
+}
+
+.expense-kpi-val {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text-main);
+    font-variant-numeric: tabular-nums;
+}
+
+.expense-kpi-val.accent { color: var(--accent-color); }
+.expense-kpi-val.income { color: #4ade80; }
+
+/* Formulário de Lançamento de Gasto Horizontal */
+.expense-form-card {
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.expense-form-title {
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: var(--accent-color);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.expense-inputs-bar {
+    display: grid;
+    grid-template-columns: 140px 180px 1.4fr 1.1fr 140px auto;
+    gap: 10px;
+    align-items: center;
+}
+
+.expense-inputs-bar .input-missao {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+    height: 38px;
+}
+
+.btn-lancar-gasto {
+    background-color: #f97316;
+    color: #ffffff;
+    font-weight: 800;
+    font-size: 0.85rem;
+    border: none;
+    border-radius: var(--radius-button);
+    padding: 0 16px;
+    height: 38px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    transition: var(--transition-fast);
+    white-space: nowrap;
+}
+
+.btn-lancar-gasto:hover {
+    background-color: #ea580c;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
+}
+
+/* Planilha / Tabela de Gastos */
+.expense-table-container {
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.expense-table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.expense-table-title {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.expense-table-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-export-csv {
+    background-color: transparent;
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-button);
+    padding: 8px 14px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: var(--transition-fast);
+}
+
+.btn-export-csv:hover {
+    background-color: var(--bg-surface);
+    border-color: var(--accent-color);
+}
+
+.btn-mark-sold {
+    background-color: #f59e0b;
+    color: #000000;
+    border: none;
+    border-radius: var(--radius-button);
+    padding: 8px 16px;
+    font-size: 0.85rem;
+    font-weight: 800;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: var(--transition-fast);
+}
+
+.btn-mark-sold:hover {
+    background-color: #d97706;
+    transform: translateY(-1px);
+}
+
+.expense-table-wrapper {
+    overflow-x: auto;
+}
+
+.expense-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.expense-data-table th {
+    text-align: left;
+    padding: 10px 12px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-sub);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.expense-data-table td {
+    padding: 12px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-main);
+    vertical-align: middle;
+}
+
+.expense-data-table tr:hover td {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* Badges de Categoria na Planilha */
+.cat-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.cat-leilao { background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.3); }
+.cat-guincho { background: rgba(217, 119, 6, 0.15); color: #fb923c; border: 1px solid rgba(217, 119, 6, 0.3); }
+.cat-mecanica { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
+.cat-funilaria { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+.cat-documentacao { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+.cat-estetica { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+.cat-outros { background: rgba(107, 114, 128, 0.15); color: #9ca3af; border: 1px solid rgba(107, 114, 128, 0.3); }
+
+.btn-delete-expense-row {
+    background: transparent;
+    border: none;
+    color: var(--text-sub);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 4px;
+    transition: var(--transition-fast);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-delete-expense-row:hover {
+    color: #ef4444;
+    background-color: rgba(239, 68, 68, 0.15);
+}
+
+.expense-table-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-color);
+}
+
+.expense-footer-label {
+    font-size: 0.9rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-main);
+}
+
+.expense-footer-total {
+    font-size: 1.25rem;
+    font-weight: 900;
+    color: var(--accent-color);
 }
 
 .details-grid-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -1011,6 +1333,8 @@
 /* Responsividade */
 @media (max-width: 1024px) {
     .form-grid-4 { grid-template-columns: repeat(2, 1fr); }
+    .expense-kpis-grid { grid-template-columns: repeat(2, 1fr); }
+    .expense-inputs-bar { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 768px) {
@@ -1034,6 +1358,8 @@
     .welcome-panel { flex-direction: column; align-items: flex-start; }
     .form-grid-3, .form-grid-2, .details-grid-cards { grid-template-columns: 1fr; }
     .vehicles-grid { grid-template-columns: 1fr; }
+    .expense-kpis-grid { grid-template-columns: 1fr; }
+    .expense-inputs-bar { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 480px) {
@@ -1043,3 +1369,4 @@
     .btn-primary-action, .btn-login { padding: 8px 10px; }
     .form-grid-4 { grid-template-columns: 1fr; }
 }
+

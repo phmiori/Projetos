@@ -61,6 +61,11 @@ function calcularMetricas(data) {
         dataVenda = new Date();
     }
 
+    let dataCompra = null;
+    if (data.dataCompra) {
+        dataCompra = new Date(data.dataCompra);
+    }
+
     return {
         marca: data.marca ? String(data.marca).trim() : '',
         modelo: data.modelo ? String(data.modelo).trim() : '',
@@ -68,6 +73,8 @@ function calcularMetricas(data) {
         placa: data.placa ? String(data.placa).trim().toUpperCase() : null,
         chassi: data.chassi ? String(data.chassi).trim().toUpperCase() : null,
         origem: data.origem ? String(data.origem).trim() : 'Seguradora',
+        leiloeiro: data.leiloeiro ? String(data.leiloeiro).trim() : null,
+        dataCompra,
         status: data.status ? String(data.status).trim() : 'Em Trânsito',
         observacoes: data.observacoes ? String(data.observacoes).trim() : null,
         valorArremate,
@@ -87,6 +94,77 @@ function calcularMetricas(data) {
         lucroBruto,
         roiPct
     };
+}
+
+/**
+ * Recalcula e atualiza as somas de gastos do veículo com base na tabela GastoVeiculo
+ */
+async function recalcularGastosVeiculo(veiculoId) {
+    const veiculo = await prisma.veiculo.findUnique({
+        where: { id: veiculoId },
+        include: { gastos: true }
+    });
+
+    if (!veiculo) return null;
+
+    let gastoMecanica = 0;
+    let gastoFunilaria = 0;
+    let gastoEstetica = 0;
+    let gastoDocumentacao = 0;
+    let taxasPatio = 0;
+    let custoGuincho = 0;
+
+    veiculo.gastos.forEach(g => {
+        const cat = g.categoria || '';
+        const val = Number(g.valor) || 0;
+
+        if (cat.includes('Mecânica') || cat.includes('Mecanica') || cat.includes('Oficina')) {
+            gastoMecanica += val;
+        } else if (cat.includes('Funilaria') || cat.includes('Pintura')) {
+            gastoFunilaria += val;
+        } else if (cat.includes('Estética') || cat.includes('Estetica') || cat.includes('Higienização')) {
+            gastoEstetica += val;
+        } else if (cat.includes('Documentação') || cat.includes('Documentacao') || cat.includes('Detran') || cat.includes('IPVA')) {
+            gastoDocumentacao += val;
+        } else if (cat.includes('Guincho')) {
+            custoGuincho += val;
+        } else if (cat.includes('Taxa') || cat.includes('Pátio') || cat.includes('Patio') || cat.includes('Leiloeiro')) {
+            taxasPatio += val;
+        } else {
+            gastoMecanica += val; // fallback
+        }
+    });
+
+    const valorArremate = veiculo.valorArremate || 0;
+    const comissaoPct = veiculo.comissaoPct || 5;
+    const totalAquisicao = valorArremate + (valorArremate * (comissaoPct / 100)) + taxasPatio + custoGuincho;
+    const totalPreparacao = gastoMecanica + gastoFunilaria + gastoEstetica + gastoDocumentacao;
+    const custoTotal = totalAquisicao + totalPreparacao;
+
+    let lucroBruto = null;
+    let roiPct = null;
+    if (veiculo.valorVenda !== null && veiculo.valorVenda > 0) {
+        lucroBruto = veiculo.valorVenda - custoTotal;
+        roiPct = custoTotal > 0 ? (lucroBruto / custoTotal) * 100 : 0;
+    }
+
+    return await prisma.veiculo.update({
+        where: { id: veiculoId },
+        data: {
+            taxasPatio,
+            custoGuincho,
+            totalAquisicao,
+            gastoMecanica,
+            gastoFunilaria,
+            gastoEstetica,
+            gastoDocumentacao,
+            totalPreparacao,
+            custoTotal,
+            lucroBruto,
+            roiPct
+        },
+        include: { gastos: { orderBy: { data: 'asc' } } }
+    });
 }
 
 /**
@@ -151,7 +229,7 @@ app.get('/api/dashboard', async (req, res) => {
 });
 
 /**
- * ROTA: Listar Veículos
+ * ROTA: Listar Veículos (com gastos incluídos)
  * GET /api/veiculos?status=...&search=...
  */
 app.get('/api/veiculos', async (req, res) => {
@@ -168,12 +246,14 @@ app.get('/api/veiculos', async (req, res) => {
                 { modelo: { contains: search } },
                 { marca: { contains: search } },
                 { placa: { contains: search } },
-                { origem: { contains: search } }
+                { origem: { contains: search } },
+                { leiloeiro: { contains: search } }
             ];
         }
 
         const veiculos = await prisma.veiculo.findMany({
             where,
+            include: { gastos: { orderBy: { data: 'asc' } } },
             orderBy: { createdAt: 'desc' }
         });
 
@@ -185,13 +265,16 @@ app.get('/api/veiculos', async (req, res) => {
 });
 
 /**
- * ROTA: Obter Veículo por ID
+ * ROTA: Obter Veículo por ID com seus Gastos
  * GET /api/veiculos/:id
  */
 app.get('/api/veiculos/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
-        const veiculo = await prisma.veiculo.findUnique({ where: { id } });
+        const veiculo = await prisma.veiculo.findUnique({
+            where: { id },
+            include: { gastos: { orderBy: { data: 'asc' } } }
+        });
 
         if (!veiculo) {
             return res.status(404).json({ error: 'Veículo não encontrado' });
@@ -217,7 +300,8 @@ app.post('/api/veiculos', async (req, res) => {
         }
 
         const novoVeiculo = await prisma.veiculo.create({
-            data: dadosCalculados
+            data: dadosCalculados,
+            include: { gastos: true }
         });
 
         res.status(201).json(novoVeiculo);
@@ -238,13 +322,143 @@ app.put('/api/veiculos/:id', async (req, res) => {
 
         const veiculoAtualizado = await prisma.veiculo.update({
             where: { id },
-            data: dadosCalculados
+            data: dadosCalculados,
+            include: { gastos: { orderBy: { data: 'asc' } } }
         });
 
         res.json(veiculoAtualizado);
     } catch (err) {
         console.error('Erro ao atualizar veículo:', err);
         res.status(500).json({ error: 'Erro ao atualizar veículo' });
+    }
+});
+
+/**
+ * ROTA: Listar Gastos de um Veículo
+ * GET /api/veiculos/:id/gastos
+ */
+app.get('/api/veiculos/:id/gastos', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const gastos = await prisma.gastoVeiculo.findMany({
+            where: { veiculoId: id },
+            orderBy: { data: 'asc' }
+        });
+
+        res.json(gastos);
+    } catch (err) {
+        console.error('Erro ao listar gastos:', err);
+        res.status(500).json({ error: 'Erro ao buscar gastos do veículo' });
+    }
+});
+
+/**
+ * ROTA: Lançar Novo Gasto / Serviço para um Veículo
+ * POST /api/veiculos/:id/gastos
+ */
+app.post('/api/veiculos/:id/gastos', async (req, res) => {
+    try {
+        const veiculoId = parseInt(req.params.id, 10);
+        const { data, categoria, descricao, oficina, valor } = req.body;
+
+        if (!categoria || !descricao || valor === undefined) {
+            return res.status(400).json({ error: 'Categoria, descrição e valor são obrigatórios.' });
+        }
+
+        const dataGasto = data ? new Date(data) : new Date();
+
+        const novoGasto = await prisma.gastoVeiculo.create({
+            data: {
+                veiculoId,
+                data: dataGasto,
+                categoria: String(categoria).trim(),
+                descricao: String(descricao).trim(),
+                oficina: oficina ? String(oficina).trim() : null,
+                valor: Number(valor) || 0
+            }
+        });
+
+        // Recalcular os totais consolidados no veículo
+        const veiculoAtualizado = await recalcularGastosVeiculo(veiculoId);
+
+        res.status(201).json({
+            success: true,
+            gasto: novoGasto,
+            veiculo: veiculoAtualizado
+        });
+    } catch (err) {
+        console.error('Erro ao lançar gasto:', err);
+        res.status(500).json({ error: 'Erro ao cadastrar gasto do veículo' });
+    }
+});
+
+/**
+ * ROTA: Excluir Gasto Específico de um Veículo
+ * DELETE /api/veiculos/:id/gastos/:gastoId
+ */
+app.delete('/api/veiculos/:id/gastos/:gastoId', async (req, res) => {
+    try {
+        const veiculoId = parseInt(req.params.id, 10);
+        const gastoId = parseInt(req.params.gastoId, 10);
+
+        await prisma.gastoVeiculo.delete({
+            where: { id: gastoId }
+        });
+
+        // Recalcular os totais consolidados no veículo
+        const veiculoAtualizado = await recalcularGastosVeiculo(veiculoId);
+
+        res.json({
+            success: true,
+            message: 'Gasto removido com sucesso',
+            veiculo: veiculoAtualizado
+        });
+    } catch (err) {
+        console.error('Erro ao excluir gasto:', err);
+        res.status(500).json({ error: 'Erro ao excluir gasto do veículo' });
+    }
+});
+
+/**
+ * ROTA: Atualizar Venda / Preço Rapidamente
+ * POST /api/veiculos/:id/vender
+ */
+app.post('/api/veiculos/:id/vender', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { valorVenda, dataVenda, precoAnuncio, status } = req.body;
+
+        const veiculo = await prisma.veiculo.findUnique({ where: { id } });
+        if (!veiculo) return res.status(404).json({ error: 'Veículo não encontrado' });
+
+        const novoStatus = status || 'Vendido';
+        const vVenda = Number(valorVenda) || null;
+        const custoTotal = veiculo.custoTotal || 0;
+        let lucroBruto = null;
+        let roiPct = null;
+
+        if (vVenda !== null && vVenda > 0) {
+            lucroBruto = vVenda - custoTotal;
+            roiPct = custoTotal > 0 ? (lucroBruto / custoTotal) * 100 : 0;
+        }
+
+        const atualizado = await prisma.veiculo.update({
+            where: { id },
+            data: {
+                status: novoStatus,
+                valorVenda: vVenda,
+                precoAnuncio: precoAnuncio ? Number(precoAnuncio) : veiculo.precoAnuncio,
+                dataVenda: dataVenda ? new Date(dataVenda) : new Date(),
+                lucroBruto,
+                roiPct
+            },
+            include: { gastos: { orderBy: { data: 'asc' } } }
+        });
+
+        res.json({ success: true, veiculo: atualizado });
+    } catch (err) {
+        console.error('Erro ao registrar venda:', err);
+        res.status(500).json({ error: 'Erro ao registrar venda do veículo' });
     }
 });
 
@@ -263,6 +477,7 @@ app.delete('/api/veiculos/:id', async (req, res) => {
         res.status(500).json({ error: 'Erro ao excluir veículo' });
     }
 });
+
 
 // Redirecionamento da raiz para a página inicial
 app.get('/', (req, res) => {

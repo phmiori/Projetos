@@ -15,3 +15,5 @@
 - [x] Desenvolver Modal de Extrato Analítico Completo de Custos e Resultados
 - [x] Implementar persistência dupla (Prisma ORM com fallback de LocalStorage)
 - [x] Documentar execução e arquitetura no `README.md`
+- [x] Modal de edição de veículos 100% opaca e com backdrop blur
+- [x] Módulo completo de Lançador de Gastos & Planilha de Serviços do Veículo (design analítico, exportação CSV e venda rápida)
