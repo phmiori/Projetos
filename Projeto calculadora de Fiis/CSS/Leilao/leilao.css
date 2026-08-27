@@ -988,13 +988,14 @@
 
 /* Header do Veículo no Lançador de Gastos */
 .expense-vehicle-header {
-    background: linear-gradient(135deg, rgba(28, 28, 30, 0.95), rgba(18, 18, 18, 0.98));
+    background-color: var(--bg-main);
     border: 1px solid var(--border-color);
-    border-radius: 12px;
+    border-radius: var(--radius-suth);
     padding: 20px 24px;
     display: flex;
     flex-direction: column;
     gap: 16px;
+    transition: var(--transition-fast);
 }
 
 .expense-header-top {
@@ -1013,7 +1014,7 @@
 }
 
 .expense-vehicle-name {
-    font-size: 1.5rem;
+    font-size: 1.4rem;
     font-weight: 800;
     color: var(--text-main);
     letter-spacing: -0.5px;
@@ -1021,16 +1022,30 @@
 
 .status-badge-inline {
     padding: 4px 10px;
-    border-radius: 6px;
+    border-radius: var(--radius-button);
     font-size: 0.75rem;
     font-weight: 800;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-.status-venda { background: rgba(30, 144, 255, 0.2); color: #60a5fa; border: 1px solid rgba(96, 165, 250, 0.4); }
-.status-preparando { background: rgba(238, 187, 0, 0.2); color: #facc15; border: 1px solid rgba(250, 204, 21, 0.4); }
-.status-vendido-tag { background: rgba(46, 125, 50, 0.2); color: #4ade80; border: 1px solid rgba(74, 222, 128, 0.4); }
+.status-venda { 
+    background-color: var(--bg-surface); 
+    color: var(--accent-color); 
+    border: 1px solid var(--accent-color); 
+}
+
+.status-preparando { 
+    background-color: var(--bg-surface); 
+    color: var(--accent-color); 
+    border: 1px solid var(--border-color); 
+}
+
+.status-vendido-tag { 
+    background-color: var(--bg-surface); 
+    color: var(--color-income); 
+    border: 1px solid var(--color-income); 
+}
 
 .expense-vehicle-meta {
     display: flex;
@@ -1053,18 +1068,18 @@
 }
 
 .expense-kpi-box {
-    background-color: rgba(0, 0, 0, 0.35);
+    background-color: var(--bg-surface);
     border: 1px solid var(--border-color);
-    border-radius: 8px;
+    border-radius: var(--radius-button);
     padding: 14px 16px;
     display: flex;
     flex-direction: column;
     gap: 4px;
+    transition: var(--transition-fast);
 }
 
 .expense-kpi-box.highlight {
-    border-color: rgba(238, 187, 0, 0.4);
-    background: linear-gradient(180deg, rgba(238, 187, 0, 0.08), rgba(0, 0, 0, 0.4));
+    border-color: var(--accent-color);
 }
 
 .expense-kpi-label {
@@ -1083,17 +1098,19 @@
 }
 
 .expense-kpi-val.accent { color: var(--accent-color); }
-.expense-kpi-val.income { color: #4ade80; }
+.expense-kpi-val.income { color: var(--color-income); }
+.expense-kpi-val.expense { color: var(--color-expense); }
 
 /* Formulário de Lançamento de Gasto Horizontal */
 .expense-form-card {
     background-color: var(--bg-main);
     border: 1px solid var(--border-color);
-    border-radius: 12px;
+    border-radius: var(--radius-suth);
     padding: 18px 20px;
     display: flex;
     flex-direction: column;
     gap: 12px;
+    transition: var(--transition-fast);
 }
 
 .expense-form-title {
@@ -1107,7 +1124,7 @@
 
 .expense-inputs-bar {
     display: grid;
-    grid-template-columns: 140px 180px 1.4fr 1.1fr 140px auto;
+    grid-template-columns: 140px 190px 1.4fr 1.1fr 140px auto;
     gap: 10px;
     align-items: center;
 }
@@ -1116,16 +1133,19 @@
     padding: 8px 12px;
     font-size: 0.85rem;
     height: 38px;
+    background-color: var(--bg-surface);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
 }
 
 .btn-lancar-gasto {
-    background-color: #f97316;
-    color: #ffffff;
+    background-color: var(--accent-color);
+    color: var(--accent-text);
     font-weight: 800;
     font-size: 0.85rem;
     border: none;
     border-radius: var(--radius-button);
-    padding: 0 16px;
+    padding: 0 18px;
     height: 38px;
     cursor: pointer;
     display: inline-flex;
@@ -1137,20 +1157,20 @@
 }
 
 .btn-lancar-gasto:hover {
-    background-color: #ea580c;
+    filter: brightness(0.9);
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(249, 115, 22, 0.3);
 }
 
 /* Planilha / Tabela de Gastos */
 .expense-table-container {
     background-color: var(--bg-main);
     border: 1px solid var(--border-color);
-    border-radius: 12px;
+    border-radius: var(--radius-suth);
     padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 16px;
+    transition: var(--transition-fast);
 }
 
 .expense-table-header {
@@ -1174,7 +1194,7 @@
 }
 
 .btn-export-csv {
-    background-color: transparent;
+    background-color: var(--bg-surface);
     color: var(--text-main);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-button);
@@ -1189,13 +1209,13 @@
 }
 
 .btn-export-csv:hover {
-    background-color: var(--bg-surface);
     border-color: var(--accent-color);
+    color: var(--accent-color);
 }
 
 .btn-mark-sold {
-    background-color: #f59e0b;
-    color: #000000;
+    background-color: var(--accent-color);
+    color: var(--accent-text);
     border: none;
     border-radius: var(--radius-button);
     padding: 8px 16px;
@@ -1209,7 +1229,7 @@
 }
 
 .btn-mark-sold:hover {
-    background-color: #d97706;
+    filter: brightness(0.9);
     transform: translateY(-1px);
 }
 
@@ -1242,27 +1262,30 @@
 }
 
 .expense-data-table tr:hover td {
-    background-color: rgba(255, 255, 255, 0.02);
+    background-color: rgba(238, 187, 0, 0.03);
 }
 
-/* Badges de Categoria na Planilha */
+/* Badges de Categoria na Planilha alinhadas com o Design System */
 .cat-badge {
     display: inline-block;
-    padding: 4px 10px;
-    border-radius: 4px;
+    padding: 3px 8px;
+    border-radius: var(--radius-button);
     font-size: 0.75rem;
-    font-weight: 800;
+    font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.4px;
+    background-color: var(--bg-surface);
+    color: var(--text-sub);
+    border: 1px solid var(--border-color);
 }
 
-.cat-leilao { background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.3); }
-.cat-guincho { background: rgba(217, 119, 6, 0.15); color: #fb923c; border: 1px solid rgba(217, 119, 6, 0.3); }
-.cat-mecanica { background: rgba(168, 85, 247, 0.15); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); }
-.cat-funilaria { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); }
-.cat-documentacao { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
-.cat-estetica { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
-.cat-outros { background: rgba(107, 114, 128, 0.15); color: #9ca3af; border: 1px solid rgba(107, 114, 128, 0.3); }
+.cat-leilao { color: var(--accent-color); border-color: var(--border-color); }
+.cat-guincho { color: var(--accent-color); border-color: var(--border-color); }
+.cat-mecanica { color: var(--text-main); border-color: var(--border-color); }
+.cat-funilaria { color: var(--text-main); border-color: var(--border-color); }
+.cat-documentacao { color: var(--accent-color); border-color: var(--border-color); }
+.cat-estetica { color: var(--text-main); border-color: var(--border-color); }
+.cat-outros { color: var(--text-sub); border-color: var(--border-color); }
 
 .btn-delete-expense-row {
     background: transparent;
@@ -1270,7 +1293,7 @@
     color: var(--text-sub);
     cursor: pointer;
     padding: 6px;
-    border-radius: 4px;
+    border-radius: var(--radius-button);
     transition: var(--transition-fast);
     display: inline-flex;
     align-items: center;
@@ -1278,8 +1301,8 @@
 }
 
 .btn-delete-expense-row:hover {
-    color: #ef4444;
-    background-color: rgba(239, 68, 68, 0.15);
+    color: var(--color-expense);
+    background-color: rgba(211, 47, 47, 0.1);
 }
 
 .expense-table-footer {
@@ -1300,10 +1323,11 @@
 }
 
 .expense-footer-total {
-    font-size: 1.25rem;
+    font-size: 1.3rem;
     font-weight: 900;
     color: var(--accent-color);
 }
+
 
 .details-grid-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 
