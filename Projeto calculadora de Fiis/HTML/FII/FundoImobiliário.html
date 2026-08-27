@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="FinanceHub - Gestão Inteligente de Fundos Imobiliários (FIIs), Renda Passiva, Calculadora Bola de Neve e Radar Funds Explorer">
+    <title>FII Hub - Fundos Imobiliários & Renda Passiva</title>
+    
+    <!-- Tokens Globais, CSS do Index (Sidebar/Header) e CSS Específico de FII -->
+    <link rel="stylesheet" href="../../CSS/Global/global_tokens.css">
+    <link rel="stylesheet" href="../../CSS/Index/index.css">
+    <link rel="stylesheet" href="../../CSS/FII/fii.css">
+    
+    <!-- Chart.js para os Gráficos Analíticos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Script do Módulo FII -->
+    <script src="../../JS/FII/fii.js" defer></script>
+</head>
+<body>
+
+    <!-- Cabeçalho Fixo Superior (Global) -->
+    <header class="app-header">
+        <div class="header-left">
+            <button class="mobile-toggle-btn" id="mobileMenuBtn" aria-label="Abrir Menu de Navegação">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+            <a href="../Index/index.html" class="logo-link" aria-label="FinanceHub Início">
+                <div class="logo-icon-box">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+                        <path d="M9 22v-4h6v4"></path>
+                        <path d="M8 6h.01"></path>
+                        <path d="M16 6h.01"></path>
+                        <path d="M8 10h.01"></path>
+                        <path d="M16 10h.01"></path>
+                        <path d="M8 14h.01"></path>
+                        <path d="M16 14h.01"></path>
+                    </svg>
+                </div>
+                <span class="logo-title">FII <span class="logo-highlight">Hub</span></span>
+            </a>
+        </div>
+
+        <nav class="header-center">
+            <a href="../Index/index.html" class="nav-btn-home" id="btnInicio" aria-label="Voltar ao Início">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                <span>Início</span>
+            </a>
+        </nav>
+
+        <div class="header-right">
+            <!-- Alternância de Tema Claro / Escuro -->
+            <button class="theme-toggle-btn" id="themeToggleBtn" aria-label="Alternar entre modo claro e escuro">
+                <span class="theme-icon-container">
+                    <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="4"></circle>
+                        <path d="M12 2v2"></path>
+                        <path d="M12 20v2"></path>
+                        <path d="m4.93 4.93 1.41 1.41"></path>
+                        <path d="m17.66 17.66 1.41 1.41"></path>
+                        <path d="M2 12h2"></path>
+                        <path d="M20 12h2"></path>
+                        <path d="m6.34 17.66-1.41 1.41"></path>
+                        <path d="m19.07 4.93-1.41 1.41"></path>
+                    </svg>
+                    <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+                    </svg>
+                </span>
+                <span class="theme-label" id="themeLabel">Modo Claro</span>
+            </button>
+
+            <!-- Botão de Login (Visual) -->
+            <button class="btn-login" id="btnLogin" type="button">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
+                    <polyline points="10 17 15 12 10 7"></polyline>
+                    <line x1="15" y1="12" x2="3" y2="12"></line>
+                </svg>
+                <span>Login</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Layout Principal: Sidebar + Conteúdo -->
+    <div class="app-layout">
+        
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+        <!-- Barra Lateral Fixa -->
+        <aside class="app-sidebar" id="appSidebar" aria-label="Navegação do Módulo FII">
+            <!-- Link de Retorno ao Hub Global -->
+            <div class="sidebar-hub-link">
+                <a href="../Index/index.html" class="hub-back-link">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="15 18 9 12 15 6"></polyline>
+                    </svg>
+                    <span>Voltar ao Hub</span>
+                </a>
+            </div>
+
+            <div class="sidebar-header-label" style="margin-top: 12px;">
+                <span>Fundos Imobiliários</span>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul class="nav-list">
+                    <li>
+                        <a href="../Index/index.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect width="7" height="9" x="3" y="3" rx="1"></rect>
+                                    <rect width="7" height="5" x="14" y="3" rx="1"></rect>
+                                    <rect width="7" height="9" x="14" y="12" rx="1"></rect>
+                                    <rect width="7" height="5" x="3" y="16" rx="1"></rect>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Visão Geral</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="FundoImobiliário.html" class="nav-item-btn active">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+                                    <path d="M9 22v-4h6v4"></path>
+                                    <path d="M8 6h.01"></path>
+                                    <path d="M16 6h.01"></path>
+                                    <path d="M8 10h.01"></path>
+                                    <path d="M16 10h.01"></path>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Fundos Imobiliários</span>
+                            <span class="nav-count-badge" id="badgeFiiCount">4</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="../Leilao/leilao.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"></path>
+                                    <circle cx="7" cy="17" r="2"></circle>
+                                    <path d="M9 17h6"></path>
+                                    <circle cx="17" cy="17" r="2"></circle>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Carros de Leilão</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="system-status-indicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Módulo FII Ativo</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Área Principal de Conteúdo -->
+        <main class="app-main" id="mainContent">
+            <div class="main-container">
+
+                <!-- Painel de Boas-Vindas do Módulo FII -->
+                <section class="welcome-panel" aria-labelledby="welcomeFiiTitle">
+                    <div class="welcome-content">
+                        <span class="welcome-badge">Mercado Financeiro & Renda Passiva</span>
+                        <h1 class="welcome-title" id="welcomeFiiTitle">Gestão de Fundos Imobiliários</h1>
+                        <p class="welcome-subtitle">Acompanhe sua carteira de FIIs, projete a renda passiva no longo prazo e acesse o Radar Funds Explorer.</p>
+                    </div>
+                </section>
+
+                <!-- Sub-Navegação em Abas (Minha Carteira | Calculadora | Radar) -->
+                <div class="sub-nav-container">
+                    <button type="button" class="sub-nav-btn active" data-subtarget="fiiSubPortfolio">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect width="20" height="14" x="2" y="7" rx="2" ry="2"></rect>
+                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                        </svg>
+                        <span>Minha Carteira</span>
+                    </button>
+                    <button type="button" class="sub-nav-btn" data-subtarget="fiiSubCalculator">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect width="18" height="18" x="3" y="3" rx="2"></rect>
+                            <line x1="8" y1="12" x2="16" y2="12"></line>
+                            <line x1="12" y1="8" x2="12" y2="16"></line>
+                        </svg>
+                        <span>Calculadora & Bola de Neve</span>
+                    </button>
+                    <button type="button" class="sub-nav-btn" data-subtarget="fiiSubRadar">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="m4.93 4.93 4.24 4.24"></path>
+                            <path d="m14.83 9.17 4.24-4.24"></path>
+                            <path d="m14.83 14.83 4.24 4.24"></path>
+                            <path d="m9.17 14.83-4.24 4.24"></path>
+                        </svg>
+                        <span>Radar Funds Explorer</span>
+                    </button>
+                </div>
+
+                <!-- ========================================================= -->
+                <!-- ABA 1: MINHA CARTEIRA DE FIIS -->
+                <!-- ========================================================= -->
+                <div id="fiiSubPortfolio" class="fii-subview active">
+                    
+                    <!-- 4 Cards de Métricas Rápidas -->
+                    <div class="kpi-grid">
+                        <article class="kpi-card kpi-total">
+                            <div class="kpi-header">
+                                <span class="kpi-title">Patrimônio Investido</span>
+                                <div class="kpi-icon-wrapper icon-accent">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect width="20" height="14" x="2" y="5" rx="2"></rect>
+                                        <line x1="2" y1="10" x2="22" y2="10"></line>
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="kpi-body">
+                                <div class="kpi-value" id="kpiPatrimonioTotal">R$ 0,00</div>
+                                <div class="kpi-status-tag tag-accent">Total alocado em FIIs</div>
+                            </div>
+                        </article>
+
+                        <article class="kpi-card kpi-income">
+                            <div class="kpi-header">
+                                <span class="kpi-title">Renda Mensal Estimada</span>
+                                <div class="kpi-icon-wrapper icon-income">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="12" y1="1" x2="12" y2="23"></line>
+                                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="kpi-body">
+                                <div class="kpi-value text-income" id="kpiRendaMensal">R$ 0,00</div>
+                                <div class="kpi-status-tag tag-income">Dividendos previstos / mês</div>
+                            </div>
+                        </article>
+
+                        <article class="kpi-card kpi-roi">
+                            <div class="kpi-header">
+                                <span class="kpi-title">Yield Médio (YoC)</span>
+                                <div class="kpi-icon-wrapper icon-accent">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                                        <polyline points="17 6 23 6 23 12"></polyline>
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="kpi-body">
+                                <div class="kpi-value text-accent" id="kpiYieldMedio">0.00% a.m.</div>
+                                <div class="kpi-status-tag tag-accent">Yield on Cost sobre preço médio</div>
+                            </div>
+                        </article>
+
+                        <article class="kpi-card kpi-total">
+                            <div class="kpi-header">
+                                <span class="kpi-title">Total de Cotas</span>
+                                <div class="kpi-icon-wrapper icon-accent">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="3" y="3" width="18" height="18" rx="2"></rect>
+                                        <path d="M3 9h18"></path>
+                                        <path d="M9 21V9"></path>
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="kpi-body">
+                                <div class="kpi-value" id="kpiTotalCotas">0</div>
+                                <div class="kpi-status-tag tag-accent">Cotas acumuladas</div>
+                            </div>
+                        </article>
+                    </div>
+
+                    <!-- 2 Gráficos: Distribuição por Segmento e Renda por FII -->
+                    <div class="charts-dual-grid">
+                        <div class="chart-panel-box">
+                            <div class="chart-header-row">
+                                <h3 class="chart-title-text">Distribuição por Segmento</h3>
+                            </div>
+                            <div style="position: relative; height: 260px; width: 100%;">
+                                <canvas id="chartSegmentos"></canvas>
+                            </div>
+                        </div>
+
+                        <div class="chart-panel-box">
+                            <div class="chart-header-row">
+                                <h3 class="chart-title-text">Renda Mensal por Fundo (R$)</h3>
+                            </div>
+                            <div style="position: relative; height: 260px; width: 100%;">
+                                <canvas id="chartRenda"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabela de FIIs Cadastrados -->
+                    <section class="table-panel-card">
+                        <div class="table-header-flex">
+                            <h3 class="panel-card-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                    <polyline points="14 2 14 8 20 8"></polyline>
+                                </svg>
+                                <span>Fundos Imobiliários Cadastrados</span>
+                            </h3>
+                            <div class="table-actions-group">
+                                <button type="button" class="btn-export-csv" id="btnExportPortfolioCsv">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                        <polyline points="7 10 12 15 17 10"></polyline>
+                                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                                    </svg>
+                                    <span>Exportar Carteira (CSV)</span>
+                                </button>
+                                <button type="button" class="btn-primary-action" id="btnAdicionarFii">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>
+                                    <span>Adicionar FII</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-scroll-wrap">
+                            <table class="fii-data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Ticker</th>
+                                        <th>Segmento</th>
+                                        <th>Cotas</th>
+                                        <th>Preço Médio</th>
+                                        <th>Total Investido</th>
+                                        <th>Últ. Dividendo</th>
+                                        <th>Renda Mensal</th>
+                                        <th>Yield Médio</th>
+                                        <th style="text-align: right;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="fiiTableBody">
+                                    <!-- Preenchido via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                </div>
+
+                <!-- ========================================================= -->
+                <!-- ABA 2: CALCULADORA & EFEITO BOLA DE NEVE -->
+                <!-- ========================================================= -->
+                <div id="fiiSubCalculator" class="fii-subview">
+                    <div class="app-grid-calc">
+                        
+                        <!-- Coluna 1: Formulário de Simulação -->
+                        <section class="panel-card">
+                            <h2 class="panel-card-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 2v20"></path>
+                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                </svg>
+                                <span>Configurar Simulação</span>
+                            </h2>
+
+                            <form id="calcForm" class="calc-form">
+                                <div class="form-group-field">
+                                    <label for="calcPrecoCota">Preço da Cota (R$)</label>
+                                    <div class="input-with-addon">
+                                        <span class="input-addon-prefix">R$</span>
+                                        <input type="number" id="calcPrecoCota" class="input-missao calc-auto-trigger" step="0.01" min="0.01" value="10.20" required>
+                                    </div>
+                                </div>
+
+                                <div class="form-group-field">
+                                    <label for="calcDividendo">Rendimento / Cota (Mês)</label>
+                                    <div class="input-with-addon">
+                                        <span class="input-addon-prefix">R$</span>
+                                        <input type="number" id="calcDividendo" class="input-missao calc-auto-trigger" step="0.01" min="0.00" value="0.10" required>
+                                    </div>
+                                </div>
+
+                                <div class="form-group-field">
+                                    <label for="calcAporteMensal">Aporte Mensal (R$)</label>
+                                    <div class="input-with-addon">
+                                        <span class="input-addon-prefix">R$</span>
+                                        <input type="number" id="calcAporteMensal" class="input-missao calc-auto-trigger" step="10" min="0" value="500" required>
+                                    </div>
+                                </div>
+
+                                <div class="form-group-field">
+                                    <label for="calcPrazo">Prazo da Simulação</label>
+                                    <div class="input-row-group">
+                                        <input type="number" id="calcPrazo" class="input-missao calc-auto-trigger" min="1" value="5" required>
+                                        <select id="calcUnidadePrazo" class="input-missao calc-auto-trigger">
+                                            <option value="years" selected>Anos</option>
+                                            <option value="months">Meses</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="form-group-field">
+                                    <label for="calcCotasIniciais">Quantidade de Cotas Inicial</label>
+                                    <input type="number" id="calcCotasIniciais" class="input-missao calc-auto-trigger" min="0" value="100">
+                                </div>
+
+                                <label class="switch-container">
+                                    <div class="switch-input">
+                                        <input type="checkbox" id="calcReinvestir" checked>
+                                        <span class="switch-slider"></span>
+                                    </div>
+                                    <span class="switch-text-label">Reinvestir dividendos recebidos (Efeito Bola de Neve com juros compostos)</span>
+                                </label>
+
+                                <button type="submit" class="btn-primary-action" style="width: 100%; justify-content: center; height: 42px;">
+                                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                                    </svg>
+                                    <span>Recalcular Simulação</span>
+                                </button>
+                            </form>
+                        </section>
+
+                        <!-- Coluna 2: Resultados & Gráfico de Evolução -->
+                        <div class="calc-results-wrapper">
+                            
+                            <!-- Banners de Patrimônio Inicial vs Final -->
+                            <div class="equity-banner-grid">
+                                <div class="equity-highlight-box">
+                                    <span class="equity-label">Patrimônio Inicial</span>
+                                    <span class="equity-value" id="calcResPatrimonioInicial">R$ 0,00</span>
+                                </div>
+                                <div class="equity-highlight-box final">
+                                    <span class="equity-label">Patrimônio Final Projetado</span>
+                                    <span class="equity-value text-income" id="calcResPatrimonioFinal">R$ 0,00</span>
+                                </div>
+                            </div>
+
+                            <!-- 4 Cards de Resumo -->
+                            <div class="highlight-metrics-grid">
+                                <div class="mini-highlight-card">
+                                    <span class="mini-highlight-label">Prazo</span>
+                                    <strong class="mini-highlight-val" id="calcResPrazo">5 Anos</strong>
+                                </div>
+                                <div class="mini-highlight-card">
+                                    <span class="mini-highlight-label">Total Aportado</span>
+                                    <strong class="mini-highlight-val" id="calcResTotalAportado">R$ 0,00</strong>
+                                </div>
+                                <div class="mini-highlight-card">
+                                    <span class="mini-highlight-label">Total Reinvestido</span>
+                                    <strong class="mini-highlight-val text-accent" id="calcResTotalReinvestido">R$ 0,00</strong>
+                                </div>
+                                <div class="mini-highlight-card">
+                                    <span class="mini-highlight-label">Renda Mensal no Fim</span>
+                                    <strong class="mini-highlight-val text-income" id="calcResRendaFinal">R$ 0,00</strong>
+                                </div>
+                            </div>
+
+                            <!-- Gráfico de Evolução -->
+                            <div class="panel-card">
+                                <div class="chart-header-row">
+                                    <h3 class="chart-title-text">Evolução do Patrimônio & Efeito Bola de Neve</h3>
+                                </div>
+                                <div style="position: relative; height: 280px; width: 100%;">
+                                    <canvas id="chartEvolucao"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Tabela Mês a Mês da Simulação -->
+                    <section class="table-panel-card">
+                        <div class="table-header-flex">
+                            <h3 class="panel-card-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                                </svg>
+                                <span>Evolução Detalhada Mês a Mês</span>
+                            </h3>
+                            <button type="button" class="btn-export-csv" id="btnExportSimulationCsv">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                <span>Exportar Simulação (CSV)</span>
+                            </button>
+                        </div>
+
+                        <div class="table-scroll-wrap" style="max-height: 400px;">
+                            <table class="fii-data-table">
+                                <thead style="position: sticky; top: 0; background-color: var(--bg-surface);">
+                                    <tr>
+                                        <th>Mês</th>
+                                        <th>Cotas Acumuladas</th>
+                                        <th>Aporte do Mês</th>
+                                        <th>Reinvestimento</th>
+                                        <th>Dividendo Recebido</th>
+                                        <th>Patrimônio Acumulado</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="simulacaoTableBody">
+                                    <!-- Linhas geradas via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- ========================================================= -->
+                <!-- ABA 3: RADAR FUNDS EXPLORER -->
+                <!-- ========================================================= -->
+                <div id="fiiSubRadar" class="fii-subview">
+                    <!-- Barra de Filtros e Busca -->
+                    <div class="radar-toolbar">
+                        <div class="status-pills-container">
+                            <button class="status-pill radar-pill active" data-segment="all">Todos os FIIs</button>
+                            <button class="status-pill radar-pill" data-segment="Papel">Papel / CRI</button>
+                            <button class="status-pill radar-pill" data-segment="Fiagro">Fiagro</button>
+                            <button class="status-pill radar-pill" data-segment="Híbrido">Híbrido</button>
+                            <button class="status-pill radar-pill" data-segment="Logística">Logística</button>
+                            <button class="status-pill radar-pill" data-segment="Shopping">Shoppings</button>
+                        </div>
+
+                        <div class="search-box">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <input type="text" id="radarSearchInput" class="search-input" placeholder="Buscar ticker ou nome do FII...">
+                        </div>
+                    </div>
+
+                    <!-- Grid de Cards do Radar -->
+                    <div class="radar-cards-grid" id="radarGrid">
+                        <!-- Preenchido via JS -->
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL: ADICIONAR / EDITAR FII NA CARTEIRA -->
+    <!-- ========================================================= -->
+    <div class="modal-overlay" id="modalFiiOverlay">
+        <div class="modal-dialog">
+            <header class="modal-header">
+                <div>
+                    <h2 class="modal-title" id="modalFiiTitle">Adicionar FII à Carteira</h2>
+                    <p class="modal-subtitle">Insira as informações do fundo para monitorar seu rendimento</p>
+                </div>
+                <button class="modal-close-btn" id="modalFiiClose" aria-label="Fechar">&times;</button>
+            </header>
+
+            <form id="fiiForm">
+                <input type="hidden" id="formFiiId">
+                <div class="form-sections-wrapper">
+                    <div class="form-section">
+                        <div class="form-fields-grid">
+                            
+                            <div class="input-field">
+                                <label for="inputFiiTicker">Ticker do FII *</label>
+                                <input type="text" id="inputFiiTicker" class="input-missao" placeholder="Ex: MXRF11" style="text-transform: uppercase;" required>
+                            </div>
+
+                            <div class="input-field">
+                                <label for="inputFiiSegment">Segmento *</label>
+                                <select id="inputFiiSegment" class="input-missao" required>
+                                    <option value="Papel / CRI">Papel / CRI</option>
+                                    <option value="Fiagro">Fiagro</option>
+                                    <option value="Logística">Logística / Galpões</option>
+                                    <option value="Shoppings">Shoppings Centers</option>
+                                    <option value="Lajes Corporativas">Lajes Corporativas</option>
+                                    <option value="Híbrido">Híbrido / Renda Urbana</option>
+                                    <option value="FoF">Fundos de Fundos (FoF)</option>
+                                    <option value="Outro">Outro Segmento</option>
+                                </select>
+                            </div>
+
+                            <div class="input-field">
+                                <label for="inputFiiShares">Quantidade de Cotas *</label>
+                                <input type="number" id="inputFiiShares" class="input-missao" min="1" step="1" placeholder="Ex: 100" required>
+                            </div>
+
+                            <div class="input-field">
+                                <label for="inputFiiAvgPrice">Preço Médio por Cota (R$) *</label>
+                                <input type="number" id="inputFiiAvgPrice" class="input-missao" min="0.01" step="0.01" placeholder="Ex: 10.15" required>
+                            </div>
+
+                            <div class="input-field">
+                                <label for="inputFiiLastDividend">Último Rendimento / Cota (R$) *</label>
+                                <input type="number" id="inputFiiLastDividend" class="input-missao" min="0.00" step="0.001" placeholder="Ex: 0.10" required>
+                            </div>
+
+                            <div class="input-field">
+                                <label for="inputFiiNotes">Anotações / Estratégia</label>
+                                <input type="text" id="inputFiiNotes" class="input-missao" placeholder="Ex: Aportes mensais até atingir meta">
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                <footer class="modal-footer">
+                    <button type="button" class="btn-cancel" id="btnFiiCancel">Cancelar</button>
+                    <button type="submit" class="btn-missao-primary">Salvar FII</button>
+                </footer>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL: COMPRAR MAIS COTAS (APORTE RÁPIDO) -->
+    <!-- ========================================================= -->
+    <div class="modal-overlay" id="modalAporteOverlay">
+        <div class="modal-dialog" style="max-width: 520px;">
+            <header class="modal-header">
+                <div>
+                    <h2 class="modal-title" id="aporteModalTitle">Comprar Mais Cotas</h2>
+                    <p class="modal-subtitle">Atualize o preço médio automaticamente ao lançar um novo aporte</p>
+                </div>
+                <button class="modal-close-btn" id="modalAporteClose" aria-label="Fechar">&times;</button>
+            </header>
+
+            <form id="aporteForm">
+                <input type="hidden" id="formAporteId">
+                <div class="form-sections-wrapper">
+                    
+                    <!-- Resumo Atual -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 16px;">
+                        <div class="mini-highlight-card">
+                            <span class="mini-highlight-label">Cotas Atuais</span>
+                            <strong class="mini-highlight-val" id="aporteCurrentShares">0</strong>
+                        </div>
+                        <div class="mini-highlight-card">
+                            <span class="mini-highlight-label">Preço Médio</span>
+                            <strong class="mini-highlight-val" id="aporteCurrentAvg">R$ 0,00</strong>
+                        </div>
+                        <div class="mini-highlight-card">
+                            <span class="mini-highlight-label">Dividendo</span>
+                            <strong class="mini-highlight-val text-income" id="aporteCurrentDiv">R$ 0,00</strong>
+                        </div>
+                    </div>
+
+                    <div class="input-field">
+                        <label for="aporteQtd">Quantidade de Novas Cotas *</label>
+                        <input type="number" id="aporteQtd" class="input-missao" min="1" step="1" placeholder="Ex: 50" required>
+                        <div style="display: flex; gap: 6px; margin-top: 6px;">
+                            <button type="button" class="status-pill quick-pill" data-add="1">+1</button>
+                            <button type="button" class="status-pill quick-pill" data-add="5">+5</button>
+                            <button type="button" class="status-pill quick-pill" data-add="10">+10</button>
+                            <button type="button" class="status-pill quick-pill" data-add="50">+50</button>
+                            <button type="button" class="status-pill quick-pill" data-add="100">+100</button>
+                        </div>
+                    </div>
+
+                    <div class="form-fields-grid" style="margin-top: 14px;">
+                        <div class="input-field">
+                            <label for="aportePreco">Preço Pago / Cota (R$) *</label>
+                            <input type="number" id="aportePreco" class="input-missao" min="0.01" step="0.01" required>
+                        </div>
+                        <div class="input-field">
+                            <label for="aporteDividendo">Rendimento Previsto (R$)</label>
+                            <input type="number" id="aporteDividendo" class="input-missao" min="0.00" step="0.001">
+                        </div>
+                    </div>
+
+                    <!-- Pré-visualização do Impacto -->
+                    <div class="preview-sim-box" style="margin-top: 16px;">
+                        <div class="preview-sim-row">
+                            <span>Novo Total de Cotas:</span>
+                            <strong id="prevTotalCotas">--</strong>
+                        </div>
+                        <div class="preview-sim-row">
+                            <span>Custo deste Aporte:</span>
+                            <strong id="prevCustoAporte">R$ 0,00</strong>
+                        </div>
+                        <div class="preview-sim-row">
+                            <span>Novo Preço Médio:</span>
+                            <strong style="color: var(--accent-color);" id="prevNovoPrecoMedio">R$ 0,00</strong>
+                        </div>
+                        <div class="preview-sim-row">
+                            <span>Nova Renda Mensal:</span>
+                            <strong style="color: var(--color-income);" id="prevNovaRenda">R$ 0,00</strong>
+                        </div>
+                    </div>
+
+                </div>
+
+                <footer class="modal-footer">
+                    <button type="button" class="btn-cancel" id="btnAporteCancel">Cancelar</button>
+                    <button type="submit" class="btn-missao-primary">Confirmar Aporte</button>
+                </footer>
+            </form>
+        </div>
+    </div>
+
+</body>
+</html>
