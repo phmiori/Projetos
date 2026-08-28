@@ -1,0 +1,33 @@
+🚀 Passo a passo para rodar o projeto
+Pré-requisitos (só na primeira vez)
+Você precisa ter o Node.js instalado. Verifique com:
+
+bash
+node -v
+1️⃣ Abra o terminal na pasta do projeto
+No VS Code, use o atalho Ctrl + ` para abrir o terminal integrado. Ele já abre na pasta certa.
+
+Ou clique com o botão direito na pasta do projeto no explorador de arquivos → "Abrir no Terminal".
+
+2️⃣ Instale as dependências (só na primeira vez)
+bash
+npm install
+3️⃣ Gere o Prisma (só na primeira vez, ou ao mudar o schema)
+bash
+npm run prisma:generate
+4️⃣ Rode o servidor
+bash
+npm run dev
+Você verá isso no terminal:
+
+====================================================
+ AutoLeilão Hub rodando na porta 3000
+ Acesso web: http://localhost:3000/HTML/Index/index.html
+====================================================
+5️⃣ Acesse no navegador
+Abra: http://localhost:3000/HTML/Index/index.html
+
+⏹️ Para parar o servidor
+No terminal, pressione Ctrl + C.
+
+Resumo do dia a dia: Na maioria das vezes, basta abrir o terminal e digitar npm run dev. Os passos 2 e 3 só são necessários na primeira vez ou após mudanças nas dependências/banco de dados.

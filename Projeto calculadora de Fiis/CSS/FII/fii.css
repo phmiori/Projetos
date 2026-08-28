@@ -1,0 +1,764 @@
+/* CSS/FII/fii.css */
+/* Estilos Específicos do Módulo de Fundos Imobiliários (FIIs) */
+/* Rigorosamente estruturado com as variáveis semânticas de global_tokens.css */
+
+/* --- Sub-Navegação em Abas --- */
+.sub-nav-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    padding: 6px;
+    flex-wrap: wrap;
+}
+
+.sub-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: transparent;
+    color: var(--text-sub);
+    border: 1px solid transparent;
+    border-radius: var(--radius-button);
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.sub-nav-btn:hover {
+    color: var(--text-main);
+    background-color: var(--bg-main);
+}
+
+.sub-nav-btn.active {
+    background-color: var(--accent-color);
+    color: var(--accent-text);
+    border-color: var(--accent-color);
+}
+
+/* Sub-views */
+.fii-subview {
+    display: none;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.fii-subview.active {
+    display: flex;
+}
+
+/* --- Botões de Ação da Tabela --- */
+.btn-primary-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background-color: var(--accent-color);
+    color: var(--accent-text);
+    border: 1px solid var(--accent-color);
+    border-radius: var(--radius-button);
+    font-size: 0.88rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    white-space: nowrap;
+}
+
+.btn-primary-action:hover {
+    filter: brightness(0.9);
+    transform: translateY(-1px);
+}
+
+.btn-export-csv {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background-color: transparent;
+    color: var(--text-sub);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-button);
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    white-space: nowrap;
+}
+
+.btn-export-csv:hover {
+    color: var(--text-main);
+    border-color: var(--text-sub);
+    background-color: var(--bg-main);
+}
+
+.table-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* --- Layout da Calculadora & Grid 2 Colunas --- */
+.app-grid-calc {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    gap: 20px;
+    align-items: start;
+}
+
+/* --- Painéis Estilo Surface / Glass --- */
+.panel-card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    transition: var(--transition-fast);
+}
+
+.panel-card-title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Formulário da Calculadora */
+.calc-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.form-group-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.form-group-field label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-sub);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.input-with-addon {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.input-addon-prefix {
+    position: absolute;
+    left: 12px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--text-sub);
+    pointer-events: none;
+}
+
+.input-with-addon input {
+    padding-left: 38px;
+    width: 100%;
+}
+
+.input-row-group {
+    display: grid;
+    grid-template-columns: 1fr 110px;
+    gap: 10px;
+}
+
+/* Switch de Reinvestimento / Bola de Neve */
+.switch-container {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    padding: 12px 14px;
+    border-radius: var(--radius-button);
+    cursor: pointer;
+}
+
+.switch-input {
+    position: relative;
+    width: 40px;
+    height: 22px;
+    flex-shrink: 0;
+}
+
+.switch-input input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.switch-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background-color: var(--border-color);
+    transition: var(--transition-fast);
+    border-radius: 20px;
+}
+
+.switch-slider:before {
+    position: absolute;
+    content: "";
+    height: 16px;
+    width: 16px;
+    left: 3px;
+    bottom: 3px;
+    background-color: var(--text-main);
+    transition: var(--transition-fast);
+    border-radius: 50%;
+}
+
+.switch-input input:checked + .switch-slider {
+    background-color: var(--accent-color);
+}
+
+.switch-input input:checked + .switch-slider:before {
+    transform: translateX(18px);
+    background-color: var(--accent-text);
+}
+
+.switch-text-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--text-main);
+    line-height: 1.35;
+}
+
+/* --- Resultados da Calculadora --- */
+.calc-results-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.equity-banner-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.2fr;
+    gap: 16px;
+}
+
+.equity-highlight-box {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.equity-highlight-box.final {
+    border-color: var(--accent-color);
+    background: linear-gradient(135deg, var(--bg-surface), rgba(238, 187, 0, 0.08));
+}
+
+.equity-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-sub);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.equity-value {
+    font-size: 1.8rem;
+    font-weight: 900;
+    color: var(--text-main);
+    letter-spacing: -0.5px;
+}
+
+.highlight-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.mini-highlight-card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-button);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.mini-highlight-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--text-sub);
+    text-transform: uppercase;
+}
+
+.mini-highlight-val {
+    font-size: 1.2rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+/* Gráficos em FIIs */
+.charts-dual-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.chart-panel-box {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.chart-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.chart-title-text {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+/* --- Tabela de Carteira e Simulação --- */
+.table-panel-card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.table-header-flex {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.table-actions-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.table-scroll-wrap {
+    overflow-x: auto;
+}
+
+.fii-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+
+.fii-data-table th {
+    text-align: left;
+    padding: 12px 14px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-sub);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.fii-data-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-main);
+    vertical-align: middle;
+}
+
+.fii-data-table tr:hover td {
+    background-color: rgba(238, 187, 0, 0.03);
+}
+
+.ticker-badge-cell {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    background-color: var(--bg-main);
+    border: 1px solid var(--accent-color);
+    color: var(--accent-color);
+    border-radius: var(--radius-button);
+    font-weight: 800;
+    letter-spacing: 0.5px;
+}
+
+.segment-tag-cell {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: var(--radius-button);
+    font-size: 0.75rem;
+    font-weight: 700;
+    background-color: var(--bg-main);
+    color: var(--text-sub);
+    border: 1px solid var(--border-color);
+}
+
+/* Botões de Ação na Tabela */
+.table-action-btns {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+}
+
+.btn-fii-action {
+    padding: 6px 10px;
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    border-radius: var(--radius-button);
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: var(--transition-fast);
+}
+
+.btn-fii-action:hover {
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+}
+
+.btn-fii-action.delete:hover {
+    border-color: var(--color-expense);
+    color: var(--color-expense);
+    background-color: rgba(211, 47, 47, 0.1);
+}
+
+/* --- Radar Funds Explorer Cards --- */
+.radar-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 14px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    padding: 14px 18px;
+}
+
+.radar-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 20px;
+}
+
+.radar-fii-card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 16px;
+    transition: var(--transition-fast);
+}
+
+.radar-fii-card:hover {
+    border-color: var(--accent-color);
+    transform: translateY(-2px);
+}
+
+.radar-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.radar-ticker-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.radar-fii-name {
+    font-size: 0.85rem;
+    color: var(--text-sub);
+    margin-top: 2px;
+}
+
+.radar-fii-desc {
+    font-size: 0.88rem;
+    color: var(--text-sub);
+    line-height: 1.5;
+}
+
+.radar-card-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 14px;
+    border-top: 1px solid var(--border-color);
+    gap: 10px;
+}
+
+.btn-radar-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--accent-color);
+    text-decoration: none;
+    transition: var(--transition-fast);
+}
+
+.btn-radar-link:hover {
+    text-decoration: underline;
+}
+
+.btn-add-from-radar {
+    padding: 6px 12px;
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    border-radius: var(--radius-button);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.btn-add-from-radar:hover {
+    background-color: var(--accent-color);
+    color: var(--accent-text);
+    border-color: var(--accent-color);
+}
+
+/* Inputs & Formulários Padronizados */
+.input-missao {
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-button);
+    padding: 10px 14px;
+    font-size: 0.9rem;
+    outline: none;
+    transition: var(--transition-fast);
+    width: 100%;
+}
+
+.input-missao:focus {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px rgba(238, 187, 0, 0.15);
+}
+
+select.input-missao {
+    cursor: pointer;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+}
+
+select.input-missao option {
+    background-color: var(--bg-surface);
+    color: var(--text-main);
+}
+
+/* Modal de Simulação & Aporte */
+.preview-sim-box {
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-button);
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.preview-sim-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    color: var(--text-sub);
+}
+
+.preview-sim-row strong {
+    color: var(--text-main);
+    font-size: 0.95rem;
+}
+
+/* ========================================================= */
+/* MODAIS (ADICIONAR FII & NOVO APORTE) */
+/* ========================================================= */
+.modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.modal-overlay.active { 
+    display: flex; 
+}
+
+.modal-dialog {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    width: 100%;
+    max-width: 620px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    z-index: 2001;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--border-color);
+    animation: modalFadeIn 0.2s ease-out;
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.modal-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    background-color: var(--bg-surface);
+}
+
+.modal-title { 
+    font-size: 1.3rem; 
+    font-weight: 800; 
+    color: var(--text-main); 
+}
+
+.modal-subtitle { 
+    font-size: 0.85rem; 
+    color: var(--text-sub); 
+    margin-top: 2px; 
+}
+
+.modal-close-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-sub);
+    font-size: 1.6rem;
+    cursor: pointer;
+    line-height: 1;
+    padding: 4px;
+    transition: var(--transition-fast);
+}
+
+.modal-close-btn:hover { 
+    color: var(--text-main); 
+}
+
+.form-sections-wrapper {
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    overflow-y: auto;
+    background-color: var(--bg-surface);
+}
+
+.form-fields-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+}
+
+.input-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.input-field label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-sub);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.modal-footer {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border-color);
+    background-color: var(--bg-surface);
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.btn-cancel {
+    padding: 10px 18px;
+    background-color: transparent;
+    color: var(--text-sub);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-button);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.btn-cancel:hover {
+    color: var(--text-main);
+    background-color: var(--bg-main);
+}
+
+/* Responsividade */
+@media (max-width: 1024px) {
+    .app-grid-calc { grid-template-columns: 1fr; }
+    .charts-dual-grid { grid-template-columns: 1fr; }
+    .highlight-metrics-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+    .equity-banner-grid { grid-template-columns: 1fr; }
+    .highlight-metrics-grid { grid-template-columns: 1fr; }
+    .radar-toolbar { flex-direction: column; align-items: stretch; }
+    .form-fields-grid { grid-template-columns: 1fr; }
+}
+
+

@@ -1,0 +1,1437 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Business Hub - Gestão de FIIs & Carros de Leilão</title>
+    <meta name="description" content="Plataforma de gestão integrada de negócios: Carteira de Fundos Imobiliários e Administração de Carros de Leilão.">
+    <link rel="stylesheet" href="styles.css">
+    <!-- Chart.js para os gráficos premium -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Mobile Header -->
+        <header class="mobile-header">
+            <div class="mobile-brand">
+                <span>💼</span> Business Hub
+            </div>
+            <button class="mobile-menu-btn" id="btnMobileMenuToggle" aria-label="Abrir Menu">
+                ☰
+            </button>
+        </header>
+
+        <!-- Overlay para mobile -->
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+        <!-- ========================================================= -->
+        <!-- BARRA LATERAL (SIDEBAR) -->
+        <!-- ========================================================= -->
+        <aside class="sidebar" id="appSidebar">
+            <!-- Brand / Logo -->
+            <div class="sidebar-header" id="brandHomeBtn">
+                <span class="brand-icon">💼</span>
+                <span class="brand-title">Business Hub</span>
+            </div>
+
+            <!-- Menu de Módulos de Negócios -->
+            <nav class="sidebar-menu">
+                <span class="sidebar-label">Meus Negócios</span>
+                
+                <button type="button" class="main-nav-btn active" id="btnNavFII" data-target="fiiModule">
+                    <span class="nav-icon">🏢</span>
+                    <span>Fundos Imobiliários</span>
+                </button>
+
+                <button type="button" class="main-nav-btn car-btn" id="btnNavCars" data-target="carModule">
+                    <span class="nav-icon">🚗</span>
+                    <span>Carros de Leilão</span>
+                </button>
+
+                <button type="button" class="main-nav-btn cdb-btn" id="btnNavCDB" data-target="cdbModule">
+                    <span class="nav-icon">🐷</span>
+                    <span>Investimento CDB</span>
+                </button>
+            </nav>
+
+            <!-- Rodapé da Sidebar com Login / Perfil -->
+            <div class="sidebar-footer">
+                <div class="auth-bar" id="authBarContainer">
+                    <!-- Preenchido dinamicamente via JS -->
+                </div>
+            </div>
+        </aside>
+
+        <!-- ========================================================= -->
+        <!-- ÁREA PRINCIPAL DE CONTEÚDO (MAIN CONTENT) -->
+        <!-- ========================================================= -->
+        <main class="main-content">
+            
+            <!-- ========================================================= -->
+            <!-- MÓDULO 1: FUNDOS IMOBILIÁRIOS (FIIs) -->
+            <!-- ========================================================= -->
+            <section id="fiiModule" class="view-section active">
+                <header class="view-header">
+                    <div>
+                        <h1>Negócios em Fundos Imobiliários</h1>
+                        <p class="subtitle">Gerencie sua carteira de FIIs, projete a renda passiva e acesse o Radar Funds Explorer</p>
+                    </div>
+                </header>
+
+                <!-- Sub-Navegação interna de FIIs -->
+                <div class="sub-nav-container">
+                    <button type="button" class="sub-nav-btn active" data-subtarget="fiiSubPortfolio">
+                        <span>💼</span> Minha Carteira
+                    </button>
+                    <button type="button" class="sub-nav-btn" data-subtarget="fiiSubCalculator">
+                        <span>🧮</span> Calculadora & Bola de Neve
+                    </button>
+                    <button type="button" class="sub-nav-btn" data-subtarget="fiiSubRadar">
+                        <span>🌐</span> Radar Funds Explorer
+                    </button>
+                </div>
+
+                <!-- SUB-ABA 1.1: MINHA CARTEIRA DE FIIS -->
+                <div id="fiiSubPortfolio" class="fii-subview active">
+                    <!-- Banner exibido quando não está logado -->
+                    <div id="portfolioGuestPrompt" class="guest-banner" style="display: none;">
+                        <h2>Faça login para salvar seus investimentos</h2>
+                        <p>Acesse para salvar seus fundos imobiliários, acompanhar seus dividendos mensais e registrar novos aportes com facilidade.</p>
+                        <div class="guest-banner-actions">
+                            <button class="btn-primary" style="width: auto;" id="btnPromptLogin">
+                                <span>🔐</span> Entrar na Minha Conta
+                            </button>
+                            <button class="btn-secondary" id="btnPromptDemo">
+                                <span>🚀</span> Testar com Conta Demo
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Conteúdo da carteira exibido quando logado -->
+                    <div id="portfolioContent" style="display: none;">
+                        <!-- Cards de Métricas da Carteira -->
+                        <div class="portfolio-metrics-grid">
+                            <div class="portfolio-stat-card">
+                                <div class="stat-icon-wrapper stat-icon-purple">
+                                    <span>💰</span>
+                                </div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Patrimônio Investido</span>
+                                    <span class="stat-value" id="portfolioTotalInvested">R$ 0,00</span>
+                                </div>
+                            </div>
+
+                            <div class="portfolio-stat-card">
+                                <div class="stat-icon-wrapper stat-icon-green">
+                                    <span>💵</span>
+                                </div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Renda Mensal Estimada</span>
+                                    <span class="stat-value text-success" id="portfolioMonthlyDividends">R$ 0,00</span>
+                                </div>
+                            </div>
+
+                            <div class="portfolio-stat-card">
+                                <div class="stat-icon-wrapper stat-icon-cyan">
+                                    <span>📈</span>
+                                </div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Yield on Cost Médio</span>
+                                    <span class="stat-value" id="portfolioAvgYield">0,00% a.m.</span>
+                                </div>
+                            </div>
+
+                            <div class="portfolio-stat-card">
+                                <div class="stat-icon-wrapper stat-icon-amber">
+                                    <span>📦</span>
+                                </div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Total de Cotas</span>
+                                    <span class="stat-value" id="portfolioTotalShares">0</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Gráficos de Alocação e Renda -->
+                        <div class="portfolio-charts-grid">
+                            <div class="glass-panel">
+                                <div class="chart-header">
+                                    <h3 class="chart-title">Distribuição por Segmento</h3>
+                                </div>
+                                <div style="position: relative; height: 260px; width: 100%;">
+                                    <canvas id="portfolioSegmentChart"></canvas>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel">
+                                <div class="chart-header">
+                                    <h3 class="chart-title">Renda por FII (Mensal)</h3>
+                                </div>
+                                <div style="position: relative; height: 260px; width: 100%;">
+                                    <canvas id="portfolioIncomeChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tabela de FIIs Cadastrados -->
+                        <section class="glass-panel table-panel" style="margin-top: 0;">
+                            <div class="table-header-row">
+                                <h3 class="table-title">Fundos Imobiliários Cadastrados</h3>
+                                <div class="table-actions">
+                                    <button id="btnExportPortfolioCsv" class="export-btn">
+                                        📥 Exportar Carteira (CSV)
+                                    </button>
+                                    <button id="btnOpenAddInvestment" class="btn-primary" style="width: auto; padding: 0.6rem 1.25rem;">
+                                        <span>➕</span> Adicionar FII
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="table-container">
+                                <table id="portfolioTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Ticker</th>
+                                            <th>Segmento</th>
+                                            <th>Cotas</th>
+                                            <th>Preço Médio</th>
+                                            <th>Total Investido</th>
+                                            <th>Últ. Dividendo</th>
+                                            <th>Renda Mensal</th>
+                                            <th>Yield Médio</th>
+                                            <th style="text-align: right;">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="portfolioTableBody">
+                                        <!-- Preenchido dinamicamente -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <!-- SUB-ABA 1.2: CALCULADORA DE FIIS -->
+                <div id="fiiSubCalculator" class="fii-subview">
+                    <div class="app-grid">
+                        <section class="glass-panel">
+                            <h2 class="form-title">Configurar Simulação</h2>
+                            <form id="simulatorForm" onsubmit="event.preventDefault();">
+                                
+                                <div class="form-group">
+                                    <label for="sharePrice">Preço da Cota</label>
+                                    <div class="input-wrapper prefix-pad">
+                                        <span class="input-prefix">R$</span>
+                                        <input type="number" id="sharePrice" step="0.01" min="0.01" placeholder="Ex: 10.50" required>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="lastDividend">Último Rendimento (por cota)</label>
+                                    <div class="input-wrapper prefix-pad">
+                                        <span class="input-prefix">R$</span>
+                                        <input type="number" id="lastDividend" step="0.01" min="0.00" placeholder="Ex: 0.10" required>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="monthlyInvestment">Investimento Mensal (Aporte)</label>
+                                    <div class="input-wrapper prefix-pad">
+                                        <span class="input-prefix">R$</span>
+                                        <input type="number" id="monthlyInvestment" step="1" min="0" placeholder="Ex: 500" required>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="duration">Prazo do Investimento</label>
+                                    <div class="input-row">
+                                        <div class="input-wrapper">
+                                            <input type="number" id="duration" min="1" placeholder="Ex: 5" required>
+                                        </div>
+                                        <div class="custom-select-container">
+                                            <input type="hidden" id="durationUnit" value="years">
+                                            <div class="custom-select" id="customDurationSelect">
+                                                <div class="custom-select-trigger">
+                                                    <span>Anos</span>
+                                                </div>
+                                                <div class="custom-options">
+                                                    <div class="custom-option selected" data-value="years">Anos</div>
+                                                    <div class="custom-option" data-value="months">Meses</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="initialShares">Quantidade de Cotas Inicial</label>
+                                    <div class="input-wrapper">
+                                        <input type="number" id="initialShares" min="0" value="0" placeholder="Ex: 0" required>
+                                    </div>
+                                </div>
+
+                                <div class="checkbox-group" id="reinvestGroup">
+                                    <label class="switch">
+                                        <input type="checkbox" id="reinvestDividends" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span class="checkbox-label">Reinvestir dividendos ganhos e sobras do aporte (Efeito Bola de Neve)</span>
+                                </div>
+
+                                <button type="submit" id="calculateBtn" class="btn-primary">
+                                    <span>⚡</span> Calcular Simulação
+                                </button>
+                            </form>
+                        </section>
+
+                        <section class="results-container">
+                            <div class="equity-banner">
+                                <div class="equity-card">
+                                    <div class="label">Patrimônio Inicial</div>
+                                    <div class="value" id="initialEquityText">R$ 0,00</div>
+                                </div>
+                                <div class="equity-card final">
+                                    <div class="label">Patrimônio Final</div>
+                                    <div class="value text-success" id="finalEquityText">R$ 0,00</div>
+                                </div>
+                            </div>
+
+                            <div class="highlight-panel">
+                                <div class="grid-highlights">
+                                    <div class="highlight-item">
+                                        <span class="label">Prazo Simulado</span>
+                                        <span class="value" id="resultDurationText">--</span>
+                                    </div>
+                                    <div class="highlight-item">
+                                        <span class="label">Total Aportado</span>
+                                        <span class="value" id="resultTotalInvested">R$ 0,00</span>
+                                    </div>
+                                    <div class="highlight-item">
+                                        <span class="label">Total Reinvestido</span>
+                                        <span class="value" id="resultTotalReinvested">R$ 0,00</span>
+                                    </div>
+                                    <div class="highlight-item">
+                                        <span class="label">Renda Mensal no Fim</span>
+                                        <span class="value" id="resultFinalDividends">R$ 0,00</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel chart-panel">
+                                <div class="chart-header">
+                                    <h3 class="chart-title">Evolução do Patrimônio ao Longo do Tempo</h3>
+                                </div>
+                                <div style="position: relative; height: 300px; width: 100%;">
+                                    <canvas id="equityChart"></canvas>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <section class="glass-panel table-panel">
+                        <div class="table-header-row">
+                            <h3 class="table-title">Evolução Mês a Mês</h3>
+                            <div class="table-actions">
+                                <button id="exportCsvBtn" class="export-btn" style="display: none;">
+                                    📥 Exportar Simulação (CSV)
+                                </button>
+                            </div>
+                        </div>
+                        <div class="table-container">
+                            <table id="simulationTable">
+                                <thead>
+                                    <tr>
+                                        <th>Mês</th>
+                                        <th>Cotas Acumuladas</th>
+                                        <th>Valor Investido (Mês)</th>
+                                        <th>Valor Reinvestido (Mês)</th>
+                                        <th>Dividendo Recebido (Mês)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tableBody">
+                                    <tr>
+                                        <td colspan="5" class="empty-state">
+                                            <span class="empty-state-icon">⚡</span>
+                                            Preencha os campos e clique em Calcular para visualizar a evolução.
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- SUB-ABA 1.3: RADAR FUNDS EXPLORER -->
+                <div id="fiiSubRadar" class="fii-subview">
+                    <div class="radar-filter-bar">
+                        <div class="filter-pills" id="radarFilterPills">
+                            <button class="filter-pill-btn active" data-segment="all">Todos (5)</button>
+                            <button class="filter-pill-btn" data-segment="Papel">Papel / CRI</button>
+                            <button class="filter-pill-btn" data-segment="Fiagro">Fiagro</button>
+                            <button class="filter-pill-btn" data-segment="Híbrido">Híbrido / Renda Urbana</button>
+                        </div>
+
+                        <div class="form-group radar-search-input" style="margin-bottom: 0;">
+                            <input type="text" id="radarSearchInput" placeholder="🔍 Buscar ticker ou nome...">
+                        </div>
+                    </div>
+
+                    <div class="fii-cards-grid" id="radarCardsGrid">
+                        <!-- Preenchido dinamicamente com os 5 FIIs e links oficiais do Funds Explorer -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================================================= -->
+            <!-- MÓDULO 2: CARROS DE LEILÃO (CARDS & DASHBOARD GERAL) -->
+            <!-- ========================================================= -->
+            <section id="carModule" class="view-section">
+                <header class="view-header car">
+                    <div>
+                        <h1>Administração de Carros de Leilão</h1>
+                        <p class="subtitle">Cadastre veículos comprados, preencha planilhas detalhadas de gastos e acompanhe seu lucro total no dashboard.</p>
+                    </div>
+                </header>
+
+                <!-- Sub-Navegação interna de Carros de Leilão -->
+                <div class="sub-nav-container">
+                    <button type="button" class="sub-nav-btn car-sub-btn active" data-car-subtarget="carSubCards">
+                        <span>📇</span> Meus Carros & Planilhas
+                    </button>
+                    <button type="button" class="sub-nav-btn car-sub-btn" data-car-subtarget="carSubDashboard">
+                        <span>📊</span> Dashboard Financeiro Geral
+                    </button>
+                </div>
+
+                <!-- Banner deslogado -->
+                <div id="carGuestPrompt" class="guest-banner" style="display: none;">
+                    <h2>Faça login para gerenciar seus carros de leilão</h2>
+                    <p>Acesse sua conta para cadastrar seus veículos arrematados, abrir suas planilhas de gastos e controlar tudo o que foi feito em cada carro.</p>
+                    <div class="guest-banner-actions">
+                        <button class="btn-primary car" style="width: auto;" id="btnCarPromptLogin">
+                            <span>🔐</span> Entrar na Minha Conta
+                        </button>
+                        <button class="btn-secondary" id="btnCarPromptDemo">
+                            <span>🚀</span> Testar com Conta Demo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Conteúdo de Carros logado -->
+                <div id="carContent" style="display: none;">
+                    
+                    <!-- ========================================================= -->
+                    <!-- SUB-ABA 2.1: GRADE DE CARDS DOS CARROS COMPRADOS -->
+                    <!-- ========================================================= -->
+                    <div id="carSubCards" class="car-subview active">
+                        
+                        <!-- Vista da Lista de Cards -->
+                        <div id="carCardsListView">
+                            <div class="table-header-row" style="margin-bottom: 1.5rem;">
+                                <h3 class="table-title">Veículos no Portfólio</h3>
+                                <button id="btnOpenAddCarModal" class="btn-primary car" style="width: auto; padding: 0.65rem 1.4rem;">
+                                    <span>➕</span> Adicionar Novo Carro
+                                </button>
+                            </div>
+
+                            <!-- Filtros Rápidos dos Cards -->
+                            <div class="radar-filter-bar" style="margin-bottom: 1.5rem;">
+                                <div class="filter-pills" id="carCardsFilterPills">
+                                    <button class="filter-pill-btn active" data-filter-status="all">Todos os Carros</button>
+                                    <button class="filter-pill-btn" data-filter-status="Em Reforma">Em Reforma / Oficina</button>
+                                    <button class="filter-pill-btn" data-filter-status="À Venda">À Venda</button>
+                                    <button class="filter-pill-btn" data-filter-status="Vendido">Vendidos</button>
+                                </div>
+                                <div class="form-group radar-search-input" style="margin-bottom: 0;">
+                                    <input type="text" id="carCardsSearchInput" placeholder="🔍 Buscar modelo, placa, leiloeiro...">
+                                </div>
+                            </div>
+
+                            <!-- Grid de Cards dos Carros Comprados -->
+                            <div class="car-cards-grid" id="carCardsGrid">
+                                <!-- Preenchido dinamicamente com os cards dos carros -->
+                            </div>
+                        </div>
+
+                        <!-- Vista da Planilha Estilo Excel do Carro Selecionado -->
+                        <div id="carSpreadsheetView" class="spreadsheet-view">
+                            <button type="button" class="btn-back-cars" id="btnBackToCarCards">
+                                <span>←</span> Voltar para Todos os Carros
+                            </button>
+
+                            <!-- Header do Carro & Resumo Financeiro -->
+                            <div class="car-spreadsheet-header">
+                                <div class="car-header-info">
+                                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                        <h2 id="sheetCarModel">Modelo do Veículo</h2>
+                                        <span class="segment-tag" id="sheetCarStatusBadge">Em Reforma</span>
+                                    </div>
+                                    <div class="car-header-meta">
+                                        <span id="sheetCarYear">2020/2020</span>
+                                        <span id="sheetCarPlate">Placa: BRA2E19</span>
+                                        <span id="sheetCarAuctioneer">Leiloeiro: Sodré Santoro</span>
+                                        <span id="sheetCarPurchaseDate">Data Compra: 10/06/2026</span>
+                                    </div>
+                                </div>
+
+                                <!-- KPIs Financeiros do Carro -->
+                                <div class="car-kpis-bar">
+                                    <div class="car-kpi-item">
+                                        <span class="lbl">Lance / Arrematação</span>
+                                        <span class="val" id="sheetKpiBid">R$ 0,00</span>
+                                    </div>
+                                    <div class="car-kpi-item">
+                                        <span class="lbl">Gastos na Planilha</span>
+                                        <span class="val text-amber" id="sheetKpiExpenses">R$ 0,00</span>
+                                    </div>
+                                    <div class="car-kpi-item">
+                                        <span class="lbl">Custo Total do Carro</span>
+                                        <span class="val highlight" id="sheetKpiTotalCost">R$ 0,00</span>
+                                    </div>
+                                    <div class="car-kpi-item">
+                                        <span class="lbl" id="sheetKpiResultLabel">Venda / Lucro</span>
+                                        <span class="val text-success" id="sheetKpiResultValue">R$ 0,00</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Barra de Inserção Rápida Estilo Excel -->
+                            <div class="excel-add-bar">
+                                <div class="excel-add-title">
+                                    <span>➕</span> Lançar Novo Gasto / Serviço Realizado
+                                </div>
+                                <form id="addExpenseForm" class="excel-inputs-row">
+                                    <input type="date" id="expDate" required>
+                                    <select id="expCategory" required>
+                                        <option value="Taxa Leiloeiro">Taxa Leilão / Pátio</option>
+                                        <option value="Guincho">Guincho / Transporte</option>
+                                        <option value="Mecânica">Mecânica & Revisão</option>
+                                        <option value="Funilaria / Pintura">Funilaria & Pintura</option>
+                                        <option value="Peças & Lataria">Peças & Acessórios</option>
+                                        <option value="Pneus">Pneus & Alinhamento</option>
+                                        <option value="Documentação">Documentação / IPVA</option>
+                                        <option value="Higienização">Higienização / Estética</option>
+                                        <option value="Outro">Outro Serviço</option>
+                                    </select>
+                                    <input type="text" id="expDescription" placeholder="O que foi feito? (Ex: Troca de óleo e pastilhas)" required>
+                                    <input type="text" id="expSupplier" placeholder="Oficina / Loja (Ex: Mecânica Silva)">
+                                    <div class="input-wrapper prefix-pad" style="margin-bottom: 0;">
+                                        <span class="input-prefix">R$</span>
+                                        <input type="number" id="expAmount" step="0.01" min="0.01" placeholder="0,00" required>
+                                    </div>
+                                    <button type="submit" class="btn-add-expense">
+                                        <span>💾</span> Lançar
+                                    </button>
+                                </form>
+                            </div>
+
+                            <!-- Tabela Estilo Excel de Gastos -->
+                            <section class="glass-panel table-panel" style="margin-top: 0;">
+                                <div class="table-header-row">
+                                    <h3 class="table-title">Planilha de Gastos & Serviços do Veículo</h3>
+                                    <div class="table-actions">
+                                        <button id="btnExportCurrentCarCsv" class="export-btn">
+                                            📥 Exportar Planilha (CSV)
+                                        </button>
+                                        <button id="btnEditCarSaleStatus" class="btn-primary car" style="width: auto; padding: 0.55rem 1.1rem; font-size: 0.85rem;">
+                                            <span>💲</span> Marcar como Vendido / Preço
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="table-container">
+                                    <table class="excel-table" id="carExpensesTable">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 50px;">#</th>
+                                                <th style="width: 110px;">Data</th>
+                                                <th style="width: 170px;">Categoria</th>
+                                                <th>Descrição do que foi feito</th>
+                                                <th>Oficina / Fornecedor</th>
+                                                <th style="width: 140px; text-align: right;">Valor (R$)</th>
+                                                <th style="width: 60px; text-align: center;">Excluir</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="carExpensesTableBody">
+                                            <!-- Linhas da planilha preenchidas via JS -->
+                                        </tbody>
+                                        <tfoot>
+                                            <tr class="excel-total-row">
+                                                <td colspan="5" style="text-align: right; text-transform: uppercase;">
+                                                    Total de Gastos na Planilha:
+                                                </td>
+                                                <td style="text-align: right; color: #FBBF24;" id="sheetTableTotalExpenses">
+                                                    R$ 0,00
+                                                </td>
+                                                <td></td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </section>
+
+                            <!-- ====================================================== -->
+                            <!-- DASHBOARD PERSONALIZADO DO VEÍCULO -->
+                            <!-- ====================================================== -->
+                            <div id="carVehicleDashboard" style="margin-top: 2rem;">
+                                <div class="table-header-row" style="margin-bottom: 1.5rem;">
+                                    <h3 class="table-title" style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <span>📊</span> Dashboard deste Veículo
+                                    </h3>
+                                </div>
+
+                                <!-- KPI cards do veículo -->
+                                <div class="portfolio-metrics-grid" id="vehicleDashKpis" style="margin-bottom: 1.5rem;">
+                                    <!-- preenchido via JS -->
+                                </div>
+
+                                <!-- Gráficos do veículo -->
+                                <div class="portfolio-charts-grid">
+                                    <div class="glass-panel">
+                                        <div class="chart-header">
+                                            <h3 class="chart-title">Gastos por Categoria</h3>
+                                        </div>
+                                        <div style="position: relative; height: 250px; width: 100%;">
+                                            <canvas id="vehicleCategoryChart"></canvas>
+                                        </div>
+                                    </div>
+
+                                    <div class="glass-panel">
+                                        <div class="chart-header">
+                                            <h3 class="chart-title">Maiores Gastos (Top 8)</h3>
+                                        </div>
+                                        <div style="position: relative; height: 250px; width: 100%;">
+                                            <canvas id="vehicleTopExpensesChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ========================================================= -->
+                    <!-- SUB-ABA 2.2: DASHBOARD FINANCEIRO GERAL (GASTOS & LUCROS) -->
+                    <!-- ========================================================= -->
+                    <div id="carSubDashboard" class="car-subview">
+                        <!-- Métricas Consolidadas de Todos os Carros -->
+                        <div class="portfolio-metrics-grid">
+                            <div class="portfolio-stat-card">
+                                <div class="stat-icon-wrapper stat-icon-orange">
+                                    <span>💰</span>
+                                </div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Total Gasto Geral (Lances + Planilhas)</span>
+                                    <span class="stat-value" id="dashTotalSpent">R$ 0,00</span>
+                                </div>
+                            </div>
+
+                            <div class="portfolio-stat-card">
+                                <div class="stat-icon-wrapper stat-icon-green">
+                                    <span>💵</span>
+                                </div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Lucro Líquido Realizado</span>
+                                    <span class="stat-value text-success" id="dashTotalProfit">R$ 0,00</span>
+                                </div>
+                            </div>
+
+                            <div class="portfolio-stat-card">
+                                <div class="stat-icon-wrapper stat-icon-cyan">
+                                    <span>🎯</span>
+                                </div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Margem Média Realizada</span>
+                                    <span class="stat-value" id="dashAvgMargin">0,0%</span>
+                                </div>
+                            </div>
+
+                            <div class="portfolio-stat-card">
+                                <div class="stat-icon-wrapper stat-icon-amber">
+                                    <span>🚘</span>
+                                </div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Faturamento Total (Vendas)</span>
+                                    <span class="stat-value" id="dashTotalRevenue">R$ 0,00</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Gráficos Visuais do Negócio de Leilão -->
+                        <div class="portfolio-charts-grid">
+                            <div class="glass-panel">
+                                <div class="chart-header">
+                                    <h3 class="chart-title">Gastos por Categoria (Todas as Planilhas)</h3>
+                                </div>
+                                <div style="position: relative; height: 260px; width: 100%;">
+                                    <canvas id="carCategoryExpensesChart"></canvas>
+                                </div>
+                            </div>
+
+                            <div class="glass-panel">
+                                <div class="chart-header">
+                                    <h3 class="chart-title">Lucro Líquido por Veículo (Vendidos)</h3>
+                                </div>
+                                <div style="position: relative; height: 260px; width: 100%;">
+                                    <canvas id="carComparisonChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tabela Resumo Consolidada de Negociações -->
+                        <section class="glass-panel table-panel" style="margin-top: 0;">
+                            <div class="table-header-row">
+                                <h3 class="table-title">Resumo Consolidado de Negociações</h3>
+                                <button id="btnExportConsolidatedCarsCsv" class="export-btn">
+                                    📥 Exportar Relatório Consolidado (CSV)
+                                </button>
+                            </div>
+
+                            <div class="table-container">
+                                <table id="carConsolidatedTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Veículo</th>
+                                            <th>Placa</th>
+                                            <th>Lance (Compra)</th>
+                                            <th>Gastos Planilha</th>
+                                            <th>Custo Total</th>
+                                            <th>Preço Venda</th>
+                                            <th>Lucro Líquido</th>
+                                            <th>Margem (%)</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="carConsolidatedTableBody">
+                                        <!-- Preenchido via JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================================================= -->
+            <!-- MÓDULO 3: INVESTIMENTOS CDB -->
+            <!-- ========================================================= -->
+            <section id="cdbModule" class="view-section">
+                <header class="view-header cdb">
+                    <div>
+                        <h1>Investimentos em Renda Fixa (CDB)</h1>
+                        <p class="subtitle">Gerencie suas aplicações em CDB, projete rendimentos líquidos reais e simule juros compostos com aportes mensais.</p>
+                    </div>
+                </header>
+
+                <!-- Sub-Navegação interna de CDB -->
+                <div class="sub-nav-container">
+                    <button type="button" class="sub-nav-btn cdb-sub-btn active" data-cdb-subtarget="cdbSubPortfolio">
+                        <span>💼</span> Minhas Aplicações
+                    </button>
+                    <button type="button" class="sub-nav-btn cdb-sub-btn" data-cdb-subtarget="cdbSubCalculator">
+                        <span>🧮</span> Simulador Renda Fixa
+                    </button>
+                </div>
+
+                <!-- Banner deslogado CDB -->
+                <div id="cdbGuestPrompt" class="guest-banner" style="display: none;">
+                    <h2>Faça login para gerenciar suas aplicações em CDB</h2>
+                    <p>Acesse sua conta para salvar suas aplicações pós e pré-fixadas, acompanhar a projeção do IR regressivo e o rendimento líquido real da sua carteira.</p>
+                    <div class="guest-banner-actions">
+                        <button class="btn-primary cdb" style="width: auto;" id="btnCdbPromptLogin">
+                            <span>🔐</span> Entrar na Minha Conta
+                        </button>
+                        <button class="btn-secondary" id="btnCdbPromptDemo">
+                            <span>🚀</span> Testar com Conta Demo
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Conteúdo de CDB logado -->
+                <div id="cdbContent" style="display: none;">
+                    <!-- SUB-ABA 3.1: MINHAS APLICAÇÕES -->
+                    <div id="cdbSubPortfolio" class="cdb-subview active">
+                        <!-- Cards de Métricas CDB -->
+                        <div class="portfolio-metrics-grid">
+                            <div class="portfolio-stat-card">
+                                <div class="stat-icon-wrapper stat-icon-green">
+                                    <span>💰</span>
+                                </div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Total Aplicado</span>
+                                    <span class="stat-value" id="cdbTotalInvested">R$ 0,00</span>
+                                </div>
+                            </div>
+                            <div class="portfolio-stat-card">
+                                <div class="stat-icon-wrapper stat-icon-purple">
+                                    <span>📈</span>
+                                </div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Rendimento Bruto Acumulado</span>
+                                    <span class="stat-value text-success" id="cdbTotalGrossReturn">R$ 0,00</span>
+                                </div>
+                            </div>
+                            <div class="portfolio-stat-card">
+                                <div class="stat-icon-wrapper stat-icon-orange">
+                                    <span>💸</span>
+                                </div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Imposto de Renda Estimado</span>
+                                    <span class="stat-value text-danger" id="cdbTotalTax">R$ 0,00</span>
+                                </div>
+                            </div>
+                            <div class="portfolio-stat-card">
+                                <div class="stat-icon-wrapper stat-icon-cyan">
+                                    <span>💵</span>
+                                </div>
+                                <div class="stat-content">
+                                    <span class="stat-label">Saldo Líquido Estimado</span>
+                                    <span class="stat-value" id="cdbTotalNetValue">R$ 0,00</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Gráficos de CDB -->
+                        <div class="portfolio-charts-grid">
+                            <div class="glass-panel">
+                                <div class="chart-header">
+                                    <h3 class="chart-title">Distribuição por Emissor</h3>
+                                </div>
+                                <div style="position: relative; height: 260px; width: 100%;">
+                                    <canvas id="cdbIssuerChart"></canvas>
+                                </div>
+                            </div>
+                            <div class="glass-panel">
+                                <div class="chart-header">
+                                    <h3 class="chart-title">Bruto vs Líquido por Título</h3>
+                                </div>
+                                <div style="position: relative; height: 260px; width: 100%;">
+                                    <canvas id="cdbIncomeChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tabela de CDBs Cadastrados -->
+                        <section class="glass-panel table-panel" style="margin-top: 0;">
+                            <div class="table-header-row">
+                                <h3 class="table-title">Aplicações em CDB Cadastradas</h3>
+                                <div class="table-actions">
+                                    <button id="btnExportCdbCsv" class="export-btn">
+                                        📥 Exportar Carteira (CSV)
+                                    </button>
+                                    <button id="btnOpenAddCdb" class="btn-primary cdb" style="width: auto; padding: 0.6rem 1.25rem;">
+                                        <span>➕</span> Adicionar CDB
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="table-container">
+                                <table id="cdbTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Banco Emissor</th>
+                                            <th>Indexador</th>
+                                            <th>Taxa</th>
+                                            <th>Valor Aplicado</th>
+                                            <th>Data Início</th>
+                                            <th>Vencimento</th>
+                                            <th>Rendimento Bruto</th>
+                                            <th>IR Provisório</th>
+                                            <th>Saldo Líquido</th>
+                                            <th style="text-align: right;">Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="cdbTableBody">
+                                        <!-- Preenchido dinamicamente via JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+
+                    <!-- SUB-ABA 3.2: SIMULADOR CDB -->
+                    <div id="cdbSubCalculator" class="cdb-subview">
+                        <div class="app-grid">
+                            <section class="glass-panel">
+                                <h2 class="form-title">Configurar Simulação CDB</h2>
+                                <form id="cdbSimulatorForm" onsubmit="event.preventDefault();">
+                                    <div class="form-group">
+                                        <label for="cdbSimInitial">Aporte Inicial</label>
+                                        <div class="input-wrapper prefix-pad">
+                                            <span class="input-prefix">R$</span>
+                                            <input type="number" id="cdbSimInitial" step="100" min="0" placeholder="Ex: 10.000" required>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="cdbSimMonthly">Aporte Mensal</label>
+                                        <div class="input-wrapper prefix-pad">
+                                            <span class="input-prefix">R$</span>
+                                            <input type="number" id="cdbSimMonthly" step="10" min="0" placeholder="Ex: 500" required>
+                                        </div>
+                                    </div>
+                                    <div class="input-grid-2">
+                                        <div class="form-group">
+                                            <label for="cdbSimRateType">Indexador</label>
+                                            <select id="cdbSimRateType" required>
+                                                <option value="CDI">Pós-fixado (% do CDI)</option>
+                                                <option value="PRE">Pré-fixado (% a.a.)</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cdbSimRate">Taxa de Rendimento</label>
+                                            <div class="input-wrapper">
+                                                <input type="number" id="cdbSimRate" step="0.01" min="0.01" placeholder="Ex: 100 ou 12.5" required>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="input-grid-2">
+                                        <div class="form-group">
+                                            <label for="cdbSimDuration">Prazo</label>
+                                            <input type="number" id="cdbSimDuration" min="1" placeholder="Ex: 24" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label for="cdbSimDurationUnit">Unidade</label>
+                                            <select id="cdbSimDurationUnit" required>
+                                                <option value="months">Meses</option>
+                                                <option value="years">Anos</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="cdbSimCdiBase">Taxa de Referência CDI (% a.a.)</label>
+                                        <div class="input-wrapper suffix-pad">
+                                            <input type="number" id="cdbSimCdiBase" step="0.01" min="0.01" value="10.75" required>
+                                            <span class="input-suffix">%</span>
+                                        </div>
+                                    </div>
+                                    <button type="submit" id="cdbCalculateBtn" class="btn-primary cdb">
+                                        <span>⚡</span> Calcular Simulação
+                                    </button>
+                                </form>
+                            </section>
+
+                            <section class="results-container">
+                                <div class="equity-banner">
+                                    <div class="equity-card">
+                                        <div class="label">Total Aportado</div>
+                                        <div class="value" id="cdbSimTotalDepositedText">R$ 0,00</div>
+                                    </div>
+                                    <div class="equity-card final">
+                                        <div class="label">Valor Líquido Final</div>
+                                        <div class="value text-success" id="cdbSimNetValueText">R$ 0,00</div>
+                                    </div>
+                                </div>
+                                <div class="highlight-panel">
+                                    <div class="grid-highlights">
+                                        <div class="highlight-item">
+                                            <span class="label">Prazo Simulado</span>
+                                            <span class="value" id="cdbSimResultDurationText">--</span>
+                                        </div>
+                                        <div class="highlight-item">
+                                            <span class="label">Rendimento Bruto</span>
+                                            <span class="value text-success" id="cdbSimResultGrossProfitText">R$ 0,00</span>
+                                        </div>
+                                        <div class="highlight-item">
+                                            <span class="label">Imposto de Renda (IR)</span>
+                                            <span class="value text-danger" id="cdbSimResultTaxText">R$ 0,00</span>
+                                        </div>
+                                        <div class="highlight-item">
+                                            <span class="label">Rentabilidade Líquida</span>
+                                            <span class="value" id="cdbSimResultNetYieldText">--</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="glass-panel chart-panel">
+                                    <div class="chart-header">
+                                        <h3 class="chart-title">Evolução do Saldo Bruto, Líquido e Aportado</h3>
+                                    </div>
+                                    <div style="position: relative; height: 300px; width: 100%;">
+                                        <canvas id="cdbEquityChart"></canvas>
+                                    </div>
+                                </div>
+                            </section>
+                        </div>
+
+                        <section class="glass-panel table-panel">
+                            <div class="table-header-row">
+                                <h3 class="table-title">Evolução Detalhada Mês a Mês</h3>
+                                <div class="table-actions">
+                                    <button id="cdbExportCsvBtn" class="export-btn" style="display: none;">
+                                        📥 Exportar Simulação (CSV)
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="table-container">
+                                <table id="cdbSimulationTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Mês</th>
+                                            <th>Aportado Acumulado</th>
+                                            <th>Saldo Bruto</th>
+                                            <th>Rendimento Bruto</th>
+                                            <th>Imposto Provisório</th>
+                                            <th>Saldo Líquido</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="cdbSimulationTableBody">
+                                        <tr>
+                                            <td colspan="6" class="empty-state">
+                                                <span class="empty-state-icon">⚡</span>
+                                                Preencha os campos e clique em Calcular para visualizar a evolução.
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL DE ADICIONAR / EDITAR INVESTIMENTO EM CDB -->
+    <!-- ========================================================= -->
+    <div class="modal-overlay" id="cdbModal">
+        <div class="modal-card">
+            <button class="modal-close-btn" id="closeCdbModalBtn">&times;</button>
+            <h2 class="form-title cdb" id="cdbModalTitle">Adicionar CDB à Carteira</h2>
+            
+            <form id="cdbForm">
+                <input type="hidden" id="cdbEditId" value="">
+
+                <div class="form-group">
+                    <label for="cdbBank">Banco / Emissor</label>
+                    <input type="text" id="cdbBank" placeholder="Ex: Banco Itaú, Inter, Sofisa..." required>
+                </div>
+
+                <div class="input-grid-2">
+                    <div class="form-group">
+                        <label for="cdbRateType">Indexador</label>
+                        <select id="cdbRateType" required>
+                            <option value="CDI">Pós-fixado (% do CDI)</option>
+                            <option value="PRE">Pré-fixado (% a.a.)</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cdbRate">Taxa de Rendimento</label>
+                        <input type="number" id="cdbRate" step="0.01" min="0.01" placeholder="Ex: 100 ou 12.5" required>
+                    </div>
+                </div>
+
+                <div class="input-grid-2">
+                    <div class="form-group">
+                        <label for="cdbInvestmentAmount">Valor Aplicado</label>
+                        <div class="input-wrapper prefix-pad">
+                            <span class="input-prefix">R$</span>
+                            <input type="number" id="cdbInvestmentAmount" step="100" min="0.01" placeholder="Ex: 10.000" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cdbMonthlyContribution">Aporte Mensal</label>
+                        <div class="input-wrapper prefix-pad">
+                            <span class="input-prefix">R$</span>
+                            <input type="number" id="cdbMonthlyContribution" step="10" min="0" value="0" placeholder="Ex: 500">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-grid-2">
+                    <div class="form-group">
+                        <label for="cdbStartDate">Data da Aplicação</label>
+                        <input type="date" id="cdbStartDate" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cdbTermMonths">Prazo (Meses)</label>
+                        <input type="number" id="cdbTermMonths" min="1" step="1" placeholder="Ex: 24" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="cdbNotes">Anotações (Opcional)</label>
+                    <textarea id="cdbNotes" placeholder="Objetivo, liquidez diária ou observações..."></textarea>
+                </div>
+
+                <button type="submit" class="btn-primary cdb" style="margin-top: 0.5rem;" id="btnSaveCdb">
+                    <span>💾</span> Salvar Investimento em CDB
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL DE AUTENTICAÇÃO (LOGIN / CADASTRO) -->
+    <!-- ========================================================= -->
+    <div class="modal-overlay" id="authModal">
+        <div class="modal-card">
+            <button class="modal-close-btn" id="closeAuthModalBtn">&times;</button>
+            
+            <div class="auth-switch-tabs">
+                <button type="button" class="auth-tab active" id="tabLoginSwitch">Entrar</button>
+                <button type="button" class="auth-tab" id="tabRegisterSwitch">Criar Conta</button>
+            </div>
+
+            <!-- Formulário de Login -->
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="loginEmail">E-mail</label>
+                    <input type="email" id="loginEmail" placeholder="seuemail@exemplo.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Senha</label>
+                    <input type="password" id="loginPassword" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn-primary" style="margin-top: 1rem;">
+                    <span>🔐</span> Entrar
+                </button>
+            </form>
+
+            <!-- Formulário de Cadastro -->
+            <form id="registerForm" style="display: none;">
+                <div class="form-group">
+                    <label for="regName">Nome Completo</label>
+                    <input type="text" id="regName" placeholder="Ex: Roberto Silva" required>
+                </div>
+                <div class="form-group">
+                    <label for="regEmail">E-mail</label>
+                    <input type="email" id="regEmail" placeholder="seuemail@exemplo.com" required>
+                </div>
+                <div class="form-group">
+                    <label for="regPassword">Senha (mínimo 6 caracteres)</label>
+                    <input type="password" id="regPassword" minlength="6" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn-primary" style="margin-top: 1rem;">
+                    <span>✨</span> Criar Conta
+                </button>
+            </form>
+
+            <div class="auth-divider">
+                <span>ou</span>
+            </div>
+
+            <button type="button" class="btn-secondary" style="width: 100%; justify-content: center;" id="btnDemoLogin">
+                <span>🚀</span> Entrar com Conta Demo (Testar Agora)
+            </button>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL DE ADICIONAR / EDITAR INVESTIMENTO EM FII -->
+    <!-- ========================================================= -->
+    <div class="modal-overlay" id="investmentModal">
+        <div class="modal-card">
+            <button class="modal-close-btn" id="closeInvestmentModalBtn">&times;</button>
+            <h2 class="form-title" id="investmentModalTitle">Adicionar FII à Carteira</h2>
+            
+            <form id="investmentForm">
+                <input type="hidden" id="invEditId" value="">
+
+                <div class="input-grid-2">
+                    <div class="form-group">
+                        <label for="invTicker">Ticker do FII</label>
+                        <input type="text" id="invTicker" placeholder="Ex: MXRF11" list="fiiSuggestions" style="text-transform: uppercase;" required>
+                        <datalist id="fiiSuggestions">
+                            <option value="SNAG11">Suno Agro (Fiagro)</option>
+                            <option value="KNSC11">Kinea Securities (Papel)</option>
+                            <option value="GARE11">Guardian Real Estate (Híbrido)</option>
+                            <option value="BTCI11">BTG Pactual Crédito Imob. (Papel)</option>
+                            <option value="MXRF11">Maxi Renda (Papel)</option>
+                        </datalist>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="invSegment">Segmento</label>
+                        <select id="invSegment" required>
+                            <option value="Papel/CRI">Papel / CRI</option>
+                            <option value="Papel/CDI">Papel / CDI</option>
+                            <option value="Logística">Logística</option>
+                            <option value="Shoppings">Shoppings</option>
+                            <option value="Lajes Corporativas">Lajes Corporativas</option>
+                            <option value="Fiagro">Fiagro</option>
+                            <option value="Híbrido">Híbrido</option>
+                            <option value="Fundos de Fundos">Fundos de Fundos (FoF)</option>
+                            <option value="Renda Urbana">Renda Urbana</option>
+                            <option value="Outro">Outro</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="input-grid-2">
+                    <div class="form-group">
+                        <label for="invShares">Quantidade de Cotas</label>
+                        <input type="number" id="invShares" min="1" step="1" placeholder="Ex: 100" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="invAvgPrice">Preço Médio por Cota</label>
+                        <div class="input-wrapper prefix-pad">
+                            <span class="input-prefix">R$</span>
+                            <input type="number" id="invAvgPrice" step="0.01" min="0.01" placeholder="Ex: 10.50" required>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="invLastDividend">Último Rendimento por Cota</label>
+                    <div class="input-wrapper prefix-pad">
+                        <span class="input-prefix">R$</span>
+                        <input type="number" id="invLastDividend" step="0.01" min="0.00" placeholder="Ex: 0.10" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="invNotes">Anotações (Opcional)</label>
+                    <textarea id="invNotes" placeholder="Estratégia, objetivo de cotas ou histórico..."></textarea>
+                </div>
+
+                <button type="submit" class="btn-primary" style="margin-top: 0.5rem;" id="btnSaveInvestment">
+                    <span>💾</span> Salvar Investimento
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL DE COMPRAR MAIS COTAS DE FII (APORTE) -->
+    <!-- ========================================================= -->
+    <div class="modal-overlay" id="buySharesModal">
+        <div class="modal-card">
+            <button class="modal-close-btn" id="closeBuyModalBtn">&times;</button>
+            <h2 class="form-title" id="buyModalTitle">Comprar Mais Cotas</h2>
+
+            <div class="info-banner-summary">
+                <div class="info-banner-item">
+                    <div class="label">Cotas Atuais</div>
+                    <div class="value" id="buyCurrentShares">0</div>
+                </div>
+                <div class="info-banner-item">
+                    <div class="label">Preço Médio</div>
+                    <div class="value" id="buyCurrentAvgPrice">R$ 0,00</div>
+                </div>
+                <div class="info-banner-item">
+                    <div class="label">Rendimento</div>
+                    <div class="value text-success" id="buyCurrentDividend">R$ 0,00</div>
+                </div>
+            </div>
+            
+            <form id="buySharesForm">
+                <input type="hidden" id="buyInvestmentId" value="">
+
+                <div class="form-group">
+                    <label for="buyNewShares">Quantidade de Novas Cotas Compradas</label>
+                    <input type="number" id="buyNewShares" min="1" step="1" placeholder="Ex: 50" required>
+                    <div class="quick-add-group">
+                        <button type="button" class="quick-pill" data-add="1">+1 cota</button>
+                        <button type="button" class="quick-pill" data-add="5">+5</button>
+                        <button type="button" class="quick-pill" data-add="10">+10</button>
+                        <button type="button" class="quick-pill" data-add="50">+50</button>
+                        <button type="button" class="quick-pill" data-add="100">+100</button>
+                    </div>
+                </div>
+
+                <div class="input-grid-2">
+                    <div class="form-group">
+                        <label for="buyPrice">Preço Pago por Cota (R$)</label>
+                        <div class="input-wrapper prefix-pad">
+                            <span class="input-prefix">R$</span>
+                            <input type="number" id="buyPrice" step="0.01" min="0.01" placeholder="Ex: 10.25" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="buyDividend">Rendimento / Cota (R$)</label>
+                        <div class="input-wrapper prefix-pad">
+                            <span class="input-prefix">R$</span>
+                            <input type="number" id="buyDividend" step="0.01" min="0.00" placeholder="Ex: 0.10">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="calc-preview-card">
+                    <div class="preview-title">
+                        <span>✨</span> Simulação do Novo Preço Médio
+                    </div>
+                    <div class="preview-metric-row">
+                        <span>Novo Total de Cotas:</span>
+                        <span class="val" id="previewTotalShares">--</span>
+                    </div>
+                    <div class="preview-metric-row">
+                        <span>Total Gasto neste Aporte:</span>
+                        <span class="val" id="previewAporteCost">R$ 0,00</span>
+                    </div>
+                    <div class="preview-metric-row">
+                        <span>Novo Preço Médio Calculado:</span>
+                        <span class="val highlight" id="previewNewAvgPrice">R$ 0,00</span>
+                    </div>
+                    <div class="preview-metric-row">
+                        <span>Nova Renda Mensal Estimada:</span>
+                        <span class="val text-success" id="previewNewMonthlyIncome">R$ 0,00</span>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-primary" style="margin-top: 0.5rem;" id="btnConfirmBuyShares">
+                    <span>💳</span> Confirmar Compra de Cotas
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL DE ADICIONAR / EDITAR CARRO COMPRADO (DADOS BÁSICOS) -->
+    <!-- ========================================================= -->
+    <div class="modal-overlay" id="carModal">
+        <div class="modal-card">
+            <button class="modal-close-btn" id="closeCarModalBtn">&times;</button>
+            <h2 class="form-title car" id="carModalTitle">Cadastrar Novo Carro Comprado</h2>
+            
+            <form id="carForm">
+                <input type="hidden" id="carEditId" value="">
+
+                <div class="form-group">
+                    <label for="carModel">Modelo do Veículo</label>
+                    <input type="text" id="carModel" placeholder="Ex: Honda Civic EXL 2.0 Flex" required>
+                </div>
+
+                <div class="input-grid-2">
+                    <div class="form-group">
+                        <label for="carYear">Ano / Modelo</label>
+                        <input type="text" id="carYear" placeholder="Ex: 2020/2020" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="carPlate">Placa</label>
+                        <input type="text" id="carPlate" placeholder="Ex: BRA2E19" style="text-transform: uppercase;">
+                    </div>
+                </div>
+
+                <div class="input-grid-2">
+                    <div class="form-group">
+                        <label for="carAuctioneer">Leiloeiro / Pátio</label>
+                        <input type="text" id="carAuctioneer" placeholder="Ex: Sodré Santoro, Freitas, Copart...">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="carPurchaseDate">Data da Compra</label>
+                        <input type="date" id="carPurchaseDate" required>
+                    </div>
+                </div>
+
+                <div class="input-grid-2">
+                    <div class="form-group">
+                        <label for="carBid">Valor do Lance (Arrematação)</label>
+                        <div class="input-wrapper prefix-pad">
+                            <span class="input-prefix">R$</span>
+                            <input type="number" id="carBid" step="100" min="0" placeholder="Ex: 68.000" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="carFipe">Tabela FIPE (Opcional)</label>
+                        <div class="input-wrapper prefix-pad">
+                            <span class="input-prefix">R$</span>
+                            <input type="number" id="carFipe" step="100" min="0" placeholder="Ex: 105.000">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="carStatus">Status do Carro</label>
+                    <select id="carStatus" required>
+                        <option value="Em Reforma">Em Reforma / Oficina</option>
+                        <option value="À Venda">Anunciado à Venda</option>
+                        <option value="Vendido">Vendido</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="carNotes">Anotações Gerais (Opcional)</label>
+                    <textarea id="carNotes" placeholder="Detalhes do leilão, histórico ou observações..."></textarea>
+                </div>
+
+                <button type="submit" class="btn-primary car" style="margin-top: 0.5rem;" id="btnSaveCar">
+                    <span>💾</span> Salvar Carro & Criar Card
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL DE ATUALIZAR STATUS DE VENDA & PREÇO DO CARRO -->
+    <!-- ========================================================= -->
+    <div class="modal-overlay" id="carSaleModal">
+        <div class="modal-card">
+            <button class="modal-close-btn" id="closeCarSaleModalBtn">&times;</button>
+            <h2 class="form-title car" id="carSaleModalTitle">Registrar Venda do Veículo</h2>
+
+            <div class="info-banner-summary">
+                <div class="info-banner-item">
+                    <div class="label">Lance (Compra)</div>
+                    <div class="value" id="saleModalBid">R$ 0,00</div>
+                </div>
+                <div class="info-banner-item">
+                    <div class="label">Gastos Planilha</div>
+                    <div class="value text-amber" id="saleModalExpenses">R$ 0,00</div>
+                </div>
+                <div class="info-banner-item">
+                    <div class="label">Custo Total</div>
+                    <div class="value highlight" id="saleModalTotalCost">R$ 0,00</div>
+                </div>
+            </div>
+            
+            <form id="carSaleForm">
+                <input type="hidden" id="saleCarId" value="">
+
+                <div class="form-group">
+                    <label for="modalCarStatusSelect">Status do Veículo</label>
+                    <select id="modalCarStatusSelect" required>
+                        <option value="Vendido">Vendido (Negócio Fechado)</option>
+                        <option value="À Venda">Anunciado à Venda (Em Negociação)</option>
+                        <option value="Em Reforma">Em Reforma / Oficina</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="modalSalePrice">Preço Final de Venda (R$)</label>
+                    <div class="input-wrapper prefix-pad">
+                        <span class="input-prefix">R$</span>
+                        <input type="number" id="modalSalePrice" step="100" min="0" placeholder="Ex: 94.000" required>
+                    </div>
+                </div>
+
+                <div class="form-group" id="modalSaleDateGroup">
+                    <label for="modalSaleDate">Data da Venda</label>
+                    <input type="date" id="modalSaleDate">
+                </div>
+
+                <div class="calc-preview-card car-calc">
+                    <div class="preview-title" style="color: #F59E0B;">
+                        <span>💵</span> Lucro Líquido Realizado
+                    </div>
+                    <div class="preview-metric-row">
+                        <span>Lucro em Reais:</span>
+                        <span class="val text-success" id="previewSaleProfit">R$ 0,00</span>
+                    </div>
+                    <div class="preview-metric-row">
+                        <span>Margem de Lucro (% sobre custo total):</span>
+                        <span class="val text-success" id="previewSaleMargin">0,0%</span>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-primary car" style="margin-top: 0.5rem;">
+                    <span>🤝</span> Salvar & Atualizar Venda
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Container de Toasts de Notificação -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Scripts -->
+    <script src="db.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
