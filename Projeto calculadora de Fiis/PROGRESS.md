@@ -56,7 +56,7 @@
 - [x] Sino no cabeçalho com contador de não vistas (persistido no navegador) presente em todos os módulos do Hub, com dropdown de notificações recentes e link para a Central de Notificações
 - [x] Verificação automática a cada 60 segundos
 
-> ⚠️ Pendência manual: rodar `npm run prisma:push` (com o servidor Node parado, para evitar o erro EPERM de arquivo em uso no Windows) para criar as tabelas `Evento`, `LocalClimaSalvo`, `GastoCasa`, `ItemDespensa`, `TarefaCasa`, `BlocoTreino`, `ExercicioTreino` e `RegistroSaude` no banco SQLite local antes de usar os módulos Calendário/Notificação, Locais Salvos do Clima, Finanças & Casa e Treinos & Saúde.
+> ⚠️ Pendência manual: rodar `npm run prisma:push` (com o servidor Node parado, para evitar o erro EPERM de arquivo em uso no Windows) para criar as tabelas `Evento`, `LocalClimaSalvo`, `GastoCasa`, `ItemDespensa`, `TarefaCasa`, `BlocoTreino`, `ExercicioTreino`, `RegistroSaude`, `VeiculoGaragem` e `ManutencaoGaragem` no banco SQLite local antes de usar os módulos Calendário/Notificação, Locais Salvos do Clima, Finanças & Casa, Treinos & Saúde e Garagem.
 
 ## 🌤️ Módulo Clima (Hub Pessoal)
 - [x] Novo módulo dedicado: `HTML/Clima/clima.html`, `CSS/Clima/clima.css` e `JS/Clima/clima.js` — sem necessidade de tabela no banco (dados sempre em tempo real via APIs públicas e gratuitas, sem chave de API)
@@ -80,5 +80,12 @@
 - [x] **Aba Treinos**: organização por blocos (ex: "Treino A - Peito e Tríceps"), cada um com sua lista de exercícios (séries, repetições, carga, observações) — modelos `BlocoTreino` e `ExercicioTreino` no Prisma, API REST própria (`GET/POST/PUT/DELETE /api/treinos/blocos` e `/api/treinos/exercicios`)
 - [x] Campo **Dia da Semana** no bloco (Segunda a Domingo, ou sem dia definido), com os blocos agrupados por dia na tela (permite adicionar quantos blocos quiser por dia, ex: "Segunda: Treino de Superior")
 - [x] **Aba Saúde**: registros diários opcionais de peso, cintura, água ingerida e horas de sono — modelo `RegistroSaude` no Prisma, API REST própria (`GET/POST/PUT/DELETE /api/saude/registros`), com KPIs de peso atual (variação desde o último registro) e médias de água/sono dos últimos 7 dias
+- [x] Integração da navegação (sidebar) no Hub Pessoal de todos os módulos
+
+## 🚘 Módulo Garagem (Hub Pessoal)
+- [x] Novo módulo dedicado: `HTML/Garagem/garagem.html`, `CSS/Garagem/garagem.css` e `JS/Garagem/garagem.js`, com 2 sub-abas — distinto do módulo de negócio "Carros de Leilão" (Hub Financeiro), aqui é para os veículos pessoais do usuário
+- [x] **Aba Minha Garagem**: ficha completa de cada veículo ativo (marca, modelo, ano, placa, cor, quilometragem, data e valor de compra) — modelo `VeiculoGaragem` no Prisma, API REST própria (`GET/POST/PUT/DELETE /api/garagem/veiculos`), com busca por marca/modelo/placa e KPIs (veículos ativos, valor total em compras, investido em manutenção)
+- [x] **Ficha do Veículo** (modal): histórico completo de manutenções (troca de óleo, pneu, revisão, freios, funilaria, documentação, etc.) — modelo `ManutencaoGaragem` no Prisma vinculado ao veículo, API REST própria (`POST/PUT/DELETE /api/garagem/manutencoes`), com custo total (compra + manutenções) calculado automaticamente
+- [x] **Aba Histórico de Vendidos**: veículos com status "Vendido" saem da garagem ativa e entram numa tabela histórica mostrando data/valor de compra, data/valor de venda, gasto total em manutenção e o resultado financeiro (venda − custo total) de cada um, com KPI de resultado total acumulado
 - [x] Integração da navegação (sidebar) no Hub Pessoal de todos os módulos
 

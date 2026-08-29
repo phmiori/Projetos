@@ -77,9 +77,55 @@ model Usuario {
   tarefasCasa   TarefaCasa[]
   blocosTreino   BlocoTreino[]
   registrosSaude RegistroSaude[]
+  veiculosGaragem VeiculoGaragem[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model VeiculoGaragem {
+  id              Int       @id @default(autoincrement())
+
+  usuarioId       Int
+  usuario         Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  marca           String
+  modelo          String
+  ano             Int
+  placa           String?
+  cor             String?
+  quilometragem   Float?
+
+  dataCompra      DateTime
+  valorCompra     Float     @default(0)
+
+  status          String    @default("Ativo") // Ativo, Vendido
+  dataVenda       DateTime?
+  valorVenda      Float?
+
+  observacoes     String?
+
+  manutencoes     ManutencaoGaragem[]
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model ManutencaoGaragem {
+  id              Int             @id @default(autoincrement())
+
+  veiculoId       Int
+  veiculo         VeiculoGaragem  @relation(fields: [veiculoId], references: [id], onDelete: Cascade)
+
+  data            DateTime        @default(now())
+  categoria       String          // Troca de Óleo, Troca de Pneu, Revisão, Freios, Suspensão, Bateria, Elétrica, Funilaria/Pintura, Documentação/IPVA, Outros
+  descricao       String
+  valor           Float           @default(0)
+  oficina         String?
+  quilometragem   Float?
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 }
 
 model BlocoTreino {
