@@ -66,8 +66,76 @@ model Usuario {
   senhaHash   String
 
   veiculos    Veiculo[]
+  imoveis     ImovelLeilao[]
   investimentosFII InvestimentoFII[]
   cofrinhos   Cofrinho[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ImovelLeilao {
+  id              Int       @id @default(autoincrement())
+
+  // Dono do Cadastro
+  usuarioId       Int
+  usuario         Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  // 1. Dados Gerais
+  endereco        String
+  cidade          String?
+  uf              String?
+  tipoImovel      String    @default("Casa") // Casa, Apartamento, Terreno, Comercial, Rural, Outro
+  areaM2          Float?
+  quartos         Int?
+  banheiros       Int?
+  matricula       String?   // Nº de Matrícula no Registro de Imóveis
+  origem          String    @default("Banco") // Banco, Judicial, Extrajudicial, Prefeitura, Outro
+  leiloeiro       String?   // Ex: Sodré Santoro, Zukerman, Leilão Judicial TJ
+  dataCompra      DateTime? // Data de aquisição/arremate
+  status          String    @default("Em Desocupação") // Em Desocupação, Em Regularização, Em Reforma, Anunciado, Vendido
+  observacoes     String?
+
+  // 2. Custos de Aquisição
+  valorArremate     Float   @default(0)
+  comissaoPct       Float   @default(5)
+  custasProcessuais Float   @default(0)
+  custoDesocupacao  Float   @default(0)
+  totalAquisicao    Float   @default(0)
+
+  // 3. Custos de Preparação e Regularização
+  gastoReforma      Float   @default(0)
+  gastoAcabamento   Float   @default(0)
+  gastoLimpeza      Float   @default(0)
+  gastoDocumentacao Float   @default(0)
+  totalPreparacao   Float   @default(0)
+
+  // 4. Dados de Venda e Margem
+  custoTotal      Float     @default(0)
+  precoAnuncio    Float?
+  valorVenda      Float?
+  dataVenda       DateTime?
+  lucroBruto      Float?
+  roiPct          Float?
+
+  // Relacionamento com Gastos Detalhados
+  gastos          GastoImovel[]
+
+  // Timestamps
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model GastoImovel {
+  id          Int          @id @default(autoincrement())
+  imovelId    Int
+  imovel      ImovelLeilao @relation(fields: [imovelId], references: [id], onDelete: Cascade)
+
+  data        DateTime @default(now())
+  categoria   String   // Taxa Leilão / Processual, Desocupação, Reforma, Acabamento / Pintura, Documentação / Cartório, Limpeza, Outros
+  descricao   String   // Ex: Pintura completa e troca de piso da sala
+  fornecedor  String?  // Ex: Construtora Silva
+  valor       Float    @default(0)
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

@@ -11,20 +11,126 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarMetricasConsolidadas();
     carregarBadgeCofrinho();
     carregarBadgeFii();
+    carregarModuloCasas();
 });
 
 async function carregarBadgeCofrinho() {
     const badge = document.getElementById('badgeCofrinhoCountIndex');
-    if (!badge) return;
 
     try {
         const response = await fetch('/api/cofrinhos');
         if (!response.ok) throw new Error('API indisponível');
         const cofrinhos = await response.json();
-        badge.textContent = cofrinhos.length;
+
+        if (badge) badge.textContent = cofrinhos.length;
+
+        let totalInvestido = 0;
+        let totalRendaDia = 0;
+        let totalRendimentoBruto = 0;
+
+        cofrinhos.forEach(item => {
+            totalInvestido += Number(item.valorInvestido) || 0;
+            totalRendaDia += Number(item.rendaPorDia) || 0;
+
+            const diasCorridos = calcularDiasCorridosCofrinho(item.dataInicio);
+            const diasUteis = contarDiasUteisCofrinho(item.dataInicio, diasCorridos);
+            totalRendimentoBruto += (Number(item.rendaPorDia) || 0) * diasUteis;
+        });
+
+        const moduleCofrinhoCount = document.getElementById('moduleCofrinhoCount');
+        const moduleCofrinhoInvestido = document.getElementById('moduleCofrinhoInvestido');
+        const moduleCofrinhoRendaDia = document.getElementById('moduleCofrinhoRendaDia');
+        const moduleCofrinhoRendimento = document.getElementById('moduleCofrinhoRendimento');
+
+        if (moduleCofrinhoCount) moduleCofrinhoCount.textContent = `${cofrinhos.length} cofrinhos`;
+        if (moduleCofrinhoInvestido) moduleCofrinhoInvestido.textContent = formatarMoeda(totalInvestido);
+        if (moduleCofrinhoRendaDia) moduleCofrinhoRendaDia.textContent = formatarMoeda(totalRendaDia);
+        if (moduleCofrinhoRendimento) moduleCofrinhoRendimento.textContent = formatarMoeda(totalRendimentoBruto);
     } catch (err) {
         console.warn('[FinanceHub] Não foi possível carregar o total de cofrinhos.', err.message);
     }
+}
+
+/**
+ * Cálculo de dias corridos/úteis do Cofrinho (espelha JS/Cofrinho/cofrinho.js) para estimar
+ * o rendimento bruto acumulado no card-resumo da Visão Geral.
+ */
+const cacheFeriadosCofrinhoIndex = {};
+
+function calcularPascoaCofrinho(ano) {
+    const a = ano % 19, b = Math.floor(ano / 100), c = ano % 100;
+    const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const mes = Math.floor((h + l - 7 * m + 114) / 31);
+    const dia = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(ano, mes - 1, dia);
+}
+
+function formatarDataChaveCofrinho(data) {
+    return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, '0')}-${String(data.getDate()).padStart(2, '0')}`;
+}
+
+function obterFeriadosNacionaisCofrinho(ano) {
+    if (cacheFeriadosCofrinhoIndex[ano]) return cacheFeriadosCofrinhoIndex[ano];
+    const feriados = new Set();
+    const somarDias = (data, dias) => { const n = new Date(data); n.setDate(n.getDate() + dias); return n; };
+    const add = (data) => feriados.add(formatarDataChaveCofrinho(data));
+
+    add(new Date(ano, 0, 1));
+    add(new Date(ano, 3, 21));
+    add(new Date(ano, 4, 1));
+    add(new Date(ano, 8, 7));
+    add(new Date(ano, 9, 12));
+    add(new Date(ano, 10, 2));
+    add(new Date(ano, 10, 15));
+    add(new Date(ano, 10, 20));
+    add(new Date(ano, 11, 25));
+
+    const pascoa = calcularPascoaCofrinho(ano);
+    add(somarDias(pascoa, -48));
+    add(somarDias(pascoa, -47));
+    add(somarDias(pascoa, -2));
+    add(somarDias(pascoa, 60));
+
+    cacheFeriadosCofrinhoIndex[ano] = feriados;
+    return feriados;
+}
+
+function ehDiaUtilCofrinho(data) {
+    const diaSemana = data.getDay();
+    if (diaSemana === 0 || diaSemana === 6) return false;
+    return !obterFeriadosNacionaisCofrinho(data.getFullYear()).has(formatarDataChaveCofrinho(data));
+}
+
+function parseDataLocalCofrinho(valor) {
+    const match = String(valor).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+        const [, ano, mes, dia] = match;
+        return new Date(Number(ano), Number(mes) - 1, Number(dia));
+    }
+    return new Date(valor);
+}
+
+function calcularDiasCorridosCofrinho(dataInicio) {
+    const inicio = parseDataLocalCofrinho(dataInicio);
+    inicio.setHours(0, 0, 0, 0);
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+    return Math.max(1, Math.floor((hoje - inicio) / (1000 * 60 * 60 * 24)) + 1);
+}
+
+function contarDiasUteisCofrinho(dataInicio, diasCorridos) {
+    const inicio = parseDataLocalCofrinho(dataInicio);
+    inicio.setHours(0, 0, 0, 0);
+    let uteis = 0;
+    for (let i = 0; i < diasCorridos; i++) {
+        const data = new Date(inicio);
+        data.setDate(data.getDate() + i);
+        if (ehDiaUtilCofrinho(data)) uteis++;
+    }
+    return uteis;
 }
 
 async function carregarBadgeFii() {
@@ -62,6 +168,49 @@ async function carregarBadgeFii() {
         if (moduleFiiYield) moduleFiiYield.textContent = `${yieldMedio.toFixed(2)}% a.m.`;
     } catch (err) {
         console.warn('[FinanceHub] Não foi possível carregar o total de fundos imobiliários.', err.message);
+    }
+}
+
+async function carregarModuloCasas() {
+    const badge = document.getElementById('badgeCasasCountIndex');
+
+    try {
+        const response = await fetch('/api/imoveis');
+        if (!response.ok) throw new Error('API indisponível');
+        const imoveis = await response.json();
+
+        if (badge) badge.textContent = imoveis.length;
+
+        let lucroTotal = 0;
+        let capitalAlocado = 0;
+        let totalEstoque = 0;
+        let totalVendidos = 0;
+        let somaRoi = 0;
+
+        imoveis.forEach(im => {
+            if (im.status === 'Vendido') {
+                totalVendidos++;
+                if (im.lucroBruto !== null && im.lucroBruto !== undefined) lucroTotal += Number(im.lucroBruto);
+                if (im.roiPct !== null && im.roiPct !== undefined) somaRoi += Number(im.roiPct);
+            } else {
+                totalEstoque++;
+                capitalAlocado += Number(im.custoTotal || 0);
+            }
+        });
+
+        const roiMedio = totalVendidos > 0 ? (somaRoi / totalVendidos) : 0;
+
+        const moduleCasasEstoque = document.getElementById('moduleCasasEstoque');
+        const moduleCasasLucro = document.getElementById('moduleCasasLucro');
+        const moduleCasasCapital = document.getElementById('moduleCasasCapital');
+        const moduleCasasRoi = document.getElementById('moduleCasasRoi');
+
+        if (moduleCasasEstoque) moduleCasasEstoque.textContent = `${totalEstoque} imóveis`;
+        if (moduleCasasLucro) moduleCasasLucro.textContent = formatarMoeda(lucroTotal);
+        if (moduleCasasCapital) moduleCasasCapital.textContent = formatarMoeda(capitalAlocado);
+        if (moduleCasasRoi) moduleCasasRoi.textContent = `${roiMedio.toFixed(1)}%`;
+    } catch (err) {
+        console.warn('[FinanceHub] Não foi possível carregar o total de casas de leilão.', err.message);
     }
 }
 

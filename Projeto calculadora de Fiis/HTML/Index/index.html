@@ -160,6 +160,18 @@
                         </a>
                     </li>
                     <li>
+                        <a href="../CasasLeilao/casasleilao.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Casas de Leilão</span>
+                            <span class="nav-count-badge" id="badgeCasasCountIndex">0</span>
+                        </a>
+                    </li>
+                    <li>
                         <a href="../Cofrinho/cofrinho.html" class="nav-item-btn">
                             <span class="nav-icon">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -364,6 +376,98 @@
                             <footer class="module-card-footer">
                                 <a href="../Leilao/leilao.html" class="btn-open-module">
                                     <span>Acessar Módulo de Leilão</span>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                </a>
+                            </footer>
+                        </article>
+
+                        <!-- Card do Módulo: Casas de Leilão -->
+                        <article class="module-feature-card">
+                            <div class="module-card-header">
+                                <div class="module-icon-wrap">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                                    </svg>
+                                </div>
+                                <div class="module-status-badge badge-active">Módulo Ativo</div>
+                            </div>
+
+                            <div class="module-card-body">
+                                <h3 class="module-title">Gestão de Casas de Leilão</h3>
+                                <p class="module-desc">Controle de compra (arremate), despesas de reforma, documentação, regularização e vendas de imóveis.</p>
+
+                                <div class="module-stats-mini-grid">
+                                    <div class="mini-stat">
+                                        <span class="mini-stat-label">Em Estoque/Reforma</span>
+                                        <strong class="mini-stat-val" id="moduleCasasEstoque">0 imóveis</strong>
+                                    </div>
+                                    <div class="mini-stat">
+                                        <span class="mini-stat-label">Lucro Apurado</span>
+                                        <strong class="mini-stat-val text-income" id="moduleCasasLucro">R$ 0,00</strong>
+                                    </div>
+                                    <div class="mini-stat">
+                                        <span class="mini-stat-label">Capital Alocado</span>
+                                        <strong class="mini-stat-val" id="moduleCasasCapital">R$ 0,00</strong>
+                                    </div>
+                                    <div class="mini-stat">
+                                        <span class="mini-stat-label">ROI Médio</span>
+                                        <strong class="mini-stat-val text-accent" id="moduleCasasRoi">0.0%</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <footer class="module-card-footer">
+                                <a href="../CasasLeilao/casasleilao.html" class="btn-open-module">
+                                    <span>Acessar Módulo de Casas</span>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                </a>
+                            </footer>
+                        </article>
+
+                        <!-- Card do Módulo: Cofrinho -->
+                        <article class="module-feature-card">
+                            <div class="module-card-header">
+                                <div class="module-icon-wrap">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M19 5c-1.5-1.5-5-2-7-2-4 0-7 2-7 5 0 2 1 3 2 4l-1 4h3l1-2c1 .3 2 .5 3 .5h1v2h3v-2.3c2-.7 3-2.2 3-4.2 0-1-.3-2-1-3l1-1-1-1z"></path>
+                                        <circle cx="15" cy="9" r="1"></circle>
+                                    </svg>
+                                </div>
+                                <div class="module-status-badge badge-active">Módulo Ativo</div>
+                            </div>
+
+                            <div class="module-card-body">
+                                <h3 class="module-title">Cofrinho</h3>
+                                <p class="module-desc">Renda diária com projeção automática dia a dia e cálculo de IOF e IR regressivos sobre o rendimento.</p>
+
+                                <div class="module-stats-mini-grid">
+                                    <div class="mini-stat">
+                                        <span class="mini-stat-label">Cofrinhos Salvos</span>
+                                        <strong class="mini-stat-val" id="moduleCofrinhoCount">0 cofrinhos</strong>
+                                    </div>
+                                    <div class="mini-stat">
+                                        <span class="mini-stat-label">Valor Investido</span>
+                                        <strong class="mini-stat-val" id="moduleCofrinhoInvestido">R$ 0,00</strong>
+                                    </div>
+                                    <div class="mini-stat">
+                                        <span class="mini-stat-label">Renda Diária Total</span>
+                                        <strong class="mini-stat-val text-income" id="moduleCofrinhoRendaDia">R$ 0,00</strong>
+                                    </div>
+                                    <div class="mini-stat">
+                                        <span class="mini-stat-label">Rendimento Acumulado</span>
+                                        <strong class="mini-stat-val text-accent" id="moduleCofrinhoRendimento">R$ 0,00</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <footer class="module-card-footer">
+                                <a href="../Cofrinho/cofrinho.html" class="btn-open-module">
+                                    <span>Acessar Módulo Cofrinho</span>
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                         <polyline points="9 18 15 12 9 6"></polyline>
                                     </svg>

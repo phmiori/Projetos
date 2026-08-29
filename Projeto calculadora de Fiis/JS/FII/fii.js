@@ -633,10 +633,10 @@ function renderizarGraficosCarteira(segmentMap, fiiIncomeList) {
 // =========================================================
 
 function executarSimulacao() {
-    const sharePrice = parseFloat(document.getElementById('calcPrecoCota')?.value) || 10.00;
-    const lastDividend = parseFloat(document.getElementById('calcDividendo')?.value) || 0.10;
-    const monthlyInvestment = parseFloat(document.getElementById('calcAporteMensal')?.value) || 500;
-    const durationInput = parseInt(document.getElementById('calcPrazo')?.value, 10) || 5;
+    const sharePrice = parseFloat(document.getElementById('calcPrecoCota')?.value) || 0;
+    const lastDividend = parseFloat(document.getElementById('calcDividendo')?.value) || 0;
+    const monthlyInvestment = parseFloat(document.getElementById('calcAporteMensal')?.value) || 0;
+    const durationInput = parseInt(document.getElementById('calcPrazo')?.value, 10) || 0;
     const durationUnit = document.getElementById('calcUnidadePrazo')?.value || 'years';
     const initialShares = parseInt(document.getElementById('calcCotasIniciais')?.value, 10) || 0;
     const reinvestDividends = document.getElementById('calcReinvestir')?.checked ?? true;
@@ -647,42 +647,44 @@ function executarSimulacao() {
     let leftover = 0.0;
     let accumulatedInvested = 0.0;
     let accumulatedReinvested = 0.0;
-    
+
     stateFII.simulacaoDados = [];
 
     const initialEquity = initialShares * sharePrice;
 
-    for (let month = 1; month <= totalMonths; month++) {
-        const cashFromInvestment = monthlyInvestment + leftover;
-        accumulatedInvested += monthlyInvestment;
-        const newSharesFromInvestment = Math.floor(cashFromInvestment / sharePrice);
-        leftover = cashFromInvestment - (newSharesFromInvestment * sharePrice);
-        currentShares += newSharesFromInvestment;
+    if (sharePrice > 0) {
+        for (let month = 1; month <= totalMonths; month++) {
+            const cashFromInvestment = monthlyInvestment + leftover;
+            accumulatedInvested += monthlyInvestment;
+            const newSharesFromInvestment = Math.floor(cashFromInvestment / sharePrice);
+            leftover = cashFromInvestment - (newSharesFromInvestment * sharePrice);
+            currentShares += newSharesFromInvestment;
 
-        const sharesBeforeDividends = currentShares;
-        const dividendsReceived = sharesBeforeDividends * lastDividend;
+            const sharesBeforeDividends = currentShares;
+            const dividendsReceived = sharesBeforeDividends * lastDividend;
 
-        let monthlyReinvestedVal = 0.0;
-        if (reinvestDividends) {
-            const reinvestCash = dividendsReceived + leftover;
-            monthlyReinvestedVal = reinvestCash;
-            const newSharesFromReinvest = Math.floor(reinvestCash / sharePrice);
-            leftover = reinvestCash - (newSharesFromReinvest * sharePrice);
-            currentShares += newSharesFromReinvest;
-            accumulatedReinvested += dividendsReceived;
+            let monthlyReinvestedVal = 0.0;
+            if (reinvestDividends) {
+                const reinvestCash = dividendsReceived + leftover;
+                monthlyReinvestedVal = reinvestCash;
+                const newSharesFromReinvest = Math.floor(reinvestCash / sharePrice);
+                leftover = reinvestCash - (newSharesFromReinvest * sharePrice);
+                currentShares += newSharesFromReinvest;
+                accumulatedReinvested += dividendsReceived;
+            }
+
+            const monthlyEquity = (currentShares * sharePrice) + leftover;
+
+            stateFII.simulacaoDados.push({
+                month: month,
+                shares: currentShares,
+                investedThisMonth: monthlyInvestment,
+                reinvestmentThisMonth: monthlyReinvestedVal,
+                dividendsThisMonth: dividendsReceived,
+                totalInvestedCumulative: accumulatedInvested + initialEquity,
+                equityCumulative: monthlyEquity
+            });
         }
-
-        const monthlyEquity = (currentShares * sharePrice) + leftover;
-
-        stateFII.simulacaoDados.push({
-            month: month,
-            shares: currentShares,
-            investedThisMonth: monthlyInvestment,
-            reinvestmentThisMonth: monthlyReinvestedVal,
-            dividendsThisMonth: dividendsReceived,
-            totalInvestedCumulative: accumulatedInvested + initialEquity,
-            equityCumulative: monthlyEquity
-        });
     }
 
     const finalEquity = (currentShares * sharePrice) + leftover;

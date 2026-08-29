@@ -169,6 +169,17 @@
                         </a>
                     </li>
                     <li>
+                        <a href="../CasasLeilao/casasleilao.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Casas de Leilão</span>
+                        </a>
+                    </li>
+                    <li>
                         <a href="../Cofrinho/cofrinho.html" class="nav-item-btn">
                             <span class="nav-icon">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -426,7 +437,7 @@
                                     <label for="calcPrecoCota">Preço da Cota (R$)</label>
                                     <div class="input-with-addon">
                                         <span class="input-addon-prefix">R$</span>
-                                        <input type="number" id="calcPrecoCota" class="input-missao calc-auto-trigger" step="0.01" min="0.01" value="10.20" required>
+                                        <input type="number" id="calcPrecoCota" class="input-missao calc-auto-trigger" step="0.01" min="0.01" placeholder="0,00" required>
                                     </div>
                                 </div>
 
@@ -434,7 +445,7 @@
                                     <label for="calcDividendo">Rendimento / Cota (Mês)</label>
                                     <div class="input-with-addon">
                                         <span class="input-addon-prefix">R$</span>
-                                        <input type="number" id="calcDividendo" class="input-missao calc-auto-trigger" step="0.01" min="0.00" value="0.10" required>
+                                        <input type="number" id="calcDividendo" class="input-missao calc-auto-trigger" step="0.01" min="0.00" placeholder="0,00" required>
                                     </div>
                                 </div>
 
@@ -442,14 +453,14 @@
                                     <label for="calcAporteMensal">Aporte Mensal (R$)</label>
                                     <div class="input-with-addon">
                                         <span class="input-addon-prefix">R$</span>
-                                        <input type="number" id="calcAporteMensal" class="input-missao calc-auto-trigger" step="10" min="0" value="500" required>
+                                        <input type="number" id="calcAporteMensal" class="input-missao calc-auto-trigger" step="10" min="0" placeholder="0" required>
                                     </div>
                                 </div>
 
                                 <div class="form-group-field">
                                     <label for="calcPrazo">Prazo da Simulação</label>
                                     <div class="input-row-group">
-                                        <input type="number" id="calcPrazo" class="input-missao calc-auto-trigger" min="1" value="5" required>
+                                        <input type="number" id="calcPrazo" class="input-missao calc-auto-trigger" min="1" placeholder="0" required>
                                         <select id="calcUnidadePrazo" class="input-missao calc-auto-trigger">
                                             <option value="years" selected>Anos</option>
                                             <option value="months">Meses</option>
@@ -459,7 +470,7 @@
 
                                 <div class="form-group-field">
                                     <label for="calcCotasIniciais">Quantidade de Cotas Inicial</label>
-                                    <input type="number" id="calcCotasIniciais" class="input-missao calc-auto-trigger" min="0" value="100">
+                                    <input type="number" id="calcCotasIniciais" class="input-missao calc-auto-trigger" min="0" placeholder="0">
                                 </div>
 
                                 <label class="switch-container">

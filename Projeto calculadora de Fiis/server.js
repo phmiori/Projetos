@@ -134,8 +134,8 @@ app.put('/api/auth/senha', requireAuth, async (req, res) => {
     }
 });
 
-// Protege as rotas de dados dos módulos de Leilão, FII e Cofrinho: exige login
-app.use(['/api/dashboard', '/api/veiculos', '/api/fii', '/api/cofrinhos'], requireAuth);
+// Protege as rotas de dados dos módulos de Leilão, Imóveis, FII e Cofrinho: exige login
+app.use(['/api/dashboard', '/api/veiculos', '/api/imoveis', '/api/fii', '/api/cofrinhos'], requireAuth);
 
 /**
  * Função utilitária para cálculo automático de totais, lucro e ROI
@@ -631,6 +631,444 @@ app.delete('/api/veiculos/:id', async (req, res) => {
     } catch (err) {
         console.error('Erro ao excluir veículo:', err);
         res.status(500).json({ error: 'Erro ao excluir veículo' });
+    }
+});
+
+
+/**
+ * Função utilitária para cálculo automático de totais, lucro e ROI de imóveis de leilão
+ */
+function calcularMetricasImovel(data) {
+    const valorArremate = Number(data.valorArremate) || 0;
+    const comissaoPct = Number(data.comissaoPct) || 0;
+    const custasProcessuais = Number(data.custasProcessuais) || 0;
+    const custoDesocupacao = Number(data.custoDesocupacao) || 0;
+
+    // Total de Aquisição: Lance + Comissão % + Custas Processuais + Desocupação
+    const totalAquisicao = valorArremate + (valorArremate * (comissaoPct / 100)) + custasProcessuais + custoDesocupacao;
+
+    const gastoReforma = Number(data.gastoReforma) || 0;
+    const gastoAcabamento = Number(data.gastoAcabamento) || 0;
+    const gastoLimpeza = Number(data.gastoLimpeza) || 0;
+    const gastoDocumentacao = Number(data.gastoDocumentacao) || 0;
+
+    // Total de Preparação
+    const totalPreparacao = gastoReforma + gastoAcabamento + gastoLimpeza + gastoDocumentacao;
+
+    // Custo Total Acumulado
+    const custoTotal = totalAquisicao + totalPreparacao;
+
+    const precoAnuncio = data.precoAnuncio !== undefined && data.precoAnuncio !== '' && data.precoAnuncio !== null
+        ? Number(data.precoAnuncio) : null;
+    const valorVenda = data.valorVenda !== undefined && data.valorVenda !== '' && data.valorVenda !== null
+        ? Number(data.valorVenda) : null;
+
+    let lucroBruto = null;
+    let roiPct = null;
+
+    if (valorVenda !== null && valorVenda > 0) {
+        lucroBruto = valorVenda - custoTotal;
+        roiPct = custoTotal > 0 ? (lucroBruto / custoTotal) * 100 : 0;
+    }
+
+    let dataVenda = null;
+    if (data.dataVenda) {
+        dataVenda = new Date(data.dataVenda);
+    } else if (data.status === 'Vendido' && !data.dataVenda) {
+        dataVenda = new Date();
+    }
+
+    let dataCompra = null;
+    if (data.dataCompra) {
+        dataCompra = new Date(data.dataCompra);
+    }
+
+    return {
+        endereco: data.endereco ? String(data.endereco).trim() : '',
+        cidade: data.cidade ? String(data.cidade).trim() : null,
+        uf: data.uf ? String(data.uf).trim().toUpperCase() : null,
+        tipoImovel: data.tipoImovel ? String(data.tipoImovel).trim() : 'Casa',
+        areaM2: data.areaM2 !== undefined && data.areaM2 !== '' && data.areaM2 !== null ? Number(data.areaM2) : null,
+        quartos: data.quartos !== undefined && data.quartos !== '' && data.quartos !== null ? parseInt(data.quartos, 10) : null,
+        banheiros: data.banheiros !== undefined && data.banheiros !== '' && data.banheiros !== null ? parseInt(data.banheiros, 10) : null,
+        matricula: data.matricula ? String(data.matricula).trim() : null,
+        origem: data.origem ? String(data.origem).trim() : 'Banco',
+        leiloeiro: data.leiloeiro ? String(data.leiloeiro).trim() : null,
+        dataCompra,
+        status: data.status ? String(data.status).trim() : 'Em Desocupação',
+        observacoes: data.observacoes ? String(data.observacoes).trim() : null,
+        valorArremate,
+        comissaoPct,
+        custasProcessuais,
+        custoDesocupacao,
+        totalAquisicao,
+        gastoReforma,
+        gastoAcabamento,
+        gastoLimpeza,
+        gastoDocumentacao,
+        totalPreparacao,
+        custoTotal,
+        precoAnuncio,
+        valorVenda,
+        dataVenda,
+        lucroBruto,
+        roiPct
+    };
+}
+
+/**
+ * Recalcula e atualiza as somas de gastos do imóvel com base na tabela GastoImovel
+ */
+async function recalcularGastosImovel(imovelId) {
+    const imovel = await prisma.imovelLeilao.findUnique({
+        where: { id: imovelId },
+        include: { gastos: true }
+    });
+
+    if (!imovel) return null;
+
+    let gastoReforma = 0;
+    let gastoAcabamento = 0;
+    let gastoLimpeza = 0;
+    let gastoDocumentacao = 0;
+    let custasProcessuais = 0;
+    let custoDesocupacao = 0;
+
+    imovel.gastos.forEach(g => {
+        const cat = g.categoria || '';
+        const val = Number(g.valor) || 0;
+
+        if (cat.includes('Reforma')) {
+            gastoReforma += val;
+        } else if (cat.includes('Acabamento') || cat.includes('Pintura')) {
+            gastoAcabamento += val;
+        } else if (cat.includes('Limpeza')) {
+            gastoLimpeza += val;
+        } else if (cat.includes('Documentação') || cat.includes('Documentacao') || cat.includes('Cartório') || cat.includes('Cartorio')) {
+            gastoDocumentacao += val;
+        } else if (cat.includes('Desocupação') || cat.includes('Desocupacao')) {
+            custoDesocupacao += val;
+        } else if (cat.includes('Taxa') || cat.includes('Processual') || cat.includes('Leilão') || cat.includes('Leilao')) {
+            custasProcessuais += val;
+        } else {
+            gastoReforma += val; // fallback
+        }
+    });
+
+    const valorArremate = imovel.valorArremate || 0;
+    const comissaoPct = imovel.comissaoPct || 5;
+    const totalAquisicao = valorArremate + (valorArremate * (comissaoPct / 100)) + custasProcessuais + custoDesocupacao;
+    const totalPreparacao = gastoReforma + gastoAcabamento + gastoLimpeza + gastoDocumentacao;
+    const custoTotal = totalAquisicao + totalPreparacao;
+
+    let lucroBruto = null;
+    let roiPct = null;
+    if (imovel.valorVenda !== null && imovel.valorVenda > 0) {
+        lucroBruto = imovel.valorVenda - custoTotal;
+        roiPct = custoTotal > 0 ? (lucroBruto / custoTotal) * 100 : 0;
+    }
+
+    return await prisma.imovelLeilao.update({
+        where: { id: imovelId },
+        data: {
+            custasProcessuais,
+            custoDesocupacao,
+            totalAquisicao,
+            gastoReforma,
+            gastoAcabamento,
+            gastoLimpeza,
+            gastoDocumentacao,
+            totalPreparacao,
+            custoTotal,
+            lucroBruto,
+            roiPct
+        },
+        include: { gastos: { orderBy: { data: 'asc' } } }
+    });
+}
+
+/**
+ * ROTA: Listar Imóveis de Leilão (com gastos incluídos)
+ * GET /api/imoveis?status=...&search=...
+ */
+app.get('/api/imoveis', async (req, res) => {
+    try {
+        const { status, search } = req.query;
+        const where = { usuarioId: req.session.userId };
+
+        if (status && status !== 'Todos') {
+            where.status = status;
+        }
+
+        if (search) {
+            where.OR = [
+                { endereco: { contains: search } },
+                { cidade: { contains: search } },
+                { matricula: { contains: search } },
+                { origem: { contains: search } },
+                { leiloeiro: { contains: search } }
+            ];
+        }
+
+        const imoveis = await prisma.imovelLeilao.findMany({
+            where,
+            include: { gastos: { orderBy: { data: 'asc' } } },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        res.json(imoveis);
+    } catch (err) {
+        console.error('Erro ao listar imóveis:', err);
+        res.status(500).json({ error: 'Erro ao buscar imóveis' });
+    }
+});
+
+/**
+ * ROTA: Obter Imóvel por ID com seus Gastos
+ * GET /api/imoveis/:id
+ */
+app.get('/api/imoveis/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const imovel = await prisma.imovelLeilao.findFirst({
+            where: { id, usuarioId: req.session.userId },
+            include: { gastos: { orderBy: { data: 'asc' } } }
+        });
+
+        if (!imovel) {
+            return res.status(404).json({ error: 'Imóvel não encontrado' });
+        }
+
+        res.json(imovel);
+    } catch (err) {
+        console.error('Erro ao buscar imóvel:', err);
+        res.status(500).json({ error: 'Erro ao buscar imóvel' });
+    }
+});
+
+/**
+ * ROTA: Cadastrar Imóvel
+ * POST /api/imoveis
+ */
+app.post('/api/imoveis', async (req, res) => {
+    try {
+        const dadosCalculados = calcularMetricasImovel(req.body);
+
+        if (!dadosCalculados.endereco) {
+            return res.status(400).json({ error: 'Endereço é obrigatório.' });
+        }
+
+        const novoImovel = await prisma.imovelLeilao.create({
+            data: { ...dadosCalculados, usuarioId: req.session.userId },
+            include: { gastos: true }
+        });
+
+        res.status(201).json(novoImovel);
+    } catch (err) {
+        console.error('Erro ao cadastrar imóvel:', err);
+        res.status(500).json({ error: 'Erro ao cadastrar imóvel' });
+    }
+});
+
+/**
+ * ROTA: Atualizar Imóvel
+ * PUT /api/imoveis/:id
+ */
+app.put('/api/imoveis/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const dadosCalculados = calcularMetricasImovel(req.body);
+
+        const imovelExistente = await prisma.imovelLeilao.findFirst({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (!imovelExistente) {
+            return res.status(404).json({ error: 'Imóvel não encontrado' });
+        }
+
+        const imovelAtualizado = await prisma.imovelLeilao.update({
+            where: { id },
+            data: dadosCalculados,
+            include: { gastos: { orderBy: { data: 'asc' } } }
+        });
+
+        res.json(imovelAtualizado);
+    } catch (err) {
+        console.error('Erro ao atualizar imóvel:', err);
+        res.status(500).json({ error: 'Erro ao atualizar imóvel' });
+    }
+});
+
+/**
+ * ROTA: Listar Gastos de um Imóvel
+ * GET /api/imoveis/:id/gastos
+ */
+app.get('/api/imoveis/:id/gastos', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+
+        const imovel = await prisma.imovelLeilao.findFirst({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (!imovel) {
+            return res.status(404).json({ error: 'Imóvel não encontrado' });
+        }
+
+        const gastos = await prisma.gastoImovel.findMany({
+            where: { imovelId: id },
+            orderBy: { data: 'asc' }
+        });
+
+        res.json(gastos);
+    } catch (err) {
+        console.error('Erro ao listar gastos:', err);
+        res.status(500).json({ error: 'Erro ao buscar gastos do imóvel' });
+    }
+});
+
+/**
+ * ROTA: Lançar Novo Gasto / Serviço para um Imóvel
+ * POST /api/imoveis/:id/gastos
+ */
+app.post('/api/imoveis/:id/gastos', async (req, res) => {
+    try {
+        const imovelId = parseInt(req.params.id, 10);
+        const { data, categoria, descricao, fornecedor, valor } = req.body;
+
+        const imovel = await prisma.imovelLeilao.findFirst({
+            where: { id: imovelId, usuarioId: req.session.userId }
+        });
+        if (!imovel) {
+            return res.status(404).json({ error: 'Imóvel não encontrado' });
+        }
+
+        if (!categoria || !descricao || valor === undefined) {
+            return res.status(400).json({ error: 'Categoria, descrição e valor são obrigatórios.' });
+        }
+
+        const dataGasto = data ? new Date(data) : new Date();
+
+        const novoGasto = await prisma.gastoImovel.create({
+            data: {
+                imovelId,
+                data: dataGasto,
+                categoria: String(categoria).trim(),
+                descricao: String(descricao).trim(),
+                fornecedor: fornecedor ? String(fornecedor).trim() : null,
+                valor: Number(valor) || 0
+            }
+        });
+
+        // Recalcular os totais consolidados no imóvel
+        const imovelAtualizado = await recalcularGastosImovel(imovelId);
+
+        res.status(201).json({
+            success: true,
+            gasto: novoGasto,
+            imovel: imovelAtualizado
+        });
+    } catch (err) {
+        console.error('Erro ao lançar gasto:', err);
+        res.status(500).json({ error: 'Erro ao cadastrar gasto do imóvel' });
+    }
+});
+
+/**
+ * ROTA: Excluir Gasto Específico de um Imóvel
+ * DELETE /api/imoveis/:id/gastos/:gastoId
+ */
+app.delete('/api/imoveis/:id/gastos/:gastoId', async (req, res) => {
+    try {
+        const imovelId = parseInt(req.params.id, 10);
+        const gastoId = parseInt(req.params.gastoId, 10);
+
+        const imovel = await prisma.imovelLeilao.findFirst({
+            where: { id: imovelId, usuarioId: req.session.userId }
+        });
+        if (!imovel) {
+            return res.status(404).json({ error: 'Imóvel não encontrado' });
+        }
+
+        await prisma.gastoImovel.delete({
+            where: { id: gastoId }
+        });
+
+        // Recalcular os totais consolidados no imóvel
+        const imovelAtualizado = await recalcularGastosImovel(imovelId);
+
+        res.json({
+            success: true,
+            message: 'Gasto removido com sucesso',
+            imovel: imovelAtualizado
+        });
+    } catch (err) {
+        console.error('Erro ao excluir gasto:', err);
+        res.status(500).json({ error: 'Erro ao excluir gasto do imóvel' });
+    }
+});
+
+/**
+ * ROTA: Atualizar Venda / Preço Rapidamente
+ * POST /api/imoveis/:id/vender
+ */
+app.post('/api/imoveis/:id/vender', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { valorVenda, dataVenda, precoAnuncio, status } = req.body;
+
+        const imovel = await prisma.imovelLeilao.findFirst({ where: { id, usuarioId: req.session.userId } });
+        if (!imovel) return res.status(404).json({ error: 'Imóvel não encontrado' });
+
+        const novoStatus = status || 'Vendido';
+        const vVenda = Number(valorVenda) || null;
+        const custoTotal = imovel.custoTotal || 0;
+        let lucroBruto = null;
+        let roiPct = null;
+
+        if (vVenda !== null && vVenda > 0) {
+            lucroBruto = vVenda - custoTotal;
+            roiPct = custoTotal > 0 ? (lucroBruto / custoTotal) * 100 : 0;
+        }
+
+        const atualizado = await prisma.imovelLeilao.update({
+            where: { id },
+            data: {
+                status: novoStatus,
+                valorVenda: vVenda,
+                precoAnuncio: precoAnuncio ? Number(precoAnuncio) : imovel.precoAnuncio,
+                dataVenda: dataVenda ? new Date(dataVenda) : new Date(),
+                lucroBruto,
+                roiPct
+            },
+            include: { gastos: { orderBy: { data: 'asc' } } }
+        });
+
+        res.json({ success: true, imovel: atualizado });
+    } catch (err) {
+        console.error('Erro ao registrar venda:', err);
+        res.status(500).json({ error: 'Erro ao registrar venda do imóvel' });
+    }
+});
+
+/**
+ * ROTA: Excluir Imóvel
+ * DELETE /api/imoveis/:id
+ */
+app.delete('/api/imoveis/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+
+        const resultado = await prisma.imovelLeilao.deleteMany({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (resultado.count === 0) {
+            return res.status(404).json({ error: 'Imóvel não encontrado' });
+        }
+
+        res.json({ success: true, message: 'Imóvel excluído com sucesso' });
+    } catch (err) {
+        console.error('Erro ao excluir imóvel:', err);
+        res.status(500).json({ error: 'Erro ao excluir imóvel' });
     }
 });
 

@@ -1,0 +1,5 @@
+/* CSS/CasasLeilao/casasleilao.css */
+/* Estilos do Módulo de Gestão de Casas de Leilão */
+/* Reaproveita integralmente o layout (app-shell, cards, modais e tabelas) já */
+/* validado no módulo Carros de Leilão, que segue as mesmas variáveis semânticas. */
+@import url('../Leilao/leilao.css');
