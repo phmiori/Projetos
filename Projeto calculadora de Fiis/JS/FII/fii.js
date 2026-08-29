@@ -8,45 +8,10 @@
 // 1. ESTADO GLOBAL & DADOS
 // =========================================================
 
+const API_BASE = '/api';
+
 const stateFII = {
-    investimentos: JSON.parse(localStorage.getItem('financehub_fii_investments')) || [
-        {
-            id: '1',
-            ticker: 'MXRF11',
-            segment: 'Papel / CRI',
-            shares: 350,
-            avgPrice: 10.15,
-            lastDividend: 0.10,
-            notes: 'Foco em renda mensal passiva'
-        },
-        {
-            id: '2',
-            ticker: 'SNAG11',
-            segment: 'Fiagro',
-            shares: 200,
-            avgPrice: 10.05,
-            lastDividend: 0.11,
-            notes: 'Exposição ao agronegócio de alta qualidade'
-        },
-        {
-            id: '3',
-            ticker: 'KNSC11',
-            segment: 'Papel / CRI',
-            shares: 120,
-            avgPrice: 8.90,
-            lastDividend: 0.085,
-            notes: 'Indexado ao IPCA e CDI'
-        },
-        {
-            id: '4',
-            ticker: 'GARE11',
-            segment: 'Híbrido',
-            shares: 180,
-            avgPrice: 9.15,
-            lastDividend: 0.087,
-            notes: 'Imóveis de renda urbana e galpões'
-        }
-    ],
+    investimentos: [],
     tema: localStorage.getItem('financehub_theme') || 'dark',
     subAbaAtiva: 'fiiSubPortfolio',
     radarFiltro: 'all',
@@ -142,12 +107,107 @@ document.addEventListener('DOMContentLoaded', () => {
     initMobileNav();
     initSubNavigation();
     initEventListeners();
-    renderizarCarteira();
+    carregarCarteira();
     renderizarRadar();
-    
+
     // Iniciar simulação padrão da calculadora
     executarSimulacao();
 });
+
+// =========================================================
+// 1.1 MAPEAMENTO API <-> ESTADO INTERNO
+// =========================================================
+
+function mapFiiFromApi(r) {
+    return {
+        id: r.id,
+        ticker: r.ticker,
+        segment: r.segmento,
+        shares: r.cotas,
+        avgPrice: r.precoMedio,
+        lastDividend: r.ultimoDividendo,
+        notes: r.observacoes || '',
+        currentPrice: r.precoAtual,
+        priceUpdatedAt: r.precoAtualizadoEm
+    };
+}
+
+function mapFiiToApi(item) {
+    return {
+        ticker: item.ticker,
+        segmento: item.segment,
+        cotas: item.shares,
+        precoMedio: item.avgPrice,
+        ultimoDividendo: item.lastDividend,
+        observacoes: item.notes
+    };
+}
+
+/**
+ * Carrega a carteira de FIIs do usuário logado a partir da API
+ */
+async function carregarCarteira() {
+    try {
+        const response = await fetch(`${API_BASE}/fii`);
+        if (!response.ok) throw new Error('API indisponível');
+
+        const dados = await response.json();
+        stateFII.investimentos = dados.map(mapFiiFromApi);
+    } catch (err) {
+        console.error('[FII Hub] Erro ao carregar carteira:', err.message);
+        stateFII.investimentos = [];
+    }
+
+    renderizarCarteira();
+    atualizarLabelUltimaAtualizacao();
+}
+
+/**
+ * Busca as cotações de mercado atuais de todos os FIIs da carteira (Yahoo Finance via backend)
+ */
+async function atualizarCotacoes() {
+    const btn = document.getElementById('btnAtualizarCotacoes');
+    const btnLabel = btn ? btn.querySelector('span') : null;
+
+    if (btn) btn.disabled = true;
+    if (btnLabel) btnLabel.textContent = 'Atualizando...';
+
+    try {
+        const response = await fetch(`${API_BASE}/fii/atualizar-precos`, { method: 'POST' });
+        if (!response.ok) throw new Error('Falha ao atualizar cotações');
+
+        const data = await response.json();
+        stateFII.investimentos = data.investimentos.map(mapFiiFromApi);
+        renderizarCarteira();
+        atualizarLabelUltimaAtualizacao();
+
+        const falhas = (data.resultados || []).filter(r => !r.sucesso);
+        if (falhas.length > 0) {
+            alert(`Não foi possível atualizar a cotação de: ${falhas.map(f => f.ticker).join(', ')}`);
+        }
+    } catch (err) {
+        console.error('Erro ao atualizar cotações:', err);
+        alert('Erro ao buscar cotações atualizadas. Tente novamente em instantes.');
+    } finally {
+        if (btn) btn.disabled = false;
+        if (btnLabel) btnLabel.textContent = 'Atualizar Cotações';
+    }
+}
+
+function atualizarLabelUltimaAtualizacao() {
+    const label = document.getElementById('fiiUltimaAtualizacao');
+    if (!label) return;
+
+    const comData = stateFII.investimentos.filter(i => i.priceUpdatedAt);
+    if (comData.length === 0) {
+        label.textContent = 'Cotações não atualizadas ainda';
+        return;
+    }
+
+    const maisRecente = comData.reduce((max, i) => new Date(i.priceUpdatedAt) > new Date(max.priceUpdatedAt) ? i : max);
+    const data = new Date(maisRecente.priceUpdatedAt);
+    label.textContent = `Cotações atualizadas em ${data.toLocaleDateString('pt-BR')} às ${data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
 
 // =========================================================
 // 3. TEMA E NAVEGAÇÃO
@@ -291,6 +351,10 @@ function initEventListeners() {
         });
     }
 
+    // Atualização de Cotações de Mercado
+    const btnAtualizarCotacoes = document.getElementById('btnAtualizarCotacoes');
+    if (btnAtualizarCotacoes) btnAtualizarCotacoes.addEventListener('click', atualizarCotacoes);
+
     // Exportação CSV
     const btnExportPortfolioCsv = document.getElementById('btnExportPortfolioCsv');
     if (btnExportPortfolioCsv) {
@@ -350,6 +414,7 @@ function renderizarCarteira() {
     const list = stateFII.investimentos;
 
     let totalInvestido = 0;
+    let totalMercado = 0;
     let rendaMensalTotal = 0;
     let totalCotas = 0;
 
@@ -358,9 +423,11 @@ function renderizarCarteira() {
 
     list.forEach(item => {
         const investido = (item.shares || 0) * (item.avgPrice || 0);
+        const precoRef = item.currentPrice != null ? item.currentPrice : item.avgPrice;
         const renda = (item.shares || 0) * (item.lastDividend || 0);
 
         totalInvestido += investido;
+        totalMercado += (item.shares || 0) * (precoRef || 0);
         rendaMensalTotal += renda;
         totalCotas += (item.shares || 0);
 
@@ -374,12 +441,26 @@ function renderizarCarteira() {
     });
 
     const yieldMedio = totalInvestido > 0 ? (rendaMensalTotal / totalInvestido) * 100 : 0;
+    const valorizacao = totalMercado - totalInvestido;
+    const valorizacaoPct = totalInvestido > 0 ? (valorizacao / totalInvestido) * 100 : 0;
 
     // Atualizar KPIs
-    document.getElementById('kpiPatrimonioTotal').textContent = formatarMoeda(totalInvestido);
+    document.getElementById('kpiPatrimonioTotal').textContent = formatarMoeda(totalMercado);
+    document.getElementById('kpiPatrimonioSub').textContent = `Custo de aquisição: ${formatarMoeda(totalInvestido)}`;
     document.getElementById('kpiRendaMensal').textContent = formatarMoeda(rendaMensalTotal);
     document.getElementById('kpiYieldMedio').textContent = yieldMedio.toFixed(2) + '% a.m.';
     document.getElementById('kpiTotalCotas').textContent = totalCotas.toLocaleString('pt-BR');
+
+    const kpiValorizacao = document.getElementById('kpiValorizacao');
+    const kpiValorizacaoPct = document.getElementById('kpiValorizacaoPct');
+    if (kpiValorizacao && kpiValorizacaoPct) {
+        const sinal = valorizacao >= 0 ? '+' : '';
+        const corClasse = valorizacao >= 0 ? 'income' : 'expense';
+        kpiValorizacao.textContent = `${sinal}${formatarMoeda(valorizacao)}`;
+        kpiValorizacao.className = `kpi-value text-${corClasse}`;
+        kpiValorizacaoPct.textContent = `${sinal}${valorizacaoPct.toFixed(2)}% vs. preço médio`;
+        kpiValorizacaoPct.className = `kpi-status-tag tag-${corClasse}`;
+    }
 
     // Badge na Sidebar
     const badgeFiiCount = document.getElementById('badgeFiiCount');
@@ -392,7 +473,7 @@ function renderizarCarteira() {
     if (list.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="9" style="text-align: center; padding: 32px; color: var(--text-sub);">
+                <td colspan="11" style="text-align: center; padding: 32px; color: var(--text-sub);">
                     Nenhum Fundo Imobiliário cadastrado ainda. Clique em "<strong>+ Adicionar FII</strong>" acima para iniciar sua carteira!
                 </td>
             </tr>
@@ -402,6 +483,10 @@ function renderizarCarteira() {
             const investido = item.shares * item.avgPrice;
             const renda = item.shares * item.lastDividend;
             const yieldOnCost = item.avgPrice > 0 ? (item.lastDividend / item.avgPrice) * 100 : 0;
+            const temCotacao = item.currentPrice != null;
+            const valorizacaoItemPct = temCotacao && item.avgPrice > 0
+                ? ((item.currentPrice - item.avgPrice) / item.avgPrice) * 100
+                : null;
 
             return `
                 <tr>
@@ -412,6 +497,10 @@ function renderizarCarteira() {
                     <td><span class="segment-tag-cell">${escapeHTML(item.segment)}</span></td>
                     <td><strong>${item.shares.toLocaleString('pt-BR')}</strong></td>
                     <td>${formatarMoeda(item.avgPrice)}</td>
+                    <td>${temCotacao ? formatarMoeda(item.currentPrice) : '<span style="color: var(--text-sub);">—</span>'}</td>
+                    <td>${valorizacaoItemPct !== null
+                        ? `<strong style="color: var(--color-${valorizacaoItemPct >= 0 ? 'income' : 'expense'});">${valorizacaoItemPct >= 0 ? '+' : ''}${valorizacaoItemPct.toFixed(2)}%</strong>`
+                        : '<span style="color: var(--text-sub);">—</span>'}</td>
                     <td><strong style="color: var(--text-main);">${formatarMoeda(investido)}</strong></td>
                     <td>${formatarMoeda(item.lastDividend)}</td>
                     <td><strong style="color: var(--color-income);">${formatarMoeda(renda)}</strong></td>
@@ -823,7 +912,7 @@ function fecharModalFII() {
     document.body.style.overflow = '';
 }
 
-function salvarFII(e) {
+async function salvarFII(e) {
     e.preventDefault();
 
     const id = document.getElementById('formFiiId').value;
@@ -839,29 +928,39 @@ function salvarFII(e) {
         return;
     }
 
-    if (id) {
-        const index = stateFII.investimentos.findIndex(i => String(i.id) === String(id));
-        if (index !== -1) {
-            stateFII.investimentos[index] = { id, ticker, segment, shares, avgPrice, lastDividend, notes };
-        }
-    } else {
-        const novoId = String(Date.now());
-        stateFII.investimentos.unshift({ id: novoId, ticker, segment, shares, avgPrice, lastDividend, notes });
-    }
+    const payload = mapFiiToApi({ ticker, segment, shares, avgPrice, lastDividend, notes });
 
-    salvarLocalFII();
-    fecharModalFII();
-    renderizarCarteira();
+    try {
+        const url = id ? `${API_BASE}/fii/${id}` : `${API_BASE}/fii`;
+        const response = await fetch(url, {
+            method: id ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error('Falha ao salvar FII');
+
+        fecharModalFII();
+        await carregarCarteira();
+    } catch (err) {
+        console.error('Erro ao salvar FII:', err);
+        alert('Erro ao salvar FII na carteira.');
+    }
 }
 
-function excluirFII(id) {
+async function excluirFII(id) {
     const item = stateFII.investimentos.find(i => String(i.id) === String(id));
     if (!item) return;
 
-    if (confirm(`Tem certeza que deseja remover ${item.ticker} da sua carteira?`)) {
-        stateFII.investimentos = stateFII.investimentos.filter(i => String(i.id) !== String(id));
-        salvarLocalFII();
-        renderizarCarteira();
+    if (!confirm(`Tem certeza que deseja remover ${item.ticker} da sua carteira?`)) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/fii/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Falha ao excluir FII');
+
+        await carregarCarteira();
+    } catch (err) {
+        console.error('Erro ao excluir FII:', err);
+        alert('Erro ao excluir FII da carteira.');
     }
 }
 
@@ -913,7 +1012,7 @@ function recalcularPrevisaoAporte() {
     document.getElementById('prevNovaRenda').textContent = formatarMoeda(novaRenda);
 }
 
-function salvarAporte(e) {
+async function salvarAporte(e) {
     e.preventDefault();
     if (!itemAporteAtual) return;
 
@@ -931,13 +1030,29 @@ function salvarAporte(e) {
     const custoAporte = novasCotas * precoPago;
     const novoPrecoMedio = totalCotas > 0 ? (custoAtual + custoAporte) / totalCotas : itemAporteAtual.avgPrice;
 
-    itemAporteAtual.shares = totalCotas;
-    itemAporteAtual.avgPrice = novoPrecoMedio;
-    itemAporteAtual.lastDividend = novoDiv;
+    const payload = mapFiiToApi({
+        ticker: itemAporteAtual.ticker,
+        segment: itemAporteAtual.segment,
+        shares: totalCotas,
+        avgPrice: novoPrecoMedio,
+        lastDividend: novoDiv,
+        notes: itemAporteAtual.notes
+    });
 
-    salvarLocalFII();
-    fecharModalAporte();
-    renderizarCarteira();
+    try {
+        const response = await fetch(`${API_BASE}/fii/${itemAporteAtual.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error('Falha ao registrar aporte');
+
+        fecharModalAporte();
+        await carregarCarteira();
+    } catch (err) {
+        console.error('Erro ao registrar aporte:', err);
+        alert('Erro ao registrar aporte do FII.');
+    }
 }
 
 function simularFiiNaCalculadora(id) {
@@ -1026,8 +1141,4 @@ function escapeHTML(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
-}
-
-function salvarLocalFII() {
-    localStorage.setItem('financehub_fii_investments', JSON.stringify(stateFII.investimentos));
 }

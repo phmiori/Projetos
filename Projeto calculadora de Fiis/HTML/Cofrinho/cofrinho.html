@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="FinanceHub - Cofrinho de Renda Diária com projeção automática e tabela de IOF regressivo">
+    <title>Cofrinho - Renda Diária & Projeção Automática</title>
+
+    <!-- Tokens Globais, CSS do Index (Sidebar/Header) e CSS Específico de Cofrinho -->
+    <link rel="stylesheet" href="../../CSS/Global/global_tokens.css">
+    <link rel="stylesheet" href="../../CSS/Index/index.css">
+    <link rel="stylesheet" href="../../CSS/Cofrinho/cofrinho.css">
+
+    <!-- Guarda de Autenticação (deve carregar antes do script do módulo) -->
+    <script src="../../JS/Global/auth.js" defer></script>
+
+    <!-- Script do Módulo Cofrinho -->
+    <script src="../../JS/Cofrinho/cofrinho.js" defer></script>
+</head>
+<body class="auth-pending">
+
+    <!-- Cabeçalho Fixo Superior (Global) -->
+    <header class="app-header">
+        <div class="header-left">
+            <button class="mobile-toggle-btn" id="mobileMenuBtn" aria-label="Abrir Menu de Navegação">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+            <a href="../Index/index.html" class="logo-link" aria-label="FinanceHub Início">
+                <div class="logo-icon-box">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 5c-1.5-1.5-5-2-7-2-4 0-7 2-7 5 0 2 1 3 2 4l-1 4h3l1-2c1 .3 2 .5 3 .5h1v2h3v-2.3c2-.7 3-2.2 3-4.2 0-1-.3-2-1-3l1-1-1-1z"></path>
+                        <circle cx="15" cy="9" r="1"></circle>
+                    </svg>
+                </div>
+                <span class="logo-title">Cofrinho <span class="logo-highlight">Hub</span></span>
+            </a>
+        </div>
+
+        <nav class="header-center">
+            <a href="../Index/index.html" class="nav-btn-home" id="btnInicio" aria-label="Voltar ao Início">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                <span>Início</span>
+            </a>
+        </nav>
+
+        <div class="header-right">
+            <!-- Botão de Ação Rápida: Novo Cofrinho -->
+            <button class="btn-primary-action" id="btnNovoCofrinhoHeader" type="button">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                <span>Novo Cofrinho</span>
+            </button>
+
+            <!-- Alternância de Tema Claro / Escuro -->
+            <button class="theme-toggle-btn" id="themeToggleBtn" aria-label="Alternar entre modo claro e escuro">
+                <span class="theme-icon-container">
+                    <svg class="icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="4"></circle>
+                        <path d="M12 2v2"></path>
+                        <path d="M12 20v2"></path>
+                        <path d="m4.93 4.93 1.41 1.41"></path>
+                        <path d="m17.66 17.66 1.41 1.41"></path>
+                        <path d="M2 12h2"></path>
+                        <path d="M20 12h2"></path>
+                        <path d="m6.34 17.66-1.41 1.41"></path>
+                        <path d="m19.07 4.93-1.41 1.41"></path>
+                    </svg>
+                    <svg class="icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+                    </svg>
+                </span>
+                <span class="theme-label" id="themeLabel">Modo Claro</span>
+            </button>
+
+            <!-- Menu de Conta do Usuário -->
+            <div class="account-menu" id="accountMenu">
+                <button class="btn-login" id="btnAccount" type="button" aria-haspopup="true" aria-expanded="false">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    <span id="accountNomeLabel">Usuário</span>
+                </button>
+
+                <div class="account-dropdown" id="accountDropdown">
+                    <div class="account-dropdown-header">
+                        <strong id="accountDropdownNome">—</strong>
+                        <span id="accountDropdownUsername">—</span>
+                    </div>
+
+                    <button type="button" class="account-dropdown-item" id="btnTogglePasswordForm">Alterar Senha</button>
+
+                    <form id="changePasswordForm" class="change-password-form" style="display:none;">
+                        <input type="password" id="inputSenhaAtual" class="input-missao" placeholder="Senha atual" required autocomplete="current-password">
+                        <input type="password" id="inputNovaSenha" class="input-missao" placeholder="Nova senha" required autocomplete="new-password">
+                        <input type="password" id="inputConfirmaSenha" class="input-missao" placeholder="Confirmar nova senha" required autocomplete="new-password">
+                        <p class="account-feedback" id="passwordFeedback" style="display:none;"></p>
+                        <button type="submit" class="btn-missao-primary account-save-btn">Salvar Nova Senha</button>
+                    </form>
+
+                    <button type="button" class="account-dropdown-item account-logout-item" id="btnLogout">Sair do Sistema</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Layout Principal: Sidebar + Conteúdo -->
+    <div class="app-layout">
+
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+        <!-- Barra Lateral Fixa -->
+        <aside class="app-sidebar" id="appSidebar" aria-label="Navegação do Módulo Cofrinho">
+            <div class="sidebar-header-label">
+                <span>Cofrinho</span>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul class="nav-list">
+                    <li>
+                        <a href="../Index/index.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect width="7" height="9" x="3" y="3" rx="1"></rect>
+                                    <rect width="7" height="5" x="14" y="3" rx="1"></rect>
+                                    <rect width="7" height="9" x="14" y="12" rx="1"></rect>
+                                    <rect width="7" height="5" x="3" y="16" rx="1"></rect>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Visão Geral</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="../FII/FundoImobiliário.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+                                    <path d="M9 22v-4h6v4"></path>
+                                    <path d="M8 6h.01"></path>
+                                    <path d="M16 6h.01"></path>
+                                    <path d="M8 10h.01"></path>
+                                    <path d="M16 10h.01"></path>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Fundos Imobiliários</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="../Leilao/leilao.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"></path>
+                                    <circle cx="7" cy="17" r="2"></circle>
+                                    <path d="M9 17h6"></path>
+                                    <circle cx="17" cy="17" r="2"></circle>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Carros de Leilão</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="cofrinho.html" class="nav-item-btn active">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M19 5c-1.5-1.5-5-2-7-2-4 0-7 2-7 5 0 2 1 3 2 4l-1 4h3l1-2c1 .3 2 .5 3 .5h1v2h3v-2.3c2-.7 3-2.2 3-4.2 0-1-.3-2-1-3l1-1-1-1z"></path>
+                                    <circle cx="15" cy="9" r="1"></circle>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Cofrinho</span>
+                            <span class="nav-count-badge" id="badgeCofrinhoCount">0</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="system-status-indicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Módulo Cofrinho Ativo</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Área Principal de Conteúdo -->
+        <main class="app-main" id="mainContent">
+            <div class="main-container">
+
+                <!-- Painel de Boas-Vindas do Módulo Cofrinho -->
+                <section class="welcome-panel" aria-labelledby="welcomeCofrinhoTitle">
+                    <div class="welcome-content">
+                        <span class="welcome-badge">Renda Diária & Liquidez Imediata</span>
+                        <h1 class="welcome-title" id="welcomeCofrinhoTitle">Cofrinho: Reservas de Renda Diária</h1>
+                        <p class="welcome-subtitle">Cadastre o valor guardado e a renda do 1º dia — o sistema projeta automaticamente o saldo dos próximos dias, já descontando o IOF regressivo caso você resgate antes de 30 dias.</p>
+                    </div>
+                </section>
+
+                <!-- 4 Cards de Métricas Rápidas -->
+                <div class="kpi-grid">
+                    <article class="kpi-card kpi-total">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Total Guardado</span>
+                            <div class="kpi-icon-wrapper icon-accent">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect width="20" height="14" x="2" y="5" rx="2"></rect>
+                                    <line x1="2" y1="10" x2="22" y2="10"></line>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-value" id="kpiCofreValorInvestido">R$ 0,00</div>
+                            <div class="kpi-status-tag tag-accent">Soma do valor investido</div>
+                        </div>
+                    </article>
+
+                    <article class="kpi-card kpi-income">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Renda Diária Atual</span>
+                            <div class="kpi-icon-wrapper icon-income">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="12" y1="1" x2="12" y2="23"></line>
+                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-value text-income" id="kpiCofreRendaDia">R$ 0,00</div>
+                            <div class="kpi-status-tag tag-income">Recebido por dia, hoje</div>
+                        </div>
+                    </article>
+
+                    <article class="kpi-card kpi-roi">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Rendimento Acumulado</span>
+                            <div class="kpi-icon-wrapper icon-accent">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                                    <polyline points="17 6 23 6 23 12"></polyline>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-value text-accent" id="kpiCofreRendimentoBruto">R$ 0,00</div>
+                            <div class="kpi-status-tag tag-accent">Bruto, desde o início de cada cofrinho</div>
+                        </div>
+                    </article>
+
+                    <article class="kpi-card kpi-total">
+                        <div class="kpi-header">
+                            <span class="kpi-title">Saldo Líquido Hoje</span>
+                            <div class="kpi-icon-wrapper icon-accent">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 2v20"></path>
+                                    <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="kpi-body">
+                            <div class="kpi-value" id="kpiCofreSaldoLiquido">R$ 0,00</div>
+                            <div class="kpi-status-tag tag-accent">Se resgatasse tudo agora (após IOF)</div>
+                        </div>
+                    </article>
+                </div>
+
+                <!-- Tabela de Cofrinhos Cadastrados -->
+                <section class="table-panel-card">
+                    <div class="table-header-flex">
+                        <h3 class="panel-card-title">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                            </svg>
+                            <span>Cofrinhos Cadastrados</span>
+                        </h3>
+                        <div class="table-actions-group">
+                            <button type="button" class="btn-primary-action" id="btnAdicionarCofrinho">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                <span>Novo Cofrinho</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-scroll-wrap">
+                        <table class="cofre-data-table">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Valor Investido</th>
+                                    <th>Renda / Dia</th>
+                                    <th>Dias Investidos</th>
+                                    <th>Rendimento Bruto</th>
+                                    <th>IOF Atual</th>
+                                    <th>Saldo Líquido Hoje</th>
+                                    <th style="text-align: right;">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cofrinhoTableBody">
+                                <!-- Preenchido via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL: ADICIONAR / EDITAR COFRINHO -->
+    <!-- ========================================================= -->
+    <div class="modal-overlay" id="modalCofrinhoOverlay">
+        <div class="modal-dialog">
+            <header class="modal-header">
+                <div>
+                    <h2 class="modal-title" id="modalCofrinhoTitle">Novo Cofrinho</h2>
+                    <p class="modal-subtitle">Informe o valor guardado e a renda recebida no 1º dia para projetar os próximos dias</p>
+                </div>
+                <button class="modal-close-btn" id="modalCofrinhoClose" aria-label="Fechar">&times;</button>
+            </header>
+
+            <form id="cofrinhoForm">
+                <input type="hidden" id="formCofrinhoId">
+                <div class="form-sections-wrapper">
+                    <div class="form-fields-grid">
+
+                        <div class="input-field" style="grid-column: 1 / -1;">
+                            <label for="inputCofrinhoNome">Nome do Cofrinho *</label>
+                            <input type="text" id="inputCofrinhoNome" class="input-missao" placeholder="Ex: Reserva de Emergência" required>
+                        </div>
+
+                        <div class="input-field">
+                            <label for="inputCofrinhoValor">Valor Investido (R$) *</label>
+                            <input type="number" id="inputCofrinhoValor" class="input-missao" min="0.01" step="0.01" placeholder="Ex: 5000.00" required>
+                        </div>
+
+                        <div class="input-field">
+                            <label for="inputCofrinhoRendaDia">Renda Recebida no Dia 1 (R$) *</label>
+                            <input type="number" id="inputCofrinhoRendaDia" class="input-missao" min="0.01" step="0.01" placeholder="Ex: 3.20" required>
+                        </div>
+
+                        <div class="input-field" style="grid-column: 1 / -1;">
+                            <label for="inputCofrinhoDataInicio">Data de Início (Dia 1) *</label>
+                            <input type="date" id="inputCofrinhoDataInicio" class="input-missao" required>
+                        </div>
+
+                        <div class="input-field" style="grid-column: 1 / -1;">
+                            <label for="inputCofrinhoObs">Anotações</label>
+                            <input type="text" id="inputCofrinhoObs" class="input-missao" placeholder="Ex: Nubank Caixinha - CDB liquidez diária">
+                        </div>
+
+                    </div>
+                </div>
+
+                <footer class="modal-footer">
+                    <button type="button" class="btn-cancel" id="btnCofrinhoCancel">Cancelar</button>
+                    <button type="submit" class="btn-missao-primary">Salvar Cofrinho</button>
+                </footer>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL: PROJEÇÃO AUTOMÁTICA DE 30 DIAS -->
+    <!-- ========================================================= -->
+    <div class="modal-overlay" id="modalProjecaoOverlay">
+        <div class="modal-dialog modal-dialog-wide">
+            <header class="modal-header">
+                <div>
+                    <h2 class="modal-title" id="projecaoModalTitle">Projeção: Cofrinho</h2>
+                    <p class="modal-subtitle">Saldo bruto, IOF regressivo e saldo líquido calculados automaticamente dia a dia (não considera Imposto de Renda)</p>
+                </div>
+                <button class="modal-close-btn" id="modalProjecaoClose" aria-label="Fechar">&times;</button>
+            </header>
+
+            <div class="form-sections-wrapper">
+                <div class="table-scroll-wrap" style="max-height: 480px;">
+                    <table class="cofre-data-table">
+                        <thead style="position: sticky; top: 0; background-color: var(--bg-surface);">
+                            <tr>
+                                <th>Dia</th>
+                                <th>Saldo Bruto</th>
+                                <th>Rendimento Acumulado</th>
+                                <th>IOF (%)</th>
+                                <th>IOF (R$)</th>
+                                <th>Saldo Líquido</th>
+                            </tr>
+                        </thead>
+                        <tbody id="projecaoTableBody">
+                            <!-- Preenchido via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <footer class="modal-footer">
+                <button type="button" class="btn-cancel" id="btnProjecaoFechar">Fechar</button>
+            </footer>
+        </div>
+    </div>
+
+</body>
+</html>

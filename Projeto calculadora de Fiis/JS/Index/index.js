@@ -9,7 +9,22 @@ document.addEventListener('DOMContentLoaded', () => {
     initMobileNavigation();
     initDateDisplay();
     carregarMetricasConsolidadas();
+    carregarBadgeCofrinho();
 });
+
+async function carregarBadgeCofrinho() {
+    const badge = document.getElementById('badgeCofrinhoCountIndex');
+    if (!badge) return;
+
+    try {
+        const response = await fetch('/api/cofrinhos');
+        if (!response.ok) throw new Error('API indisponível');
+        const cofrinhos = await response.json();
+        badge.textContent = cofrinhos.length;
+    } catch (err) {
+        console.warn('[FinanceHub] Não foi possível carregar o total de cofrinhos.', err.message);
+    }
+}
 
 function initTheme() {
     const STORAGE_KEY = 'financehub_theme';

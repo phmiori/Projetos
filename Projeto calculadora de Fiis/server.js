@@ -134,8 +134,8 @@ app.put('/api/auth/senha', requireAuth, async (req, res) => {
     }
 });
 
-// Protege as rotas de dados do módulo de Leilão: exige login
-app.use(['/api/dashboard', '/api/veiculos'], requireAuth);
+// Protege as rotas de dados dos módulos de Leilão, FII e Cofrinho: exige login
+app.use(['/api/dashboard', '/api/veiculos', '/api/fii', '/api/cofrinhos'], requireAuth);
 
 /**
  * Função utilitária para cálculo automático de totais, lucro e ROI
@@ -634,6 +634,273 @@ app.delete('/api/veiculos/:id', async (req, res) => {
     }
 });
 
+
+/**
+ * Busca a cotação atual de um ticker de FII na B3 via Yahoo Finance (fonte pública, sem chave de API)
+ */
+async function buscarCotacaoTicker(ticker) {
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}.SA?interval=1d&range=1d`;
+    const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+
+    if (!response.ok) {
+        throw new Error('Cotação indisponível no momento');
+    }
+
+    const json = await response.json();
+    const meta = json?.chart?.result?.[0]?.meta;
+
+    if (!meta || typeof meta.regularMarketPrice !== 'number') {
+        throw new Error('Ticker não encontrado na B3');
+    }
+
+    return {
+        precoAtual: meta.regularMarketPrice,
+        fechamentoAnterior: typeof meta.chartPreviousClose === 'number' ? meta.chartPreviousClose : null
+    };
+}
+
+/**
+ * ROTA: Listar Carteira de FIIs do Usuário Logado
+ * GET /api/fii
+ */
+app.get('/api/fii', async (req, res) => {
+    try {
+        const investimentos = await prisma.investimentoFII.findMany({
+            where: { usuarioId: req.session.userId },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(investimentos);
+    } catch (err) {
+        console.error('Erro ao listar FIIs:', err);
+        res.status(500).json({ error: 'Erro ao buscar carteira de FIIs' });
+    }
+});
+
+/**
+ * ROTA: Cadastrar Novo FII na Carteira
+ * POST /api/fii
+ */
+app.post('/api/fii', async (req, res) => {
+    try {
+        const { ticker, segmento, cotas, precoMedio, ultimoDividendo, observacoes } = req.body;
+
+        if (!ticker || !cotas || !precoMedio) {
+            return res.status(400).json({ error: 'Ticker, cotas e preço médio são obrigatórios.' });
+        }
+
+        const novoInvestimento = await prisma.investimentoFII.create({
+            data: {
+                usuarioId: req.session.userId,
+                ticker: String(ticker).trim().toUpperCase(),
+                segmento: segmento ? String(segmento).trim() : 'Papel / CRI',
+                cotas: parseInt(cotas, 10) || 0,
+                precoMedio: Number(precoMedio) || 0,
+                ultimoDividendo: Number(ultimoDividendo) || 0,
+                observacoes: observacoes ? String(observacoes).trim() : null
+            }
+        });
+
+        res.status(201).json(novoInvestimento);
+    } catch (err) {
+        console.error('Erro ao cadastrar FII:', err);
+        res.status(500).json({ error: 'Erro ao cadastrar FII na carteira' });
+    }
+});
+
+/**
+ * ROTA: Atualizar FII (Edição ou Aporte de Novas Cotas)
+ * PUT /api/fii/:id
+ */
+app.put('/api/fii/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { ticker, segmento, cotas, precoMedio, ultimoDividendo, observacoes } = req.body;
+
+        const existente = await prisma.investimentoFII.findFirst({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (!existente) {
+            return res.status(404).json({ error: 'FII não encontrado na carteira' });
+        }
+
+        const atualizado = await prisma.investimentoFII.update({
+            where: { id },
+            data: {
+                ticker: ticker ? String(ticker).trim().toUpperCase() : existente.ticker,
+                segmento: segmento ? String(segmento).trim() : existente.segmento,
+                cotas: cotas !== undefined ? parseInt(cotas, 10) || 0 : existente.cotas,
+                precoMedio: precoMedio !== undefined ? Number(precoMedio) || 0 : existente.precoMedio,
+                ultimoDividendo: ultimoDividendo !== undefined ? Number(ultimoDividendo) || 0 : existente.ultimoDividendo,
+                observacoes: observacoes !== undefined ? (observacoes ? String(observacoes).trim() : null) : existente.observacoes
+            }
+        });
+
+        res.json(atualizado);
+    } catch (err) {
+        console.error('Erro ao atualizar FII:', err);
+        res.status(500).json({ error: 'Erro ao atualizar FII da carteira' });
+    }
+});
+
+/**
+ * ROTA: Excluir FII da Carteira
+ * DELETE /api/fii/:id
+ */
+app.delete('/api/fii/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+
+        const resultado = await prisma.investimentoFII.deleteMany({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (resultado.count === 0) {
+            return res.status(404).json({ error: 'FII não encontrado na carteira' });
+        }
+
+        res.json({ success: true, message: 'FII removido da carteira com sucesso' });
+    } catch (err) {
+        console.error('Erro ao excluir FII:', err);
+        res.status(500).json({ error: 'Erro ao excluir FII da carteira' });
+    }
+});
+
+/**
+ * ROTA: Atualizar Cotações de Mercado de Todos os FIIs da Carteira
+ * POST /api/fii/atualizar-precos
+ */
+app.post('/api/fii/atualizar-precos', async (req, res) => {
+    try {
+        const investimentos = await prisma.investimentoFII.findMany({
+            where: { usuarioId: req.session.userId }
+        });
+
+        const resultados = await Promise.all(investimentos.map(async (inv) => {
+            try {
+                const { precoAtual } = await buscarCotacaoTicker(inv.ticker);
+                await prisma.investimentoFII.update({
+                    where: { id: inv.id },
+                    data: { precoAtual, precoAtualizadoEm: new Date() }
+                });
+                return { ticker: inv.ticker, sucesso: true, precoAtual };
+            } catch (e) {
+                return { ticker: inv.ticker, sucesso: false, erro: e.message };
+            }
+        }));
+
+        const listaAtualizada = await prisma.investimentoFII.findMany({
+            where: { usuarioId: req.session.userId },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        res.json({ success: true, resultados, investimentos: listaAtualizada });
+    } catch (err) {
+        console.error('Erro ao atualizar cotações de FIIs:', err);
+        res.status(500).json({ error: 'Erro ao atualizar cotações dos FIIs' });
+    }
+});
+
+/**
+ * ROTA: Listar Cofrinhos do Usuário Logado
+ * GET /api/cofrinhos
+ */
+app.get('/api/cofrinhos', async (req, res) => {
+    try {
+        const cofrinhos = await prisma.cofrinho.findMany({
+            where: { usuarioId: req.session.userId },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(cofrinhos);
+    } catch (err) {
+        console.error('Erro ao listar cofrinhos:', err);
+        res.status(500).json({ error: 'Erro ao buscar cofrinhos' });
+    }
+});
+
+/**
+ * ROTA: Cadastrar Novo Cofrinho
+ * POST /api/cofrinhos
+ */
+app.post('/api/cofrinhos', async (req, res) => {
+    try {
+        const { nome, valorInvestido, rendaPorDia, dataInicio, observacoes } = req.body;
+
+        if (!nome || !valorInvestido || rendaPorDia === undefined) {
+            return res.status(400).json({ error: 'Nome, valor investido e renda do dia 1 são obrigatórios.' });
+        }
+
+        const novoCofrinho = await prisma.cofrinho.create({
+            data: {
+                usuarioId: req.session.userId,
+                nome: String(nome).trim(),
+                valorInvestido: Number(valorInvestido) || 0,
+                rendaPorDia: Number(rendaPorDia) || 0,
+                dataInicio: dataInicio ? new Date(dataInicio) : new Date(),
+                observacoes: observacoes ? String(observacoes).trim() : null
+            }
+        });
+
+        res.status(201).json(novoCofrinho);
+    } catch (err) {
+        console.error('Erro ao cadastrar cofrinho:', err);
+        res.status(500).json({ error: 'Erro ao cadastrar cofrinho' });
+    }
+});
+
+/**
+ * ROTA: Atualizar Cofrinho
+ * PUT /api/cofrinhos/:id
+ */
+app.put('/api/cofrinhos/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { nome, valorInvestido, rendaPorDia, dataInicio, observacoes } = req.body;
+
+        const existente = await prisma.cofrinho.findFirst({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (!existente) {
+            return res.status(404).json({ error: 'Cofrinho não encontrado' });
+        }
+
+        const atualizado = await prisma.cofrinho.update({
+            where: { id },
+            data: {
+                nome: nome ? String(nome).trim() : existente.nome,
+                valorInvestido: valorInvestido !== undefined ? Number(valorInvestido) || 0 : existente.valorInvestido,
+                rendaPorDia: rendaPorDia !== undefined ? Number(rendaPorDia) || 0 : existente.rendaPorDia,
+                dataInicio: dataInicio ? new Date(dataInicio) : existente.dataInicio,
+                observacoes: observacoes !== undefined ? (observacoes ? String(observacoes).trim() : null) : existente.observacoes
+            }
+        });
+
+        res.json(atualizado);
+    } catch (err) {
+        console.error('Erro ao atualizar cofrinho:', err);
+        res.status(500).json({ error: 'Erro ao atualizar cofrinho' });
+    }
+});
+
+/**
+ * ROTA: Excluir Cofrinho
+ * DELETE /api/cofrinhos/:id
+ */
+app.delete('/api/cofrinhos/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+
+        const resultado = await prisma.cofrinho.deleteMany({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (resultado.count === 0) {
+            return res.status(404).json({ error: 'Cofrinho não encontrado' });
+        }
+
+        res.json({ success: true, message: 'Cofrinho excluído com sucesso' });
+    } catch (err) {
+        console.error('Erro ao excluir cofrinho:', err);
+        res.status(500).json({ error: 'Erro ao excluir cofrinho' });
+    }
+});
 
 // Redirecionamento da raiz para a página inicial
 app.get('/', (req, res) => {

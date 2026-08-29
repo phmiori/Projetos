@@ -102,6 +102,20 @@
     flex-wrap: wrap;
 }
 
+.fii-price-update-label {
+    font-size: 0.78rem;
+    color: var(--text-sub);
+    white-space: nowrap;
+}
+
+.text-expense { color: var(--color-expense); }
+
+.tag-expense {
+    background-color: var(--bg-main);
+    color: var(--color-expense);
+    border: 1px solid var(--border-color);
+}
+
 /* --- Layout da Calculadora & Grid 2 Colunas --- */
 .app-grid-calc {
     display: grid;

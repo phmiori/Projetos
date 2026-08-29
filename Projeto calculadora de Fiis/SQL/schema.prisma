@@ -66,9 +66,48 @@ model Usuario {
   senhaHash   String
 
   veiculos    Veiculo[]
+  investimentosFII InvestimentoFII[]
+  cofrinhos   Cofrinho[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model Cofrinho {
+  id              Int       @id @default(autoincrement())
+
+  usuarioId       Int
+  usuario         Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  nome            String
+  valorInvestido  Float     @default(0)
+  rendaPorDia     Float     @default(0) // Renda recebida no dia 1 (R$), usada como base fixa diária (juros simples)
+  dataInicio      DateTime  @default(now())
+  observacoes     String?
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model InvestimentoFII {
+  id                Int       @id @default(autoincrement())
+
+  usuarioId         Int
+  usuario           Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  ticker            String
+  segmento          String    @default("Papel / CRI")
+  cotas             Int       @default(0)
+  precoMedio        Float     @default(0)
+  ultimoDividendo   Float     @default(0)
+  observacoes       String?
+
+  // Cotação de mercado obtida automaticamente (Yahoo Finance)
+  precoAtual        Float?
+  precoAtualizadoEm DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
 }
 
 model GastoVeiculo {
