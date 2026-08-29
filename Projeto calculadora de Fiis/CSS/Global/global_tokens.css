@@ -112,3 +112,108 @@ body {
         width: 100%;
     }
 }
+
+/* --- Guarda de Autenticação: evita "flash" de conteúdo antes da checagem de sessão --- */
+body.auth-pending {
+    visibility: hidden;
+}
+
+/* --- Menu de Conta do Usuário (Header) --- */
+.account-menu {
+    position: relative;
+}
+
+.account-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    min-width: 260px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+    padding: 12px;
+    z-index: 1000;
+}
+
+.account-dropdown.open {
+    display: block;
+}
+
+.account-dropdown-header {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 8px 12px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.account-dropdown-header strong {
+    color: var(--text-main);
+    font-size: 0.95rem;
+}
+
+.account-dropdown-header span {
+    color: var(--text-sub);
+    font-size: 0.8rem;
+}
+
+.account-dropdown-item {
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    color: var(--text-main);
+    font-size: 0.9rem;
+    font-weight: 600;
+    padding: 10px 8px;
+    border-radius: var(--radius-button);
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.account-dropdown-item:hover {
+    background-color: var(--bg-main);
+}
+
+.account-logout-item {
+    color: var(--color-expense);
+    margin-top: 4px;
+}
+
+.change-password-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+}
+
+.change-password-form .input-missao {
+    width: 100%;
+    font-size: 0.85rem;
+    padding: 8px 10px;
+}
+
+.account-save-btn {
+    width: 100%;
+    font-size: 0.85rem;
+    padding: 8px;
+}
+
+.account-feedback {
+    font-size: 0.8rem;
+    border-radius: var(--radius-button);
+    padding: 6px 8px;
+}
+
+.account-feedback.feedback-erro {
+    background-color: rgba(211, 47, 47, 0.12);
+    color: var(--color-expense);
+}
+
+.account-feedback.feedback-sucesso {
+    background-color: rgba(46, 125, 50, 0.12);
+    color: var(--color-income);
+}

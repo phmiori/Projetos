@@ -6,6 +6,8 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const session = require('express-session');
+const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
@@ -15,8 +17,125 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 
+app.use(session({
+    secret: process.env.SESSION_SECRET || 'autoleilao-hub-chave-local-2026',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+        httpOnly: true,
+        secure: false,
+        maxAge: 8 * 60 * 60 * 1000 // 8 horas
+    }
+}));
+
+/**
+ * Middleware de proteção: exige sessão de usuário autenticado
+ */
+function requireAuth(req, res, next) {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Não autenticado' });
+    }
+    next();
+}
+
 // Servir arquivos estáticos do frontend
 app.use(express.static(__dirname));
+
+/**
+ * ROTA: Login
+ * POST /api/auth/login
+ */
+app.post('/api/auth/login', async (req, res) => {
+    try {
+        const { username, senha } = req.body;
+
+        if (!username || !senha) {
+            return res.status(400).json({ error: 'Usuário e senha são obrigatórios.' });
+        }
+
+        const usuario = await prisma.usuario.findUnique({ where: { username: String(username).trim() } });
+        if (!usuario) {
+            return res.status(401).json({ error: 'Usuário ou senha inválidos.' });
+        }
+
+        const senhaValida = await bcrypt.compare(senha, usuario.senhaHash);
+        if (!senhaValida) {
+            return res.status(401).json({ error: 'Usuário ou senha inválidos.' });
+        }
+
+        req.session.userId = usuario.id;
+
+        res.json({ success: true, usuario: { id: usuario.id, username: usuario.username, nome: usuario.nome } });
+    } catch (err) {
+        console.error('Erro no login:', err);
+        res.status(500).json({ error: 'Erro ao processar login' });
+    }
+});
+
+/**
+ * ROTA: Logout
+ * POST /api/auth/logout
+ */
+app.post('/api/auth/logout', (req, res) => {
+    req.session.destroy(() => {
+        res.clearCookie('connect.sid');
+        res.json({ success: true });
+    });
+});
+
+/**
+ * ROTA: Sessão Atual
+ * GET /api/auth/me
+ */
+app.get('/api/auth/me', async (req, res) => {
+    if (!req.session.userId) {
+        return res.status(401).json({ error: 'Não autenticado' });
+    }
+
+    const usuario = await prisma.usuario.findUnique({ where: { id: req.session.userId } });
+    if (!usuario) {
+        return res.status(401).json({ error: 'Não autenticado' });
+    }
+
+    res.json({ id: usuario.id, username: usuario.username, nome: usuario.nome });
+});
+
+/**
+ * ROTA: Alterar Senha do Usuário Logado
+ * PUT /api/auth/senha
+ */
+app.put('/api/auth/senha', requireAuth, async (req, res) => {
+    try {
+        const { senhaAtual, novaSenha } = req.body;
+
+        if (!senhaAtual || !novaSenha) {
+            return res.status(400).json({ error: 'Senha atual e nova senha são obrigatórias.' });
+        }
+        if (String(novaSenha).length < 4) {
+            return res.status(400).json({ error: 'A nova senha deve ter pelo menos 4 caracteres.' });
+        }
+
+        const usuario = await prisma.usuario.findUnique({ where: { id: req.session.userId } });
+        const senhaValida = await bcrypt.compare(senhaAtual, usuario.senhaHash);
+        if (!senhaValida) {
+            return res.status(401).json({ error: 'Senha atual incorreta.' });
+        }
+
+        const novoHash = await bcrypt.hash(novaSenha, 10);
+        await prisma.usuario.update({
+            where: { id: usuario.id },
+            data: { senhaHash: novoHash }
+        });
+
+        res.json({ success: true, message: 'Senha alterada com sucesso.' });
+    } catch (err) {
+        console.error('Erro ao alterar senha:', err);
+        res.status(500).json({ error: 'Erro ao alterar senha' });
+    }
+});
+
+// Protege as rotas de dados do módulo de Leilão: exige login
+app.use(['/api/dashboard', '/api/veiculos'], requireAuth);
 
 /**
  * Função utilitária para cálculo automático de totais, lucro e ROI
@@ -565,6 +684,34 @@ async function seedInitialData() {
     }
 }
 
+/**
+ * Função de Seed dos Usuários Administradores (fixos, cadastrados apenas uma vez)
+ */
+async function seedUsuarios() {
+    try {
+        const count = await prisma.usuario.count();
+        if (count === 0) {
+            console.log('[Prisma] Cadastrando usuários administradores...');
+
+            const admins = [
+                { username: 'Davi_olp', nome: 'Davi', senha: 'adm123' },
+                { username: 'PhMiori', nome: 'Ph Miori', senha: 'adm123' }
+            ];
+
+            for (const admin of admins) {
+                const senhaHash = await bcrypt.hash(admin.senha, 10);
+                await prisma.usuario.create({
+                    data: { username: admin.username, nome: admin.nome, senhaHash }
+                });
+            }
+
+            console.log('[Prisma] Usuários administradores cadastrados com sucesso!');
+        }
+    } catch (e) {
+        console.warn('[Prisma] Aviso na inicialização de usuários:', e.message);
+    }
+}
+
 // Iniciar servidor
 app.listen(PORT, async () => {
     console.log(`====================================================`);
@@ -572,4 +719,5 @@ app.listen(PORT, async () => {
     console.log(` Acesso web: http://localhost:${PORT}/HTML/Index/index.html`);
     console.log(`====================================================`);
     await seedInitialData();
+    await seedUsuarios();
 });

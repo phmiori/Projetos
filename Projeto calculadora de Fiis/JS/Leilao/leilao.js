@@ -131,33 +131,7 @@ function initEventListeners() {
             statusPills.forEach(p => p.classList.remove('active'));
             pill.classList.add('active');
             state.filtroStatus = pill.getAttribute('data-status');
-            atualizarSidebarAtiva(state.filtroStatus);
             renderizarVeiculos();
-        });
-    });
-
-    const navButtons = document.querySelectorAll('.nav-item-btn');
-    navButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            navButtons.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-
-            const filter = btn.getAttribute('data-filter-status');
-            state.filtroStatus = filter;
-
-            statusPills.forEach(p => {
-                p.classList.toggle('active', p.getAttribute('data-status') === filter || (filter === 'Estoque' && p.getAttribute('data-status') === 'Todos'));
-            });
-
-            renderizarVeiculos();
-
-            const appSidebar = document.getElementById('appSidebar');
-            const sidebarBackdrop = document.getElementById('sidebarBackdrop');
-            if (window.innerWidth <= 768 && appSidebar) {
-                appSidebar.classList.remove('open');
-                if (sidebarBackdrop) sidebarBackdrop.classList.remove('active');
-                document.body.style.overflow = '';
-            }
         });
     });
 
@@ -167,26 +141,6 @@ function initEventListeners() {
             state.filtroBusca = e.target.value.toLowerCase().trim();
             renderizarVeiculos();
         });
-    }
-}
-
-function atualizarSidebarAtiva(status) {
-    const navVisaoGeral = document.getElementById('navVisaoGeral');
-    const navEstoque = document.getElementById('navEstoque');
-    const navVendidos = document.getElementById('navVendidos');
-
-    if (!navVisaoGeral || !navEstoque || !navVendidos) return;
-
-    navVisaoGeral.classList.remove('active');
-    navEstoque.classList.remove('active');
-    navVendidos.classList.remove('active');
-
-    if (status === 'Todos') {
-        navVisaoGeral.classList.add('active');
-    } else if (status === 'Vendido') {
-        navVendidos.classList.add('active');
-    } else {
-        navEstoque.classList.add('active');
     }
 }
 
@@ -300,9 +254,8 @@ function atualizarDashboard() {
 
     document.getElementById('kpiRoiMedio').textContent = `${roiMedio.toFixed(1)}%`;
 
-    document.getElementById('badgeTotalGeral').textContent = state.veiculos.length;
-    document.getElementById('badgeEstoque').textContent = totalEstoque;
-    document.getElementById('badgeVendidos').textContent = totalVendidos;
+    const badgeLeilaoCount = document.getElementById('badgeLeilaoCount');
+    if (badgeLeilaoCount) badgeLeilaoCount.textContent = state.veiculos.length;
 }
 
 function renderizarVeiculos() {

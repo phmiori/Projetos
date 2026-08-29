@@ -10,13 +10,21 @@
     "prisma:push": "prisma db push --schema=./SQL/schema.prisma",
     "prisma:studio": "prisma studio --schema=./SQL/schema.prisma"
   },
-  "keywords": ["leilao", "carros", "financeiro", "gestao", "prisma"],
+  "keywords": [
+    "leilao",
+    "carros",
+    "financeiro",
+    "gestao",
+    "prisma"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@prisma/client": "^6.4.1",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "express-session": "^1.19.0"
   },
   "devDependencies": {
     "prisma": "^6.4.1"
