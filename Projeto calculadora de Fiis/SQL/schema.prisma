@@ -68,6 +68,7 @@ model Usuario {
   veiculos    Veiculo[]
   imoveis     ImovelLeilao[]
   investimentosFII InvestimentoFII[]
+  investimentosCripto InvestimentoCripto[]
   cofrinhos   Cofrinho[]
 
   createdAt   DateTime @default(now())
@@ -171,6 +172,28 @@ model InvestimentoFII {
   observacoes       String?
 
   // Cotação de mercado obtida automaticamente (Yahoo Finance)
+  precoAtual        Float?
+  precoAtualizadoEm DateTime?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model InvestimentoCripto {
+  id                Int       @id @default(autoincrement())
+
+  usuarioId         Int
+  usuario           Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  moedaId           String    // Slug da CoinGecko usado para buscar cotação (Ex: bitcoin, ethereum)
+  ticker            String    // Símbolo de exibição (Ex: BTC, ETH)
+  nome              String    // Nome de exibição (Ex: Bitcoin, Ethereum)
+  categoria         String    @default("Layer 1") // Layer 1, Layer 2, DeFi, Meme, Stablecoin, Outro
+  quantidade        Float     @default(0)
+  precoMedio        Float     @default(0) // Preço médio de compra em R$
+  observacoes       String?
+
+  // Cotação de mercado obtida automaticamente (CoinGecko)
   precoAtual        Float?
   precoAtualizadoEm DateTime?
 

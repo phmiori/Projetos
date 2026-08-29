@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarBadgeCofrinho();
     carregarBadgeFii();
     carregarModuloCasas();
+    carregarModuloCripto();
 });
 
 async function carregarBadgeCofrinho() {
@@ -211,6 +212,45 @@ async function carregarModuloCasas() {
         if (moduleCasasRoi) moduleCasasRoi.textContent = `${roiMedio.toFixed(1)}%`;
     } catch (err) {
         console.warn('[FinanceHub] Não foi possível carregar o total de casas de leilão.', err.message);
+    }
+}
+
+async function carregarModuloCripto() {
+    const badge = document.getElementById('badgeCriptoCountIndex');
+
+    try {
+        const response = await fetch('/api/cripto');
+        if (!response.ok) throw new Error('API indisponível');
+        const moedas = await response.json();
+
+        if (badge) badge.textContent = moedas.length;
+
+        let totalInvestido = 0;
+        let totalMercado = 0;
+
+        moedas.forEach(m => {
+            const precoRef = m.precoAtual != null ? m.precoAtual : m.precoMedio;
+            totalInvestido += (m.quantidade || 0) * (m.precoMedio || 0);
+            totalMercado += (m.quantidade || 0) * (precoRef || 0);
+        });
+
+        const valorizacaoPct = totalInvestido > 0 ? ((totalMercado - totalInvestido) / totalInvestido) * 100 : 0;
+
+        const moduleCriptoCount = document.getElementById('moduleCriptoCount');
+        const moduleCriptoPatrimonio = document.getElementById('moduleCriptoPatrimonio');
+        const moduleCriptoCusto = document.getElementById('moduleCriptoCusto');
+        const moduleCriptoValorizacao = document.getElementById('moduleCriptoValorizacao');
+
+        if (moduleCriptoCount) moduleCriptoCount.textContent = `${moedas.length} moedas`;
+        if (moduleCriptoPatrimonio) moduleCriptoPatrimonio.textContent = formatarMoeda(totalMercado);
+        if (moduleCriptoCusto) moduleCriptoCusto.textContent = formatarMoeda(totalInvestido);
+        if (moduleCriptoValorizacao) {
+            const sinal = valorizacaoPct >= 0 ? '+' : '';
+            moduleCriptoValorizacao.textContent = `${sinal}${valorizacaoPct.toFixed(2)}%`;
+            moduleCriptoValorizacao.className = `mini-stat-val ${valorizacaoPct >= 0 ? 'text-income' : 'text-expense'}`;
+        }
+    } catch (err) {
+        console.warn('[FinanceHub] Não foi possível carregar o total de criptomoedas.', err.message);
     }
 }
 

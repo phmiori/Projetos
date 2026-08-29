@@ -134,8 +134,8 @@ app.put('/api/auth/senha', requireAuth, async (req, res) => {
     }
 });
 
-// Protege as rotas de dados dos módulos de Leilão, Imóveis, FII e Cofrinho: exige login
-app.use(['/api/dashboard', '/api/veiculos', '/api/imoveis', '/api/fii', '/api/cofrinhos'], requireAuth);
+// Protege as rotas de dados dos módulos de Leilão, Imóveis, FII, Cripto e Cofrinho: exige login
+app.use(['/api/dashboard', '/api/veiculos', '/api/imoveis', '/api/fii', '/api/cripto', '/api/cofrinhos'], requireAuth);
 
 /**
  * Função utilitária para cálculo automático de totais, lucro e ROI
@@ -1234,6 +1234,174 @@ app.post('/api/fii/atualizar-precos', async (req, res) => {
     } catch (err) {
         console.error('Erro ao atualizar cotações de FIIs:', err);
         res.status(500).json({ error: 'Erro ao atualizar cotações dos FIIs' });
+    }
+});
+
+/**
+ * Busca a cotação atual (em Reais) de uma ou mais criptomoedas na CoinGecko (fonte pública, sem chave de API)
+ */
+async function buscarCotacaoCripto(moedaIds) {
+    const ids = [...new Set(moedaIds)].join(',');
+    const url = `https://api.coingecko.com/api/v3/simple/price?ids=${encodeURIComponent(ids)}&vs_currencies=brl`;
+    const response = await fetch(url, { headers: { 'Accept': 'application/json' } });
+
+    if (!response.ok) {
+        throw new Error('Cotação indisponível no momento');
+    }
+
+    return await response.json();
+}
+
+/**
+ * ROTA: Listar Carteira de Criptomoedas do Usuário Logado
+ * GET /api/cripto
+ */
+app.get('/api/cripto', async (req, res) => {
+    try {
+        const investimentos = await prisma.investimentoCripto.findMany({
+            where: { usuarioId: req.session.userId },
+            orderBy: { createdAt: 'desc' }
+        });
+        res.json(investimentos);
+    } catch (err) {
+        console.error('Erro ao listar criptomoedas:', err);
+        res.status(500).json({ error: 'Erro ao buscar carteira de criptomoedas' });
+    }
+});
+
+/**
+ * ROTA: Cadastrar Nova Criptomoeda na Carteira
+ * POST /api/cripto
+ */
+app.post('/api/cripto', async (req, res) => {
+    try {
+        const { moedaId, ticker, nome, categoria, quantidade, precoMedio, observacoes } = req.body;
+
+        if (!moedaId || !ticker || !quantidade || !precoMedio) {
+            return res.status(400).json({ error: 'Moeda, ticker, quantidade e preço médio são obrigatórios.' });
+        }
+
+        const novoInvestimento = await prisma.investimentoCripto.create({
+            data: {
+                usuarioId: req.session.userId,
+                moedaId: String(moedaId).trim().toLowerCase(),
+                ticker: String(ticker).trim().toUpperCase(),
+                nome: nome ? String(nome).trim() : String(ticker).trim().toUpperCase(),
+                categoria: categoria ? String(categoria).trim() : 'Layer 1',
+                quantidade: Number(quantidade) || 0,
+                precoMedio: Number(precoMedio) || 0,
+                observacoes: observacoes ? String(observacoes).trim() : null
+            }
+        });
+
+        res.status(201).json(novoInvestimento);
+    } catch (err) {
+        console.error('Erro ao cadastrar criptomoeda:', err);
+        res.status(500).json({ error: 'Erro ao cadastrar criptomoeda na carteira' });
+    }
+});
+
+/**
+ * ROTA: Atualizar Criptomoeda (Edição ou Aporte de Nova Quantidade)
+ * PUT /api/cripto/:id
+ */
+app.put('/api/cripto/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { moedaId, ticker, nome, categoria, quantidade, precoMedio, observacoes } = req.body;
+
+        const existente = await prisma.investimentoCripto.findFirst({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (!existente) {
+            return res.status(404).json({ error: 'Criptomoeda não encontrada na carteira' });
+        }
+
+        const atualizado = await prisma.investimentoCripto.update({
+            where: { id },
+            data: {
+                moedaId: moedaId ? String(moedaId).trim().toLowerCase() : existente.moedaId,
+                ticker: ticker ? String(ticker).trim().toUpperCase() : existente.ticker,
+                nome: nome ? String(nome).trim() : existente.nome,
+                categoria: categoria ? String(categoria).trim() : existente.categoria,
+                quantidade: quantidade !== undefined ? Number(quantidade) || 0 : existente.quantidade,
+                precoMedio: precoMedio !== undefined ? Number(precoMedio) || 0 : existente.precoMedio,
+                observacoes: observacoes !== undefined ? (observacoes ? String(observacoes).trim() : null) : existente.observacoes
+            }
+        });
+
+        res.json(atualizado);
+    } catch (err) {
+        console.error('Erro ao atualizar criptomoeda:', err);
+        res.status(500).json({ error: 'Erro ao atualizar criptomoeda da carteira' });
+    }
+});
+
+/**
+ * ROTA: Excluir Criptomoeda da Carteira
+ * DELETE /api/cripto/:id
+ */
+app.delete('/api/cripto/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+
+        const resultado = await prisma.investimentoCripto.deleteMany({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (resultado.count === 0) {
+            return res.status(404).json({ error: 'Criptomoeda não encontrada na carteira' });
+        }
+
+        res.json({ success: true, message: 'Criptomoeda removida da carteira com sucesso' });
+    } catch (err) {
+        console.error('Erro ao excluir criptomoeda:', err);
+        res.status(500).json({ error: 'Erro ao excluir criptomoeda da carteira' });
+    }
+});
+
+/**
+ * ROTA: Atualizar Cotações de Mercado de Todas as Criptomoedas da Carteira
+ * POST /api/cripto/atualizar-precos
+ */
+app.post('/api/cripto/atualizar-precos', async (req, res) => {
+    try {
+        const investimentos = await prisma.investimentoCripto.findMany({
+            where: { usuarioId: req.session.userId }
+        });
+
+        if (investimentos.length === 0) {
+            return res.json({ success: true, resultados: [], investimentos: [] });
+        }
+
+        let cotacoes = {};
+        let erroGeral = null;
+        try {
+            cotacoes = await buscarCotacaoCripto(investimentos.map(inv => inv.moedaId));
+        } catch (e) {
+            erroGeral = e.message;
+        }
+
+        const resultados = await Promise.all(investimentos.map(async (inv) => {
+            const preco = cotacoes[inv.moedaId]?.brl;
+            if (typeof preco !== 'number') {
+                return { ticker: inv.ticker, sucesso: false, erro: erroGeral || 'Moeda não encontrada na CoinGecko' };
+            }
+            await prisma.investimentoCripto.update({
+                where: { id: inv.id },
+                data: { precoAtual: preco, precoAtualizadoEm: new Date() }
+            });
+            return { ticker: inv.ticker, sucesso: true, precoAtual: preco };
+        }));
+
+        const listaAtualizada = await prisma.investimentoCripto.findMany({
+            where: { usuarioId: req.session.userId },
+            orderBy: { createdAt: 'desc' }
+        });
+
+        res.json({ success: true, resultados, investimentos: listaAtualizada });
+    } catch (err) {
+        console.error('Erro ao atualizar cotações de criptomoedas:', err);
+        res.status(500).json({ error: 'Erro ao atualizar cotações das criptomoedas' });
     }
 });
 

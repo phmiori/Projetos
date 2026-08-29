@@ -1,0 +1,5 @@
+/* CSS/Cripto/cripto.css */
+/* Estilos do Módulo de Gestão de Criptomoedas */
+/* Reaproveita integralmente os componentes (KPIs, tabela, radar, pills, calculadora) */
+/* já validados no módulo FII, que segue as mesmas variáveis semânticas. */
+@import url('../FII/fii.css');

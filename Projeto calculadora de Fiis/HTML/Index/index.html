@@ -146,6 +146,23 @@
                         </a>
                     </li>
                     <li>
+                        <a href="../Cripto/cripto.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <path d="M9.5 8h3.2a2.3 2.3 0 0 1 0 4.6H9.5"></path>
+                                    <path d="M9.5 12.6h3.6a2.3 2.3 0 0 1 0 4.6H9.5"></path>
+                                    <path d="M9.5 8V6.5"></path>
+                                    <path d="M9.5 17.2v1.5"></path>
+                                    <path d="M12.3 8V6.5"></path>
+                                    <path d="M12.3 17.2v1.5"></path>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Cripto Moedas</span>
+                            <span class="nav-count-badge" id="badgeCriptoCountIndex">0</span>
+                        </a>
+                    </li>
+                    <li>
                         <a href="../Leilao/leilao.html" class="nav-item-btn">
                             <span class="nav-icon">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -328,6 +345,57 @@
                             <footer class="module-card-footer">
                                 <a href="../FII/FundoImobiliário.html" class="btn-open-module">
                                     <span>Acessar Módulo FIIs</span>
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="9 18 15 12 9 6"></polyline>
+                                    </svg>
+                                </a>
+                            </footer>
+                        </article>
+
+                        <!-- Card do Módulo: Cripto Moedas -->
+                        <article class="module-feature-card">
+                            <div class="module-card-header">
+                                <div class="module-icon-wrap">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="12" cy="12" r="10"></circle>
+                                        <path d="M9.5 8h3.2a2.3 2.3 0 0 1 0 4.6H9.5"></path>
+                                        <path d="M9.5 12.6h3.6a2.3 2.3 0 0 1 0 4.6H9.5"></path>
+                                        <path d="M9.5 8V6.5"></path>
+                                        <path d="M9.5 17.2v1.5"></path>
+                                        <path d="M12.3 8V6.5"></path>
+                                        <path d="M12.3 17.2v1.5"></path>
+                                    </svg>
+                                </div>
+                                <div class="module-status-badge badge-active">Módulo Ativo</div>
+                            </div>
+
+                            <div class="module-card-body">
+                                <h3 class="module-title">Cripto Moedas</h3>
+                                <p class="module-desc">Carteira de criptoativos com cotação ao vivo, simulador de aportes mensais e radar de moedas populares.</p>
+
+                                <div class="module-stats-mini-grid">
+                                    <div class="mini-stat">
+                                        <span class="mini-stat-label">Moedas na Carteira</span>
+                                        <strong class="mini-stat-val" id="moduleCriptoCount">0 moedas</strong>
+                                    </div>
+                                    <div class="mini-stat">
+                                        <span class="mini-stat-label">Patrimônio Atual</span>
+                                        <strong class="mini-stat-val" id="moduleCriptoPatrimonio">R$ 0,00</strong>
+                                    </div>
+                                    <div class="mini-stat">
+                                        <span class="mini-stat-label">Custo de Aquisição</span>
+                                        <strong class="mini-stat-val" id="moduleCriptoCusto">R$ 0,00</strong>
+                                    </div>
+                                    <div class="mini-stat">
+                                        <span class="mini-stat-label">Valorização</span>
+                                        <strong class="mini-stat-val text-accent" id="moduleCriptoValorizacao">0.00%</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <footer class="module-card-footer">
+                                <a href="../Cripto/cripto.html" class="btn-open-module">
+                                    <span>Acessar Módulo Cripto</span>
                                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                         <polyline points="9 18 15 12 9 6"></polyline>
                                     </svg>
