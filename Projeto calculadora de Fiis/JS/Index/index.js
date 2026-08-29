@@ -10,6 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initDateDisplay();
     carregarMetricasConsolidadas();
     carregarBadgeCofrinho();
+    carregarBadgeFii();
 });
 
 async function carregarBadgeCofrinho() {
@@ -23,6 +24,44 @@ async function carregarBadgeCofrinho() {
         badge.textContent = cofrinhos.length;
     } catch (err) {
         console.warn('[FinanceHub] Não foi possível carregar o total de cofrinhos.', err.message);
+    }
+}
+
+async function carregarBadgeFii() {
+    const badge = document.getElementById('badgeFiiCountIndex');
+
+    try {
+        const response = await fetch('/api/fii');
+        if (!response.ok) throw new Error('API indisponível');
+        const fundos = await response.json();
+
+        if (badge) badge.textContent = fundos.length;
+
+        let totalInvestido = 0;
+        let totalMercado = 0;
+        let rendaMensalTotal = 0;
+
+        fundos.forEach(item => {
+            const cotas = item.cotas || 0;
+            const precoRef = item.precoAtual != null ? item.precoAtual : item.precoMedio;
+            totalInvestido += cotas * (item.precoMedio || 0);
+            totalMercado += cotas * (precoRef || 0);
+            rendaMensalTotal += cotas * (item.ultimoDividendo || 0);
+        });
+
+        const yieldMedio = totalInvestido > 0 ? (rendaMensalTotal / totalInvestido) * 100 : 0;
+
+        const moduleFiiCount = document.getElementById('moduleFiiCount');
+        const moduleFiiRenda = document.getElementById('moduleFiiRenda');
+        const moduleFiiPatrimonio = document.getElementById('moduleFiiPatrimonio');
+        const moduleFiiYield = document.getElementById('moduleFiiYield');
+
+        if (moduleFiiCount) moduleFiiCount.textContent = `${fundos.length} FIIs`;
+        if (moduleFiiRenda) moduleFiiRenda.textContent = formatarMoeda(rendaMensalTotal);
+        if (moduleFiiPatrimonio) moduleFiiPatrimonio.textContent = formatarMoeda(totalMercado);
+        if (moduleFiiYield) moduleFiiYield.textContent = `${yieldMedio.toFixed(2)}% a.m.`;
+    } catch (err) {
+        console.warn('[FinanceHub] Não foi possível carregar o total de fundos imobiliários.', err.message);
     }
 }
 
