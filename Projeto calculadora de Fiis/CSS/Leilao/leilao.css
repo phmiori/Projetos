@@ -239,6 +239,13 @@
     flex-grow: 1;
 }
 
+/* Usada no primeiro grupo de navegação quando há mais de um Hub na sidebar
+   (ex: Hub Financeiro + Hub Pessoal): evita que esse grupo "estique" e afaste
+   os grupos seguintes — o espaço flexível fica só no último grupo. */
+.sidebar-nav-compact {
+    flex-grow: 0;
+}
+
 .nav-list {
     list-style: none;
     display: flex;

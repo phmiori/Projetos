@@ -1,0 +1,470 @@
+/* CSS/Clima/clima.css */
+/* Estilos do Módulo Clima (Hub Pessoal): busca de localização, clima atual e previsões */
+
+/* ========================================================= */
+/* BARRA DE BUSCA DE LOCALIZAÇÃO */
+/* ========================================================= */
+.clima-search-panel {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.clima-search-input-wrap {
+    position: relative;
+    flex: 1 1 280px;
+    min-width: 0;
+}
+
+.clima-search-input {
+    width: 100%;
+}
+
+.clima-search-results {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+    z-index: 500;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.clima-search-results.open {
+    display: block;
+}
+
+.clima-search-result-item {
+    display: flex;
+    flex-direction: column;
+    padding: 10px 14px;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.clima-search-result-item:hover {
+    background-color: var(--bg-main);
+}
+
+.clima-search-result-nome {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.clima-search-result-meta {
+    font-size: 0.78rem;
+    color: var(--text-sub);
+}
+
+.clima-search-empty {
+    padding: 14px;
+    text-align: center;
+    font-size: 0.85rem;
+    color: var(--text-sub);
+}
+
+.clima-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 18px;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-button);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    white-space: nowrap;
+}
+
+.clima-btn-secondary:hover {
+    border-color: var(--accent-color);
+    color: var(--accent-color);
+}
+
+.clima-section-title {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.clima-recent-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.clima-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background-color: var(--bg-surface);
+    color: var(--text-sub);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.clima-chip:hover {
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+/* ========================================================= */
+/* LOCAIS SALVOS */
+/* ========================================================= */
+.clima-saved-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.clima-saved-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 12px;
+}
+
+.clima-saved-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 16px 10px 12px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.clima-saved-card:hover {
+    border-color: var(--accent-color);
+    transform: translateY(-2px);
+}
+
+.clima-saved-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: var(--text-sub);
+    border: none;
+    border-radius: 50%;
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.clima-saved-remove:hover {
+    background-color: var(--bg-main);
+    color: var(--color-expense);
+}
+
+.clima-saved-icon {
+    font-size: 1.8rem;
+}
+
+.clima-saved-temp {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.clima-saved-nome {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--text-sub);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+}
+
+/* Botão de Salvar/Remover o Local Atual (estrela) */
+.clima-current-header-title {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+}
+
+.clima-save-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    background-color: transparent;
+    border: none;
+    color: var(--text-sub);
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.clima-save-btn:hover {
+    color: var(--accent-color);
+}
+
+.clima-save-btn.is-saved .clima-star-icon {
+    fill: var(--accent-color);
+    stroke: var(--accent-color);
+}
+
+.clima-status-msg {
+    padding: 14px 18px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    color: var(--text-sub);
+    font-size: 0.9rem;
+}
+
+.clima-status-msg.is-error {
+    border-color: var(--color-expense);
+    color: var(--color-expense);
+}
+
+/* ========================================================= */
+/* CARD PRINCIPAL DO CLIMA ATUAL */
+/* ========================================================= */
+.clima-current-card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.clima-current-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.clima-location-name {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.clima-location-meta {
+    display: block;
+    font-size: 0.85rem;
+    color: var(--text-sub);
+    margin-top: 2px;
+}
+
+.clima-updated-at {
+    font-size: 0.78rem;
+    color: var(--text-sub);
+    white-space: nowrap;
+}
+
+.clima-current-main {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.clima-current-icon {
+    font-size: 4.5rem;
+    line-height: 1;
+}
+
+.clima-current-temp-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.clima-current-temp {
+    font-size: 3.2rem;
+    font-weight: 800;
+    color: var(--text-main);
+    line-height: 1;
+}
+
+.clima-current-desc {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-sub);
+    text-transform: capitalize;
+}
+
+.clima-current-meta-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 14px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+
+.clima-meta-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.clima-meta-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-sub);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.clima-meta-val {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+/* ========================================================= */
+/* PREVISÃO HORÁRIA */
+/* ========================================================= */
+.clima-hourly-section, .clima-daily-section {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.clima-hourly-scroll {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 4px;
+}
+
+.clima-hourly-card {
+    flex: 0 0 auto;
+    width: 84px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 8px;
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-button);
+}
+
+.clima-hourly-hora {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-sub);
+}
+
+.clima-hourly-icon {
+    font-size: 1.6rem;
+}
+
+.clima-hourly-temp {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.clima-hourly-precip {
+    font-size: 0.7rem;
+    color: var(--accent-color);
+    font-weight: 600;
+}
+
+/* ========================================================= */
+/* PREVISÃO DIÁRIA */
+/* ========================================================= */
+.clima-daily-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 12px;
+}
+
+.clima-daily-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 16px 10px;
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-button);
+    text-align: center;
+}
+
+.clima-daily-card.is-today {
+    border-color: var(--accent-color);
+}
+
+.clima-daily-dia {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-main);
+    text-transform: capitalize;
+}
+
+.clima-daily-icon {
+    font-size: 2rem;
+}
+
+.clima-daily-precip {
+    font-size: 0.72rem;
+    color: var(--accent-color);
+    font-weight: 600;
+}
+
+.clima-daily-temps {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.88rem;
+}
+
+.clima-daily-max {
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.clima-daily-min {
+    color: var(--text-sub);
+}
+
+/* ========================================================= */
+/* RESPONSIVIDADE */
+/* ========================================================= */
+@media (max-width: 768px) {
+    .clima-search-panel { flex-direction: column; align-items: stretch; }
+    .clima-current-icon { font-size: 3.5rem; }
+    .clima-current-temp { font-size: 2.4rem; }
+}

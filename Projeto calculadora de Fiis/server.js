@@ -134,8 +134,8 @@ app.put('/api/auth/senha', requireAuth, async (req, res) => {
     }
 });
 
-// Protege as rotas de dados dos módulos de Leilão, Imóveis, FII, Cripto e Cofrinho: exige login
-app.use(['/api/dashboard', '/api/veiculos', '/api/imoveis', '/api/fii', '/api/cripto', '/api/cofrinhos'], requireAuth);
+// Protege as rotas de dados dos módulos de Leilão, Imóveis, FII, Cripto, Cofrinho, Calendário, Notificações, Clima e Finanças & Casa: exige login
+app.use(['/api/dashboard', '/api/veiculos', '/api/imoveis', '/api/fii', '/api/cripto', '/api/cofrinhos', '/api/eventos', '/api/notificacoes', '/api/clima', '/api/casa'], requireAuth);
 
 /**
  * Função utilitária para cálculo automático de totais, lucro e ROI
@@ -1505,6 +1505,663 @@ app.delete('/api/cofrinhos/:id', async (req, res) => {
     } catch (err) {
         console.error('Erro ao excluir cofrinho:', err);
         res.status(500).json({ error: 'Erro ao excluir cofrinho' });
+    }
+});
+
+/**
+ * ROTA: Listar Eventos do Calendário do Usuário Logado (opcionalmente filtrado por período)
+ * GET /api/eventos?inicio=ISO&fim=ISO
+ */
+app.get('/api/eventos', async (req, res) => {
+    try {
+        const { inicio, fim } = req.query;
+        const where = { usuarioId: req.session.userId };
+
+        if (inicio && fim) {
+            where.inicio = { lte: new Date(fim) };
+            where.fim = { gte: new Date(inicio) };
+        }
+
+        const eventos = await prisma.evento.findMany({
+            where,
+            orderBy: { inicio: 'asc' }
+        });
+
+        res.json(eventos);
+    } catch (err) {
+        console.error('Erro ao listar eventos:', err);
+        res.status(500).json({ error: 'Erro ao buscar eventos do calendário' });
+    }
+});
+
+/**
+ * ROTA: Cadastrar Novo Evento no Calendário
+ * POST /api/eventos
+ */
+app.post('/api/eventos', async (req, res) => {
+    try {
+        const { titulo, descricao, local, inicio, fim, diaTodo, cor, lembreteMinutos } = req.body;
+
+        if (!titulo || !inicio || !fim) {
+            return res.status(400).json({ error: 'Título, início e fim são obrigatórios.' });
+        }
+
+        const novoEvento = await prisma.evento.create({
+            data: {
+                usuarioId: req.session.userId,
+                titulo: String(titulo).trim(),
+                descricao: descricao ? String(descricao).trim() : null,
+                local: local ? String(local).trim() : null,
+                inicio: new Date(inicio),
+                fim: new Date(fim),
+                diaTodo: Boolean(diaTodo),
+                cor: cor ? String(cor).trim() : '#EEBB00',
+                lembreteMinutos: lembreteMinutos !== undefined && lembreteMinutos !== null && lembreteMinutos !== ''
+                    ? parseInt(lembreteMinutos, 10) : null
+            }
+        });
+
+        res.status(201).json(novoEvento);
+    } catch (err) {
+        console.error('Erro ao cadastrar evento:', err);
+        res.status(500).json({ error: 'Erro ao cadastrar evento' });
+    }
+});
+
+/**
+ * ROTA: Atualizar Evento do Calendário
+ * PUT /api/eventos/:id
+ */
+app.put('/api/eventos/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { titulo, descricao, local, inicio, fim, diaTodo, cor, lembreteMinutos } = req.body;
+
+        const existente = await prisma.evento.findFirst({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (!existente) {
+            return res.status(404).json({ error: 'Evento não encontrado' });
+        }
+
+        const atualizado = await prisma.evento.update({
+            where: { id },
+            data: {
+                titulo: titulo ? String(titulo).trim() : existente.titulo,
+                descricao: descricao !== undefined ? (descricao ? String(descricao).trim() : null) : existente.descricao,
+                local: local !== undefined ? (local ? String(local).trim() : null) : existente.local,
+                inicio: inicio ? new Date(inicio) : existente.inicio,
+                fim: fim ? new Date(fim) : existente.fim,
+                diaTodo: diaTodo !== undefined ? Boolean(diaTodo) : existente.diaTodo,
+                cor: cor ? String(cor).trim() : existente.cor,
+                lembreteMinutos: lembreteMinutos !== undefined
+                    ? (lembreteMinutos === null || lembreteMinutos === '' ? null : parseInt(lembreteMinutos, 10))
+                    : existente.lembreteMinutos
+            }
+        });
+
+        res.json(atualizado);
+    } catch (err) {
+        console.error('Erro ao atualizar evento:', err);
+        res.status(500).json({ error: 'Erro ao atualizar evento' });
+    }
+});
+
+/**
+ * ROTA: Excluir Evento do Calendário
+ * DELETE /api/eventos/:id
+ */
+app.delete('/api/eventos/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+
+        const resultado = await prisma.evento.deleteMany({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (resultado.count === 0) {
+            return res.status(404).json({ error: 'Evento não encontrado' });
+        }
+
+        res.json({ success: true, message: 'Evento excluído com sucesso' });
+    } catch (err) {
+        console.error('Erro ao excluir evento:', err);
+        res.status(500).json({ error: 'Erro ao excluir evento' });
+    }
+});
+
+/**
+ * Identifica o nome de um local a partir de coordenadas (geolocalização do navegador)
+ * usando a API pública e gratuita BigDataCloud (sem necessidade de chave de API)
+ */
+async function buscarNomeLocalPorCoordenadas(lat, lon) {
+    const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&localityLanguage=pt`;
+    const response = await fetch(url);
+
+    if (!response.ok) {
+        throw new Error('Não foi possível identificar o local');
+    }
+
+    const data = await response.json();
+
+    return {
+        nome: data.locality || data.city || data.principalSubdivision || 'Local Atual',
+        cidade: data.city || data.locality || null,
+        estado: data.principalSubdivision || null,
+        pais: data.countryName || null
+    };
+}
+
+/**
+ * ROTA: Identificar Local a partir de Coordenadas (Geolocalização do Navegador)
+ * GET /api/clima/local-atual?lat=&lon=
+ */
+app.get('/api/clima/local-atual', async (req, res) => {
+    try {
+        const { lat, lon } = req.query;
+        if (!lat || !lon) {
+            return res.status(400).json({ error: 'Latitude e longitude são obrigatórias.' });
+        }
+
+        const local = await buscarNomeLocalPorCoordenadas(lat, lon);
+        res.json(local);
+    } catch (err) {
+        console.error('Erro ao identificar local atual:', err);
+        res.status(500).json({ error: 'Erro ao identificar o local atual' });
+    }
+});
+
+/**
+ * ROTA: Buscar Localidades (Cidade ou Bairro) por Nome via Open-Meteo Geocoding
+ * GET /api/clima/buscar-local?query=
+ */
+app.get('/api/clima/buscar-local', async (req, res) => {
+    try {
+        const { query } = req.query;
+        if (!query || String(query).trim().length < 2) {
+            return res.status(400).json({ error: 'Digite ao menos 2 caracteres para buscar.' });
+        }
+
+        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(String(query).trim())}&count=8&language=pt&format=json`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error('Serviço de busca indisponível');
+        }
+
+        const data = await response.json();
+        const resultados = (data.results || []).map(r => ({
+            nome: r.name,
+            estado: r.admin1 || null,
+            pais: r.country || null,
+            lat: r.latitude,
+            lon: r.longitude
+        }));
+
+        res.json(resultados);
+    } catch (err) {
+        console.error('Erro ao buscar local:', err);
+        res.status(500).json({ error: 'Erro ao buscar localidades' });
+    }
+});
+
+/**
+ * ROTA: Previsão do Tempo Atual, Horária e Diária via Open-Meteo (sem necessidade de chave de API)
+ * GET /api/clima/previsao?lat=&lon=
+ */
+app.get('/api/clima/previsao', async (req, res) => {
+    try {
+        const { lat, lon } = req.query;
+        if (!lat || !lon) {
+            return res.status(400).json({ error: 'Latitude e longitude são obrigatórias.' });
+        }
+
+        const params = new URLSearchParams({
+            latitude: lat,
+            longitude: lon,
+            current: 'temperature_2m,relative_humidity_2m,apparent_temperature,is_day,precipitation,weather_code,wind_speed_10m',
+            hourly: 'temperature_2m,weather_code,precipitation_probability',
+            daily: 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset',
+            timezone: 'auto',
+            forecast_days: '7'
+        });
+
+        const url = `https://api.open-meteo.com/v1/forecast?${params.toString()}`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error('Serviço de previsão indisponível');
+        }
+
+        const data = await response.json();
+        res.json(data);
+    } catch (err) {
+        console.error('Erro ao buscar previsão do tempo:', err);
+        res.status(500).json({ error: 'Erro ao buscar a previsão do tempo' });
+    }
+});
+
+/**
+ * ROTA: Listar Locais de Clima Salvos do Usuário Logado
+ * GET /api/clima/salvos
+ */
+app.get('/api/clima/salvos', async (req, res) => {
+    try {
+        const locais = await prisma.localClimaSalvo.findMany({
+            where: { usuarioId: req.session.userId },
+            orderBy: { createdAt: 'asc' }
+        });
+        res.json(locais);
+    } catch (err) {
+        console.error('Erro ao listar locais salvos:', err);
+        res.status(500).json({ error: 'Erro ao buscar locais salvos' });
+    }
+});
+
+/**
+ * ROTA: Salvar Novo Local de Clima
+ * POST /api/clima/salvos
+ */
+app.post('/api/clima/salvos', async (req, res) => {
+    try {
+        const { nome, estado, pais, lat, lon } = req.body;
+        if (!nome || lat === undefined || lon === undefined) {
+            return res.status(400).json({ error: 'Nome, latitude e longitude são obrigatórios.' });
+        }
+
+        const novoLocal = await prisma.localClimaSalvo.create({
+            data: {
+                usuarioId: req.session.userId,
+                nome: String(nome).trim(),
+                estado: estado ? String(estado).trim() : null,
+                pais: pais ? String(pais).trim() : null,
+                lat: Number(lat),
+                lon: Number(lon)
+            }
+        });
+
+        res.status(201).json(novoLocal);
+    } catch (err) {
+        console.error('Erro ao salvar local:', err);
+        res.status(500).json({ error: 'Erro ao salvar local' });
+    }
+});
+
+/**
+ * ROTA: Remover Local de Clima Salvo
+ * DELETE /api/clima/salvos/:id
+ */
+app.delete('/api/clima/salvos/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+
+        const resultado = await prisma.localClimaSalvo.deleteMany({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (resultado.count === 0) {
+            return res.status(404).json({ error: 'Local não encontrado' });
+        }
+
+        res.json({ success: true, message: 'Local removido com sucesso' });
+    } catch (err) {
+        console.error('Erro ao remover local salvo:', err);
+        res.status(500).json({ error: 'Erro ao remover local salvo' });
+    }
+});
+
+/**
+ * ROTA: Listar Gastos da Casa (opcionalmente filtrado por mês/ano/categoria)
+ * GET /api/casa/gastos?mes=&ano=&categoria=
+ */
+app.get('/api/casa/gastos', async (req, res) => {
+    try {
+        const { mes, ano, categoria } = req.query;
+        const where = { usuarioId: req.session.userId };
+
+        if (categoria && categoria !== 'Todas') {
+            where.categoria = categoria;
+        }
+        if (mes && ano) {
+            const inicio = new Date(Number(ano), Number(mes) - 1, 1);
+            const fim = new Date(Number(ano), Number(mes), 0, 23, 59, 59, 999);
+            where.data = { gte: inicio, lte: fim };
+        }
+
+        const gastos = await prisma.gastoCasa.findMany({ where, orderBy: { data: 'desc' } });
+        res.json(gastos);
+    } catch (err) {
+        console.error('Erro ao listar gastos da casa:', err);
+        res.status(500).json({ error: 'Erro ao buscar gastos da casa' });
+    }
+});
+
+/**
+ * ROTA: Cadastrar Gasto da Casa
+ * POST /api/casa/gastos
+ */
+app.post('/api/casa/gastos', async (req, res) => {
+    try {
+        const { categoria, descricao, valor, data, recorrente } = req.body;
+        if (!categoria || !descricao || valor === undefined) {
+            return res.status(400).json({ error: 'Categoria, descrição e valor são obrigatórios.' });
+        }
+
+        const novoGasto = await prisma.gastoCasa.create({
+            data: {
+                usuarioId: req.session.userId,
+                categoria: String(categoria).trim(),
+                descricao: String(descricao).trim(),
+                valor: Number(valor) || 0,
+                data: data ? new Date(data) : new Date(),
+                recorrente: Boolean(recorrente)
+            }
+        });
+
+        res.status(201).json(novoGasto);
+    } catch (err) {
+        console.error('Erro ao cadastrar gasto da casa:', err);
+        res.status(500).json({ error: 'Erro ao cadastrar gasto da casa' });
+    }
+});
+
+/**
+ * ROTA: Atualizar Gasto da Casa
+ * PUT /api/casa/gastos/:id
+ */
+app.put('/api/casa/gastos/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { categoria, descricao, valor, data, recorrente } = req.body;
+
+        const existente = await prisma.gastoCasa.findFirst({ where: { id, usuarioId: req.session.userId } });
+        if (!existente) return res.status(404).json({ error: 'Gasto não encontrado' });
+
+        const atualizado = await prisma.gastoCasa.update({
+            where: { id },
+            data: {
+                categoria: categoria ? String(categoria).trim() : existente.categoria,
+                descricao: descricao ? String(descricao).trim() : existente.descricao,
+                valor: valor !== undefined ? Number(valor) || 0 : existente.valor,
+                data: data ? new Date(data) : existente.data,
+                recorrente: recorrente !== undefined ? Boolean(recorrente) : existente.recorrente
+            }
+        });
+
+        res.json(atualizado);
+    } catch (err) {
+        console.error('Erro ao atualizar gasto da casa:', err);
+        res.status(500).json({ error: 'Erro ao atualizar gasto da casa' });
+    }
+});
+
+/**
+ * ROTA: Excluir Gasto da Casa
+ * DELETE /api/casa/gastos/:id
+ */
+app.delete('/api/casa/gastos/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const resultado = await prisma.gastoCasa.deleteMany({ where: { id, usuarioId: req.session.userId } });
+        if (resultado.count === 0) return res.status(404).json({ error: 'Gasto não encontrado' });
+        res.json({ success: true, message: 'Gasto excluído com sucesso' });
+    } catch (err) {
+        console.error('Erro ao excluir gasto da casa:', err);
+        res.status(500).json({ error: 'Erro ao excluir gasto da casa' });
+    }
+});
+
+/**
+ * ROTA: Listar Itens da Despensa
+ * GET /api/casa/despensa
+ */
+app.get('/api/casa/despensa', async (req, res) => {
+    try {
+        const itens = await prisma.itemDespensa.findMany({
+            where: { usuarioId: req.session.userId },
+            orderBy: { nome: 'asc' }
+        });
+        res.json(itens);
+    } catch (err) {
+        console.error('Erro ao listar itens da despensa:', err);
+        res.status(500).json({ error: 'Erro ao buscar itens da despensa' });
+    }
+});
+
+/**
+ * ROTA: Cadastrar Item da Despensa
+ * POST /api/casa/despensa
+ */
+app.post('/api/casa/despensa', async (req, res) => {
+    try {
+        const { nome, categoria, quantidade, unidade, quantidadeMinima, ultimaCompra } = req.body;
+        if (!nome) {
+            return res.status(400).json({ error: 'Nome é obrigatório.' });
+        }
+
+        const novoItem = await prisma.itemDespensa.create({
+            data: {
+                usuarioId: req.session.userId,
+                nome: String(nome).trim(),
+                categoria: categoria ? String(categoria).trim() : 'Outros',
+                quantidade: Number(quantidade) || 0,
+                unidade: unidade ? String(unidade).trim() : 'un',
+                quantidadeMinima: Number(quantidadeMinima) || 0,
+                ultimaCompra: ultimaCompra ? new Date(ultimaCompra) : null
+            }
+        });
+
+        res.status(201).json(novoItem);
+    } catch (err) {
+        console.error('Erro ao cadastrar item da despensa:', err);
+        res.status(500).json({ error: 'Erro ao cadastrar item da despensa' });
+    }
+});
+
+/**
+ * ROTA: Atualizar Item da Despensa
+ * PUT /api/casa/despensa/:id
+ */
+app.put('/api/casa/despensa/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { nome, categoria, quantidade, unidade, quantidadeMinima, ultimaCompra } = req.body;
+
+        const existente = await prisma.itemDespensa.findFirst({ where: { id, usuarioId: req.session.userId } });
+        if (!existente) return res.status(404).json({ error: 'Item não encontrado' });
+
+        const atualizado = await prisma.itemDespensa.update({
+            where: { id },
+            data: {
+                nome: nome ? String(nome).trim() : existente.nome,
+                categoria: categoria ? String(categoria).trim() : existente.categoria,
+                quantidade: quantidade !== undefined ? Number(quantidade) || 0 : existente.quantidade,
+                unidade: unidade ? String(unidade).trim() : existente.unidade,
+                quantidadeMinima: quantidadeMinima !== undefined ? Number(quantidadeMinima) || 0 : existente.quantidadeMinima,
+                ultimaCompra: ultimaCompra !== undefined ? (ultimaCompra ? new Date(ultimaCompra) : null) : existente.ultimaCompra
+            }
+        });
+
+        res.json(atualizado);
+    } catch (err) {
+        console.error('Erro ao atualizar item da despensa:', err);
+        res.status(500).json({ error: 'Erro ao atualizar item da despensa' });
+    }
+});
+
+/**
+ * ROTA: Excluir Item da Despensa
+ * DELETE /api/casa/despensa/:id
+ */
+app.delete('/api/casa/despensa/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const resultado = await prisma.itemDespensa.deleteMany({ where: { id, usuarioId: req.session.userId } });
+        if (resultado.count === 0) return res.status(404).json({ error: 'Item não encontrado' });
+        res.json({ success: true, message: 'Item excluído com sucesso' });
+    } catch (err) {
+        console.error('Erro ao excluir item da despensa:', err);
+        res.status(500).json({ error: 'Erro ao excluir item da despensa' });
+    }
+});
+
+/**
+ * ROTA: Listar Tarefas & Manutenção da Casa
+ * GET /api/casa/tarefas
+ */
+app.get('/api/casa/tarefas', async (req, res) => {
+    try {
+        const tarefas = await prisma.tarefaCasa.findMany({
+            where: { usuarioId: req.session.userId },
+            orderBy: [{ status: 'asc' }, { dataPrevista: 'asc' }]
+        });
+        res.json(tarefas);
+    } catch (err) {
+        console.error('Erro ao listar tarefas da casa:', err);
+        res.status(500).json({ error: 'Erro ao buscar tarefas da casa' });
+    }
+});
+
+/**
+ * ROTA: Cadastrar Tarefa & Manutenção da Casa
+ * POST /api/casa/tarefas
+ */
+app.post('/api/casa/tarefas', async (req, res) => {
+    try {
+        const { titulo, descricao, categoria, prioridade, status, dataPrevista, custoEstimado, custoReal } = req.body;
+        if (!titulo) {
+            return res.status(400).json({ error: 'Título é obrigatório.' });
+        }
+
+        const novaTarefa = await prisma.tarefaCasa.create({
+            data: {
+                usuarioId: req.session.userId,
+                titulo: String(titulo).trim(),
+                descricao: descricao ? String(descricao).trim() : null,
+                categoria: categoria ? String(categoria).trim() : 'Manutenção',
+                prioridade: prioridade ? String(prioridade).trim() : 'Média',
+                status: status ? String(status).trim() : 'Pendente',
+                dataPrevista: dataPrevista ? new Date(dataPrevista) : null,
+                custoEstimado: custoEstimado !== undefined && custoEstimado !== '' ? Number(custoEstimado) : null,
+                custoReal: custoReal !== undefined && custoReal !== '' ? Number(custoReal) : null,
+                concluidaEm: status === 'Concluída' ? new Date() : null
+            }
+        });
+
+        res.status(201).json(novaTarefa);
+    } catch (err) {
+        console.error('Erro ao cadastrar tarefa da casa:', err);
+        res.status(500).json({ error: 'Erro ao cadastrar tarefa da casa' });
+    }
+});
+
+/**
+ * ROTA: Atualizar Tarefa & Manutenção da Casa
+ * Quando a tarefa é marcada como Concluída com um custo real e a flag
+ * "lancarComoGasto" é enviada, um lançamento correspondente é criado
+ * automaticamente em Gastos da Casa (categoria da própria tarefa).
+ * PUT /api/casa/tarefas/:id
+ */
+app.put('/api/casa/tarefas/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { titulo, descricao, categoria, prioridade, status, dataPrevista, custoEstimado, custoReal, lancarComoGasto } = req.body;
+
+        const existente = await prisma.tarefaCasa.findFirst({ where: { id, usuarioId: req.session.userId } });
+        if (!existente) return res.status(404).json({ error: 'Tarefa não encontrada' });
+
+        const novoStatus = status ? String(status).trim() : existente.status;
+        const foiConcluidaAgora = novoStatus === 'Concluída' && existente.status !== 'Concluída';
+        const novoCustoReal = custoReal !== undefined && custoReal !== '' ? Number(custoReal) : existente.custoReal;
+
+        const atualizado = await prisma.tarefaCasa.update({
+            where: { id },
+            data: {
+                titulo: titulo ? String(titulo).trim() : existente.titulo,
+                descricao: descricao !== undefined ? (descricao ? String(descricao).trim() : null) : existente.descricao,
+                categoria: categoria ? String(categoria).trim() : existente.categoria,
+                prioridade: prioridade ? String(prioridade).trim() : existente.prioridade,
+                status: novoStatus,
+                dataPrevista: dataPrevista !== undefined ? (dataPrevista ? new Date(dataPrevista) : null) : existente.dataPrevista,
+                custoEstimado: custoEstimado !== undefined ? (custoEstimado !== '' ? Number(custoEstimado) : null) : existente.custoEstimado,
+                custoReal: novoCustoReal,
+                concluidaEm: novoStatus === 'Concluída' ? (existente.concluidaEm || new Date()) : null
+            }
+        });
+
+        if (foiConcluidaAgora && lancarComoGasto && novoCustoReal) {
+            await prisma.gastoCasa.create({
+                data: {
+                    usuarioId: req.session.userId,
+                    categoria: atualizado.categoria,
+                    descricao: `Tarefa concluída: ${atualizado.titulo}`,
+                    valor: novoCustoReal,
+                    data: new Date(),
+                    recorrente: false
+                }
+            });
+        }
+
+        res.json(atualizado);
+    } catch (err) {
+        console.error('Erro ao atualizar tarefa da casa:', err);
+        res.status(500).json({ error: 'Erro ao atualizar tarefa da casa' });
+    }
+});
+
+/**
+ * ROTA: Excluir Tarefa & Manutenção da Casa
+ * DELETE /api/casa/tarefas/:id
+ */
+app.delete('/api/casa/tarefas/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const resultado = await prisma.tarefaCasa.deleteMany({ where: { id, usuarioId: req.session.userId } });
+        if (resultado.count === 0) return res.status(404).json({ error: 'Tarefa não encontrada' });
+        res.json({ success: true, message: 'Tarefa excluída com sucesso' });
+    } catch (err) {
+        console.error('Erro ao excluir tarefa da casa:', err);
+        res.status(500).json({ error: 'Erro ao excluir tarefa da casa' });
+    }
+});
+
+/**
+ * ROTA: Notificações Pendentes (sino do cabeçalho)
+ * Retorna os eventos cujo lembrete configurado já está dentro da janela de aviso
+ * (do horário do lembrete até o término do evento), para alertar o usuário.
+ * GET /api/notificacoes
+ */
+app.get('/api/notificacoes', async (req, res) => {
+    try {
+        const agora = new Date();
+        const limiteFuturo = new Date(agora.getTime() + 24 * 60 * 60 * 1000);
+
+        const eventos = await prisma.evento.findMany({
+            where: {
+                usuarioId: req.session.userId,
+                lembreteMinutos: { not: null },
+                fim: { gte: agora },
+                inicio: { lte: limiteFuturo }
+            },
+            orderBy: { inicio: 'asc' }
+        });
+
+        const notificacoes = eventos
+            .filter(ev => {
+                const horarioLembrete = new Date(ev.inicio.getTime() - (ev.lembreteMinutos || 0) * 60 * 1000);
+                return agora >= horarioLembrete;
+            })
+            .map(ev => ({
+                id: ev.id,
+                titulo: ev.titulo,
+                local: ev.local,
+                inicio: ev.inicio,
+                fim: ev.fim,
+                diaTodo: ev.diaTodo,
+                cor: ev.cor,
+                emAndamento: agora >= ev.inicio && agora <= ev.fim
+            }));
+
+        res.json(notificacoes);
+    } catch (err) {
+        console.error('Erro ao buscar notificações:', err);
+        res.status(500).json({ error: 'Erro ao buscar notificações' });
     }
 });
 

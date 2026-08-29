@@ -40,3 +40,38 @@
 - [x] KPIs consolidados (Total Guardado, Renda Diária Atual, Rendimento Acumulado, Saldo Líquido Hoje) e modal de **Projeção automática de 30 dias** (saldo bruto, IOF e IR em % e R$, saldo líquido por dia, com destaque no dia atual e nos dias sem renda)
 - [x] Integração da navegação (sidebar) nos módulos Index, FII e Leilão, e badge de contagem na Visão Geral
 
+## 🧭 Hub Pessoal (novo agrupamento na Sidebar, separado do Hub Financeiro)
+- [x] Criada a seção "Hub Pessoal" na barra lateral de todos os módulos, abaixo do Hub Financeiro (sem módulo de Visão Geral próprio)
+
+## 📅 Módulo Calendário (Hub Pessoal)
+- [x] Novo módulo dedicado: `HTML/Calendario/calendario.html`, `CSS/Calendario/calendario.css` e `JS/Calendario/calendario.js`, com modelo `Evento` no Prisma vinculado ao usuário e API REST própria (`GET/POST/PUT/DELETE /api/eventos`)
+- [x] Visões interativas de Mês, Semana e Dia (estilo Google Calendar), com navegação Hoje/Anterior/Próximo
+- [x] Criação de evento por clique no dia (mês) ou no horário (semana/dia), edição/exclusão ao clicar em um evento existente
+- [x] Suporte a eventos de dia inteiro, local, descrição, cor personalizável e linha indicadora do horário atual na grade
+- [x] Campo de lembrete (nenhum, no horário, 10min/30min/1h/1dia antes) usado pelo sino de notificações
+
+## 🔔 Módulo Notificação (sino do cabeçalho, compartilhado por todos os módulos)
+- [x] Novo módulo dedicado: `HTML/Notificacao/notificacao.html` (Central de Notificações), `CSS/Notificacao/notificacao.css` e `JS/Notificacao/notificacao.js`
+- [x] Endpoint próprio no backend (`GET /api/notificacoes`) que calcula os lembretes de eventos do Calendário já dentro da janela de aviso configurada
+- [x] Sino no cabeçalho com contador de não vistas (persistido no navegador) presente em todos os módulos do Hub, com dropdown de notificações recentes e link para a Central de Notificações
+- [x] Verificação automática a cada 60 segundos
+
+> ⚠️ Pendência manual: rodar `npm run prisma:push` (com o servidor Node parado, para evitar o erro EPERM de arquivo em uso no Windows) para criar as tabelas `Evento`, `LocalClimaSalvo`, `GastoCasa`, `ItemDespensa` e `TarefaCasa` no banco SQLite local antes de usar os módulos Calendário/Notificação, Locais Salvos do Clima e Finanças & Casa.
+
+## 🌤️ Módulo Clima (Hub Pessoal)
+- [x] Novo módulo dedicado: `HTML/Clima/clima.html`, `CSS/Clima/clima.css` e `JS/Clima/clima.js` — sem necessidade de tabela no banco (dados sempre em tempo real via APIs públicas e gratuitas, sem chave de API)
+- [x] Detecção automática da localização atual via geolocalização do navegador, com identificação do nome do local pela API BigDataCloud (`GET /api/clima/local-atual`)
+- [x] Busca manual de qualquer cidade ou bairro via Open-Meteo Geocoding (`GET /api/clima/buscar-local`), com dropdown de resultados e chips de locais buscados recentemente (salvos no navegador)
+- [x] Clima atual (temperatura, sensação térmica, umidade, vento, mín/máx do dia) e previsões horária (24h) e diária (7 dias) via Open-Meteo (`GET /api/clima/previsao`)
+- [x] Fallback automático para o último local buscado quando a geolocalização é negada ou indisponível
+- [x] Integração da navegação (sidebar) no Hub Pessoal de todos os módulos
+- [x] Locais Salvos persistentes: modelo `LocalClimaSalvo` no Prisma vinculado ao usuário, com API REST própria (`GET/POST/DELETE /api/clima/salvos`) — botão de estrela no card do clima atual para salvar/remover, e seção "Meus Locais Salvos" (com mini-previsão de cada um) sempre visível ao entrar no módulo
+
+## 🏠 Módulo Finanças & Casa (Hub Pessoal)
+- [x] Novo módulo dedicado: `HTML/FinancasCasa/financascasa.html`, `CSS/FinancasCasa/financascasa.css` e `JS/FinancasCasa/financascasa.js`, com 3 sub-abas (padrão de sub-navegação já usado no módulo FII)
+- [x] **Aba Gastos da Casa**: modelo `GastoCasa` no Prisma, API REST própria (`GET/POST/PUT/DELETE /api/casa/gastos`), categorias (Manutenção, Energia Elétrica, Água, Internet, Compra do Mês, Outros), filtro por categoria, marcação de gasto recorrente e KPIs (gasto no mês, categoria com maior gasto, total acumulado)
+- [x] **Aba Despensa**: modelo `ItemDespensa` no Prisma, API REST própria (`GET/POST/PUT/DELETE /api/casa/despensa`), controle de quantidade/unidade/quantidade mínima com destaque visual e KPI de itens em **Estoque Baixo**
+- [x] **Aba Tarefas & Manutenção**: modelo `TarefaCasa` no Prisma, API REST própria (`GET/POST/PUT/DELETE /api/casa/tarefas`), com categoria, prioridade, status (Pendente/Em Andamento/Concluída), data prevista, custo estimado/real e descrição — cobre casos como "conserto de ar-condicionado"
+- [x] Integração entre Tarefas e Gastos: ao concluir uma tarefa com a opção "lançar como gasto" marcada, o custo real é automaticamente registrado em Gastos da Casa (rota `PUT /api/casa/tarefas/:id`)
+- [x] Integração da navegação (sidebar) no Hub Pessoal de todos os módulos
+

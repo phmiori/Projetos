@@ -70,9 +70,101 @@ model Usuario {
   investimentosFII InvestimentoFII[]
   investimentosCripto InvestimentoCripto[]
   cofrinhos   Cofrinho[]
+  eventos     Evento[]
+  locaisClimaSalvos LocalClimaSalvo[]
+  gastosCasa    GastoCasa[]
+  itensDespensa ItemDespensa[]
+  tarefasCasa   TarefaCasa[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model GastoCasa {
+  id          Int       @id @default(autoincrement())
+
+  usuarioId   Int
+  usuario     Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  categoria   String    // Manutenção, Energia Elétrica, Água, Internet, Compra do Mês, Outros
+  descricao   String
+  valor       Float     @default(0)
+  data        DateTime  @default(now())
+  recorrente  Boolean   @default(false)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model ItemDespensa {
+  id               Int       @id @default(autoincrement())
+
+  usuarioId        Int
+  usuario          Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  nome             String
+  categoria        String    @default("Outros") // Alimentos, Limpeza, Higiene, Bebidas, Outros
+  quantidade       Float     @default(0)
+  unidade          String    @default("un") // un, kg, g, L, ml, pacote, caixa
+  quantidadeMinima Float     @default(0) // abaixo disso, alerta de estoque baixo
+  ultimaCompra     DateTime?
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model TarefaCasa {
+  id            Int       @id @default(autoincrement())
+
+  usuarioId     Int
+  usuario       Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  titulo        String
+  descricao     String?
+  categoria     String    @default("Manutenção") // Manutenção, Reparo, Limpeza, Outro
+  prioridade    String    @default("Média")      // Baixa, Média, Alta
+  status        String    @default("Pendente")   // Pendente, Em Andamento, Concluída
+  dataPrevista  DateTime?
+  custoEstimado Float?
+  custoReal     Float?
+  concluidaEm   DateTime?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model LocalClimaSalvo {
+  id        Int      @id @default(autoincrement())
+
+  usuarioId Int
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  nome      String
+  estado    String?
+  pais      String?
+  lat       Float
+  lon       Float
+
+  createdAt DateTime @default(now())
+}
+
+model Evento {
+  id              Int       @id @default(autoincrement())
+
+  usuarioId       Int
+  usuario         Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  titulo          String
+  descricao       String?
+  local           String?
+  inicio          DateTime
+  fim             DateTime
+  diaTodo         Boolean   @default(false)
+  cor             String    @default("#EEBB00")
+  lembreteMinutos Int?      // Minutos de antecedência para o sino de notificação (null = sem lembrete)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model ImovelLeilao {

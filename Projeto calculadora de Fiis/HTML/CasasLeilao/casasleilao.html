@@ -9,9 +9,13 @@
     <!-- Tokens Globais e CSS Modular do Módulo Casas de Leilão -->
     <link rel="stylesheet" href="../../CSS/Global/global_tokens.css">
     <link rel="stylesheet" href="../../CSS/CasasLeilao/casasleilao.css">
+    <link rel="stylesheet" href="../../CSS/Notificacao/notificacao.css">
 
     <!-- Guarda de Autenticação (deve carregar antes do script do módulo) -->
     <script src="../../JS/Global/auth.js" defer></script>
+
+    <!-- Script do Sino de Notificações (compartilhado por todos os módulos) -->
+    <script src="../../JS/Notificacao/notificacao.js" defer></script>
 
     <!-- Script do Módulo Casas de Leilão -->
     <script src="../../JS/CasasLeilao/casasleilao.js" defer></script>
@@ -58,6 +62,27 @@
                 </svg>
                 <span>Novo Imóvel</span>
             </button>
+
+            <!-- Sino de Notificações (compartilhado por todos os módulos) -->
+            <div class="notification-menu" id="notificationMenu">
+                <button class="notification-bell-btn" id="btnNotificacoes" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Ver notificações">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                    <span class="notification-badge" id="notificationBadge" style="display:none;">0</span>
+                </button>
+
+                <div class="notification-dropdown" id="notificationDropdown">
+                    <div class="notification-dropdown-header">
+                        <strong>Notificações</strong>
+                        <a href="../Notificacao/notificacao.html" class="notification-view-all">Ver todas</a>
+                    </div>
+                    <div class="notification-list" id="notificationList">
+                        <p class="notification-empty" id="notificationEmpty">Nenhuma notificação no momento.</p>
+                    </div>
+                </div>
+            </div>
 
             <!-- Alternância de Tema Claro / Escuro -->
             <button class="theme-toggle-btn" id="themeToggleBtn" aria-label="Alternar entre modo claro e escuro">
@@ -123,7 +148,7 @@
                 <span>Casas de Leilão</span>
             </div>
 
-            <nav class="sidebar-nav">
+            <nav class="sidebar-nav sidebar-nav-compact">
                 <ul class="nav-list">
                     <li>
                         <a href="../Index/index.html" class="nav-item-btn">
@@ -203,6 +228,52 @@
                                 </svg>
                             </span>
                             <span class="nav-text">Cofrinho</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer"></div>
+
+            <div class="sidebar-header-label">
+                <span>Hub Pessoal</span>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul class="nav-list">
+                    <li>
+                        <a href="../Calendario/calendario.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Calendário</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="../Clima/clima.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M17.5 19a4.5 4.5 0 1 0-1.44-8.765 5 5 0 1 0-9.302 3.717A3.5 3.5 0 0 0 7.5 19h10Z"></path>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Clima</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="../FinancasCasa/financascasa.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path>
+                                    <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path>
+                                    <path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Finanças & Casa</span>
                         </a>
                     </li>
                 </ul>
