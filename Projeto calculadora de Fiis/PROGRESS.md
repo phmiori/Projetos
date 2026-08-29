@@ -56,7 +56,7 @@
 - [x] Sino no cabeçalho com contador de não vistas (persistido no navegador) presente em todos os módulos do Hub, com dropdown de notificações recentes e link para a Central de Notificações
 - [x] Verificação automática a cada 60 segundos
 
-> ⚠️ Pendência manual: rodar `npm run prisma:push` (com o servidor Node parado, para evitar o erro EPERM de arquivo em uso no Windows) para criar as tabelas `Evento`, `LocalClimaSalvo`, `GastoCasa`, `ItemDespensa` e `TarefaCasa` no banco SQLite local antes de usar os módulos Calendário/Notificação, Locais Salvos do Clima e Finanças & Casa.
+> ⚠️ Pendência manual: rodar `npm run prisma:push` (com o servidor Node parado, para evitar o erro EPERM de arquivo em uso no Windows) para criar as tabelas `Evento`, `LocalClimaSalvo`, `GastoCasa`, `ItemDespensa`, `TarefaCasa`, `BlocoTreino`, `ExercicioTreino` e `RegistroSaude` no banco SQLite local antes de usar os módulos Calendário/Notificação, Locais Salvos do Clima, Finanças & Casa e Treinos & Saúde.
 
 ## 🌤️ Módulo Clima (Hub Pessoal)
 - [x] Novo módulo dedicado: `HTML/Clima/clima.html`, `CSS/Clima/clima.css` e `JS/Clima/clima.js` — sem necessidade de tabela no banco (dados sempre em tempo real via APIs públicas e gratuitas, sem chave de API)
@@ -73,5 +73,12 @@
 - [x] **Aba Despensa**: modelo `ItemDespensa` no Prisma, API REST própria (`GET/POST/PUT/DELETE /api/casa/despensa`), controle de quantidade/unidade/quantidade mínima com destaque visual e KPI de itens em **Estoque Baixo**
 - [x] **Aba Tarefas & Manutenção**: modelo `TarefaCasa` no Prisma, API REST própria (`GET/POST/PUT/DELETE /api/casa/tarefas`), com categoria, prioridade, status (Pendente/Em Andamento/Concluída), data prevista, custo estimado/real e descrição — cobre casos como "conserto de ar-condicionado"
 - [x] Integração entre Tarefas e Gastos: ao concluir uma tarefa com a opção "lançar como gasto" marcada, o custo real é automaticamente registrado em Gastos da Casa (rota `PUT /api/casa/tarefas/:id`)
+- [x] Integração da navegação (sidebar) no Hub Pessoal de todos os módulos
+
+## 💪 Módulo Treinos & Saúde (Hub Pessoal)
+- [x] Novo módulo dedicado: `HTML/TreinosSaude/treinossaude.html`, `CSS/TreinosSaude/treinossaude.css` e `JS/TreinosSaude/treinossaude.js`, com 2 sub-abas
+- [x] **Aba Treinos**: organização por blocos (ex: "Treino A - Peito e Tríceps"), cada um com sua lista de exercícios (séries, repetições, carga, observações) — modelos `BlocoTreino` e `ExercicioTreino` no Prisma, API REST própria (`GET/POST/PUT/DELETE /api/treinos/blocos` e `/api/treinos/exercicios`)
+- [x] Campo **Dia da Semana** no bloco (Segunda a Domingo, ou sem dia definido), com os blocos agrupados por dia na tela (permite adicionar quantos blocos quiser por dia, ex: "Segunda: Treino de Superior")
+- [x] **Aba Saúde**: registros diários opcionais de peso, cintura, água ingerida e horas de sono — modelo `RegistroSaude` no Prisma, API REST própria (`GET/POST/PUT/DELETE /api/saude/registros`), com KPIs de peso atual (variação desde o último registro) e médias de água/sono dos últimos 7 dias
 - [x] Integração da navegação (sidebar) no Hub Pessoal de todos os módulos
 

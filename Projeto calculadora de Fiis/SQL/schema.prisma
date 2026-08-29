@@ -75,9 +75,62 @@ model Usuario {
   gastosCasa    GastoCasa[]
   itensDespensa ItemDespensa[]
   tarefasCasa   TarefaCasa[]
+  blocosTreino   BlocoTreino[]
+  registrosSaude RegistroSaude[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model BlocoTreino {
+  id          Int       @id @default(autoincrement())
+
+  usuarioId   Int
+  usuario     Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  nome        String
+  diaSemana   String?   // Segunda, Terça, Quarta, Quinta, Sexta, Sábado, Domingo (null = sem dia definido)
+  observacoes String?
+  ordem       Int       @default(0)
+
+  exercicios  ExercicioTreino[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model ExercicioTreino {
+  id          Int         @id @default(autoincrement())
+
+  blocoId     Int
+  bloco       BlocoTreino @relation(fields: [blocoId], references: [id], onDelete: Cascade)
+
+  nome        String
+  series      Int?
+  repeticoes  String?
+  carga       String?
+  observacoes String?
+  ordem       Int         @default(0)
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model RegistroSaude {
+  id          Int       @id @default(autoincrement())
+
+  usuarioId   Int
+  usuario     Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  data        DateTime  @default(now())
+  peso        Float?
+  cintura     Float?
+  aguaMl      Int?
+  sonoHoras   Float?
+  observacoes String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 }
 
 model GastoCasa {
