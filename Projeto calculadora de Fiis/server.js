@@ -292,7 +292,9 @@ async function recalcularGastosVeiculo(veiculoId) {
  */
 app.get('/api/dashboard', async (req, res) => {
     try {
-        const veiculos = await prisma.veiculo.findMany();
+        const veiculos = await prisma.veiculo.findMany({
+            where: { usuarioId: req.session.userId }
+        });
 
         let lucroTotalAcumulado = 0;
         let capitalInvestidoParado = 0;
@@ -354,7 +356,7 @@ app.get('/api/dashboard', async (req, res) => {
 app.get('/api/veiculos', async (req, res) => {
     try {
         const { status, search } = req.query;
-        const where = {};
+        const where = { usuarioId: req.session.userId };
 
         if (status && status !== 'Todos') {
             where.status = status;
@@ -390,8 +392,8 @@ app.get('/api/veiculos', async (req, res) => {
 app.get('/api/veiculos/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
-        const veiculo = await prisma.veiculo.findUnique({
-            where: { id },
+        const veiculo = await prisma.veiculo.findFirst({
+            where: { id, usuarioId: req.session.userId },
             include: { gastos: { orderBy: { data: 'asc' } } }
         });
 
@@ -419,7 +421,7 @@ app.post('/api/veiculos', async (req, res) => {
         }
 
         const novoVeiculo = await prisma.veiculo.create({
-            data: dadosCalculados,
+            data: { ...dadosCalculados, usuarioId: req.session.userId },
             include: { gastos: true }
         });
 
@@ -438,6 +440,13 @@ app.put('/api/veiculos/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
         const dadosCalculados = calcularMetricas(req.body);
+
+        const veiculoExistente = await prisma.veiculo.findFirst({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (!veiculoExistente) {
+            return res.status(404).json({ error: 'Veículo não encontrado' });
+        }
 
         const veiculoAtualizado = await prisma.veiculo.update({
             where: { id },
@@ -459,6 +468,14 @@ app.put('/api/veiculos/:id', async (req, res) => {
 app.get('/api/veiculos/:id/gastos', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
+
+        const veiculo = await prisma.veiculo.findFirst({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (!veiculo) {
+            return res.status(404).json({ error: 'Veículo não encontrado' });
+        }
+
         const gastos = await prisma.gastoVeiculo.findMany({
             where: { veiculoId: id },
             orderBy: { data: 'asc' }
@@ -479,6 +496,13 @@ app.post('/api/veiculos/:id/gastos', async (req, res) => {
     try {
         const veiculoId = parseInt(req.params.id, 10);
         const { data, categoria, descricao, oficina, valor } = req.body;
+
+        const veiculo = await prisma.veiculo.findFirst({
+            where: { id: veiculoId, usuarioId: req.session.userId }
+        });
+        if (!veiculo) {
+            return res.status(404).json({ error: 'Veículo não encontrado' });
+        }
 
         if (!categoria || !descricao || valor === undefined) {
             return res.status(400).json({ error: 'Categoria, descrição e valor são obrigatórios.' });
@@ -520,6 +544,13 @@ app.delete('/api/veiculos/:id/gastos/:gastoId', async (req, res) => {
         const veiculoId = parseInt(req.params.id, 10);
         const gastoId = parseInt(req.params.gastoId, 10);
 
+        const veiculo = await prisma.veiculo.findFirst({
+            where: { id: veiculoId, usuarioId: req.session.userId }
+        });
+        if (!veiculo) {
+            return res.status(404).json({ error: 'Veículo não encontrado' });
+        }
+
         await prisma.gastoVeiculo.delete({
             where: { id: gastoId }
         });
@@ -547,7 +578,7 @@ app.post('/api/veiculos/:id/vender', async (req, res) => {
         const id = parseInt(req.params.id, 10);
         const { valorVenda, dataVenda, precoAnuncio, status } = req.body;
 
-        const veiculo = await prisma.veiculo.findUnique({ where: { id } });
+        const veiculo = await prisma.veiculo.findFirst({ where: { id, usuarioId: req.session.userId } });
         if (!veiculo) return res.status(404).json({ error: 'Veículo não encontrado' });
 
         const novoStatus = status || 'Vendido';
@@ -588,7 +619,13 @@ app.post('/api/veiculos/:id/vender', async (req, res) => {
 app.delete('/api/veiculos/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
-        await prisma.veiculo.delete({ where: { id } });
+
+        const resultado = await prisma.veiculo.deleteMany({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (resultado.count === 0) {
+            return res.status(404).json({ error: 'Veículo não encontrado' });
+        }
 
         res.json({ success: true, message: 'Veículo excluído com sucesso' });
     } catch (err) {
@@ -602,87 +639,6 @@ app.delete('/api/veiculos/:id', async (req, res) => {
 app.get('/', (req, res) => {
     res.redirect('/HTML/Index/index.html');
 });
-
-/**
- * Função de Seed Inicial (dados de demonstração se banco estiver vazio)
- */
-async function seedInitialData() {
-    try {
-        const count = await prisma.veiculo.count();
-        if (count === 0) {
-            console.log('[Prisma] Inserindo dados iniciais de demonstração...');
-            
-            const car1 = calcularMetricas({
-                marca: 'Honda',
-                modelo: 'Civic EXL 2.0',
-                ano: 2020,
-                placa: 'BRA2E19',
-                chassi: '93HB49281729381',
-                origem: 'Seguradora (Pequena Monta)',
-                status: 'Vendido',
-                observacoes: 'Arrematado com pequena colisão frontal. Trocado parachoque e farol.',
-                valorArremate: 65000,
-                comissaoPct: 5,
-                taxasPatio: 1200,
-                custoGuincho: 450,
-                gastoMecanica: 1800,
-                gastoFunilaria: 2500,
-                gastoEstetica: 600,
-                gastoDocumentacao: 1150,
-                precoAnuncio: 89900,
-                valorVenda: 88500,
-                dataVenda: '2026-08-15'
-            });
-
-            const car2 = calcularMetricas({
-                marca: 'Volkswagen',
-                modelo: 'T-Cross Highline 1.4 TSI',
-                ano: 2022,
-                placa: 'RIO4F22',
-                chassi: '9BWZZZ2GZLP12839',
-                origem: 'Banco / Financiamento',
-                status: 'Anunciado',
-                observacoes: 'Retomada de banco. Feito apenas polimento e revisão básica.',
-                valorArremate: 82000,
-                comissaoPct: 5,
-                taxasPatio: 1500,
-                custoGuincho: 500,
-                gastoMecanica: 950,
-                gastoFunilaria: 0,
-                gastoEstetica: 800,
-                gastoDocumentacao: 1350,
-                precoAnuncio: 104900
-            });
-
-            const car3 = calcularMetricas({
-                marca: 'Jeep',
-                modelo: 'Compass Longitude 2.0 Flex',
-                ano: 2021,
-                placa: 'SPO9A88',
-                chassi: '89WJ98129031823',
-                origem: 'Frota / Locadora',
-                status: 'Em Preparação',
-                observacoes: 'Na funilaria para retoque na porta traseira e parachoque.',
-                valorArremate: 74000,
-                comissaoPct: 5,
-                taxasPatio: 1300,
-                custoGuincho: 400,
-                gastoMecanica: 1200,
-                gastoFunilaria: 1900,
-                gastoEstetica: 0,
-                gastoDocumentacao: 900,
-                precoAnuncio: 96000
-            });
-
-            await prisma.veiculo.createMany({
-                data: [car1, car2, car3]
-            });
-            console.log('[Prisma] Veículos de demonstração cadastrados com sucesso!');
-        }
-    } catch (e) {
-        console.warn('[Prisma] Aviso na inicialização de seed:', e.message);
-    }
-}
 
 /**
  * Função de Seed dos Usuários Administradores (fixos, cadastrados apenas uma vez)
@@ -718,6 +674,5 @@ app.listen(PORT, async () => {
     console.log(` AutoLeilão Hub (FinanceHub) rodando na porta ${PORT}`);
     console.log(` Acesso web: http://localhost:${PORT}/HTML/Index/index.html`);
     console.log(`====================================================`);
-    await seedInitialData();
     await seedUsuarios();
 });
