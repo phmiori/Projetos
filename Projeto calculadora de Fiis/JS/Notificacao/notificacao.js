@@ -94,8 +94,49 @@ function initNotificationBell() {
         }
     });
 
+    const header = dropdown.querySelector('.notification-dropdown-header');
+    if (header && !header.querySelector('.notification-clear-all')) {
+        const btnLimparTudo = document.createElement('button');
+        btnLimparTudo.type = 'button';
+        btnLimparTudo.className = 'notification-clear-all';
+        btnLimparTudo.textContent = 'Apagar todas';
+        btnLimparTudo.addEventListener('click', (e) => {
+            e.stopPropagation();
+            excluirTodasNotificacoes();
+        });
+        header.appendChild(btnLimparTudo);
+    }
+
+    const btnLimparPagina = document.getElementById('btnApagarTodasPagina');
+    if (btnLimparPagina) btnLimparPagina.addEventListener('click', excluirTodasNotificacoes);
+
     carregarNotificacoes();
     setInterval(carregarNotificacoes, NOTIF_POLL_MS);
+}
+
+async function excluirNotificacao(id) {
+    try {
+        const resp = await fetch(`${NOTIF_API}/${id}`, { method: 'DELETE' });
+        if (!resp.ok) throw new Error('Falha ao apagar notificação');
+        await carregarNotificacoes();
+    } catch (err) {
+        console.error('[Notificações] Erro ao apagar:', err.message);
+        alert('Não foi possível apagar a notificação.');
+    }
+}
+
+async function excluirTodasNotificacoes() {
+    if (!ultimasNotificacoes.length) return;
+    if (!confirm('Apagar todas as notificações?')) return;
+
+    try {
+        const resp = await fetch(NOTIF_API, { method: 'DELETE' });
+        if (!resp.ok) throw new Error('Falha ao apagar notificações');
+        await carregarNotificacoes();
+    } catch (err) {
+        console.error('[Notificações] Erro ao apagar todas:', err.message);
+        alert('Não foi possível apagar as notificações.');
+    }
 }
 
 async function carregarNotificacoes() {
@@ -125,6 +166,15 @@ async function carregarNotificacoes() {
     }
 }
 
+/**
+ * Chave usada para lembrar que uma notificação já foi vista. Inclui o horário de
+ * atualização do evento para que, se o evento for editado (ex: reativado após
+ * dispensado), a notificação volte a contar como "não vista".
+ */
+function chaveNotificacao(n) {
+    return `${n.id}:${n.atualizadoEm}`;
+}
+
 function obterVistos() {
     try {
         return new Set(JSON.parse(localStorage.getItem(NOTIF_VISTOS_KEY) || '[]'));
@@ -137,10 +187,12 @@ function salvarVistos(vistos) {
     localStorage.setItem(NOTIF_VISTOS_KEY, JSON.stringify([...vistos]));
 }
 
+/**
+ * Marca as notificações atualmente carregadas como vistas (o sino foi aberto),
+ * limpando o número vermelho em qualquer módulo do sistema.
+ */
 function marcarTodasComoVistas() {
-    const vistos = obterVistos();
-    ultimasNotificacoes.forEach(n => vistos.add(String(n.id)));
-    salvarVistos(vistos);
+    salvarVistos(new Set(ultimasNotificacoes.map(chaveNotificacao)));
     atualizarBadge(ultimasNotificacoes);
 }
 
@@ -149,7 +201,7 @@ function atualizarBadge(notificacoes) {
     if (!badge) return;
 
     const vistos = obterVistos();
-    const naoVistas = notificacoes.filter(n => !vistos.has(String(n.id))).length;
+    const naoVistas = notificacoes.filter(n => !vistos.has(chaveNotificacao(n))).length;
 
     if (naoVistas > 0) {
         badge.textContent = naoVistas > 9 ? '9+' : String(naoVistas);
@@ -211,8 +263,28 @@ function criarItemNotificacao(n) {
         body.appendChild(tag);
     }
 
+    const btnExcluir = document.createElement('button');
+    btnExcluir.type = 'button';
+    btnExcluir.className = 'notification-item-delete';
+    btnExcluir.title = 'Apagar notificação';
+    btnExcluir.setAttribute('aria-label', 'Apagar notificação');
+    btnExcluir.innerHTML = `
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+            <path d="M10 11v6"></path>
+            <path d="M14 11v6"></path>
+            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+        </svg>
+    `;
+    btnExcluir.addEventListener('click', (e) => {
+        e.stopPropagation();
+        excluirNotificacao(n.id);
+    });
+
     item.appendChild(dot);
     item.appendChild(body);
+    item.appendChild(btnExcluir);
 
     item.addEventListener('click', () => {
         window.location.href = resolverLinkCalendario();
