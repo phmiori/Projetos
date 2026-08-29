@@ -29,6 +29,98 @@ function obterPercentualIOF(dias) {
     return TABELA_IOF_REGRESSIVO[dias] ?? 0;
 }
 
+// Percentual de Imposto de Renda sobre o rendimento, conforme os dias corridos desde a aplicação
+// (tabela regressiva de renda fixa: sempre incide, mesmo após os 30 dias em que o IOF já é isento)
+function obterPercentualIR(dias) {
+    if (dias <= 180) return 22.5;
+    if (dias <= 360) return 20;
+    if (dias <= 720) return 17.5;
+    return 15;
+}
+
+// =========================================================
+// 1.1 CALENDÁRIO DE DIAS ÚTEIS (a renda só é creditada em dias úteis,
+// pois o CDI não acumula em fins de semana e feriados nacionais)
+// =========================================================
+
+const cacheFeriadosPorAno = {};
+
+/**
+ * Calcula a data da Páscoa de um ano (Algoritmo de Meeus/Jones/Butcher),
+ * usada como base dos feriados móveis (Carnaval, Sexta-Feira Santa e Corpus Christi)
+ */
+function calcularPascoa(ano) {
+    const a = ano % 19;
+    const b = Math.floor(ano / 100);
+    const c = ano % 100;
+    const d = Math.floor(b / 4);
+    const e = b % 4;
+    const f = Math.floor((b + 8) / 25);
+    const g = Math.floor((b - f + 1) / 3);
+    const h = (19 * a + b - d - g + 15) % 30;
+    const i = Math.floor(c / 4);
+    const k = c % 4;
+    const l = (32 + 2 * e + 2 * i - h - k) % 7;
+    const m = Math.floor((a + 11 * h + 22 * l) / 451);
+    const mes = Math.floor((h + l - 7 * m + 114) / 31);
+    const dia = ((h + l - 7 * m + 114) % 31) + 1;
+    return new Date(ano, mes - 1, dia);
+}
+
+function formatarDataChave(data) {
+    const y = data.getFullYear();
+    const m = String(data.getMonth() + 1).padStart(2, '0');
+    const d = String(data.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+/**
+ * Retorna o conjunto de feriados nacionais (fixos + móveis) de um ano específico
+ */
+function obterFeriadosNacionais(ano) {
+    if (cacheFeriadosPorAno[ano]) return cacheFeriadosPorAno[ano];
+
+    const feriados = new Set();
+    const somarDias = (data, dias) => {
+        const nova = new Date(data);
+        nova.setDate(nova.getDate() + dias);
+        return nova;
+    };
+    const addData = (data) => feriados.add(formatarDataChave(data));
+
+    // Feriados fixos
+    addData(new Date(ano, 0, 1));    // Confraternização Universal
+    addData(new Date(ano, 3, 21));   // Tiradentes
+    addData(new Date(ano, 4, 1));    // Dia do Trabalho
+    addData(new Date(ano, 8, 7));    // Independência do Brasil
+    addData(new Date(ano, 9, 12));   // Nossa Senhora Aparecida
+    addData(new Date(ano, 10, 2));   // Finados
+    addData(new Date(ano, 10, 15));  // Proclamação da República
+    addData(new Date(ano, 10, 20));  // Dia da Consciência Negra
+    addData(new Date(ano, 11, 25));  // Natal
+
+    // Feriados móveis (baseados na Páscoa)
+    const pascoa = calcularPascoa(ano);
+    addData(somarDias(pascoa, -48)); // Carnaval (Segunda-feira)
+    addData(somarDias(pascoa, -47)); // Carnaval (Terça-feira)
+    addData(somarDias(pascoa, -2));  // Sexta-feira Santa
+    addData(somarDias(pascoa, 60));  // Corpus Christi
+
+    cacheFeriadosPorAno[ano] = feriados;
+    return feriados;
+}
+
+/**
+ * Verifica se uma data é dia útil (não é sábado, domingo ou feriado nacional)
+ */
+function ehDiaUtil(data) {
+    const diaSemana = data.getDay();
+    if (diaSemana === 0 || diaSemana === 6) return false;
+
+    const feriados = obterFeriadosNacionais(data.getFullYear());
+    return !feriados.has(formatarDataChave(data));
+}
+
 // =========================================================
 // 2. INICIALIZAÇÃO
 // =========================================================
@@ -134,10 +226,25 @@ async function carregarCofrinhos() {
 }
 
 /**
- * Calcula quantos dias se passaram desde o início (o próprio dia de início conta como Dia 1)
+ * Interpreta uma data (string "YYYY-MM-DD" ou ISO vindo da API) como meia-noite no fuso
+ * LOCAL, evitando o bug de `new Date("YYYY-MM-DD")` ser interpretado em UTC e "voltar"
+ * um dia em fusos negativos (ex: Brasil, UTC-3) ao ler getDay()/getDate().
  */
-function calcularDiasInvestidos(dataInicio) {
-    const inicio = new Date(dataInicio);
+function parseDataLocal(valor) {
+    const match = String(valor).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+        const [, ano, mes, dia] = match;
+        return new Date(Number(ano), Number(mes) - 1, Number(dia));
+    }
+    return new Date(valor);
+}
+
+/**
+ * Calcula quantos dias corridos se passaram desde o início (o próprio dia de início conta como Dia 1).
+ * O prazo do IOF regressivo é contado em dias corridos, conforme o Decreto 6.306/2007.
+ */
+function calcularDiasCorridos(dataInicio) {
+    const inicio = parseDataLocal(dataInicio);
     inicio.setHours(0, 0, 0, 0);
 
     const hoje = new Date();
@@ -148,31 +255,71 @@ function calcularDiasInvestidos(dataInicio) {
 }
 
 /**
- * Calcula as métricas atuais de um cofrinho: rendimento bruto acumulado, IOF vigente e saldo líquido
+ * Conta quantos dos "diasCorridos" a partir de dataInicio são dias úteis (a renda só é
+ * creditada nesses dias, pois o CDI não acumula em fins de semana e feriados nacionais)
  */
-function calcularMetricasCofrinho(item) {
-    const dias = calcularDiasInvestidos(item.dataInicio);
-    const rendimentoBruto = item.rendaPorDia * dias;
-    const saldoBruto = item.valorInvestido + rendimentoBruto;
-    const iofPct = obterPercentualIOF(dias);
-    const iofValor = rendimentoBruto * (iofPct / 100);
-    const saldoLiquido = saldoBruto - iofValor;
+function contarDiasUteis(dataInicio, diasCorridos) {
+    const inicio = parseDataLocal(dataInicio);
+    inicio.setHours(0, 0, 0, 0);
 
-    return { dias, rendimentoBruto, saldoBruto, iofPct, iofValor, saldoLiquido };
+    let uteis = 0;
+    for (let i = 0; i < diasCorridos; i++) {
+        const data = new Date(inicio);
+        data.setDate(data.getDate() + i);
+        if (ehDiaUtil(data)) uteis++;
+    }
+    return uteis;
 }
 
 /**
- * Gera a projeção automática dia a dia (1 a 30) com base no valor investido e na renda diária fixa
+ * Calcula as métricas atuais de um cofrinho: rendimento bruto acumulado (só em dias úteis),
+ * IOF e IR vigentes (em dias corridos) e saldo líquido.
+ * Ordem oficial de apuração: o IOF é descontado primeiro sobre o rendimento bruto,
+ * e o IR incide depois sobre o que sobrar (rendimento já líquido de IOF) — não sobre o bruto.
+ */
+function calcularMetricasCofrinho(item) {
+    const diasCorridos = calcularDiasCorridos(item.dataInicio);
+    const diasUteis = contarDiasUteis(item.dataInicio, diasCorridos);
+    const rendimentoBruto = item.rendaPorDia * diasUteis;
+    const saldoBruto = item.valorInvestido + rendimentoBruto;
+    const iofPct = obterPercentualIOF(diasCorridos);
+    const iofValor = rendimentoBruto * (iofPct / 100);
+    const rendimentoAposIOF = rendimentoBruto - iofValor;
+    const irPct = obterPercentualIR(diasCorridos);
+    const irValor = rendimentoAposIOF * (irPct / 100);
+    const saldoLiquido = saldoBruto - iofValor - irValor;
+
+    return { diasCorridos, diasUteis, rendimentoBruto, saldoBruto, iofPct, iofValor, irPct, irValor, saldoLiquido };
+}
+
+/**
+ * Gera a projeção automática dia a dia (1 a 30 dias corridos), somando renda apenas
+ * nos dias úteis e aplicando o IOF regressivo e o IR regressivo conforme o prazo em dias corridos
  */
 function gerarProjecao(item) {
+    const inicio = parseDataLocal(item.dataInicio);
+    inicio.setHours(0, 0, 0, 0);
+
     const linhas = [];
+    let diasUteisAcumulados = 0;
+
     for (let dia = 1; dia <= 30; dia++) {
-        const rendimentoBruto = item.rendaPorDia * dia;
+        const dataDoDia = new Date(inicio);
+        dataDoDia.setDate(dataDoDia.getDate() + (dia - 1));
+
+        const diaUtil = ehDiaUtil(dataDoDia);
+        if (diaUtil) diasUteisAcumulados++;
+
+        const rendimentoBruto = item.rendaPorDia * diasUteisAcumulados;
         const saldoBruto = item.valorInvestido + rendimentoBruto;
         const iofPct = obterPercentualIOF(dia);
         const iofValor = rendimentoBruto * (iofPct / 100);
-        const saldoLiquido = saldoBruto - iofValor;
-        linhas.push({ dia, saldoBruto, rendimentoBruto, iofPct, iofValor, saldoLiquido });
+        const rendimentoAposIOF = rendimentoBruto - iofValor;
+        const irPct = obterPercentualIR(dia);
+        const irValor = rendimentoAposIOF * (irPct / 100);
+        const saldoLiquido = saldoBruto - iofValor - irValor;
+
+        linhas.push({ dia, diaUtil, diasUteisAcumulados, saldoBruto, rendimentoBruto, iofPct, iofValor, irPct, irValor, saldoLiquido });
     }
     return linhas;
 }
@@ -201,7 +348,18 @@ function renderizarCofrinhos() {
     document.getElementById('kpiCofreValorInvestido').textContent = formatarMoeda(totalInvestido);
     document.getElementById('kpiCofreRendaDia').textContent = formatarMoeda(totalRendaDia);
     document.getElementById('kpiCofreRendimentoBruto').textContent = formatarMoeda(totalRendimentoBruto);
-    document.getElementById('kpiCofreSaldoLiquido').textContent = formatarMoeda(totalSaldoLiquido);
+
+    const kpiSaldoLiquido = document.getElementById('kpiCofreSaldoLiquido');
+    const kpiSaldoLiquidoTag = document.getElementById('kpiCofreSaldoLiquidoTag');
+    const prejuizo = totalSaldoLiquido < totalInvestido;
+    kpiSaldoLiquido.textContent = formatarMoeda(totalSaldoLiquido);
+    kpiSaldoLiquido.className = 'kpi-value' + (prejuizo ? ' text-expense' : '');
+    if (kpiSaldoLiquidoTag) {
+        kpiSaldoLiquidoTag.textContent = prejuizo
+            ? 'Abaixo do valor investido — IOF + IR consomem todo o rendimento'
+            : 'Se resgatasse tudo agora (após IOF e IR)';
+        kpiSaldoLiquidoTag.className = 'kpi-status-tag ' + (prejuizo ? 'tag-expense' : 'tag-accent');
+    }
 
     const badgeCofrinhoCount = document.getElementById('badgeCofrinhoCount');
     if (badgeCofrinhoCount) badgeCofrinhoCount.textContent = list.length;
@@ -212,7 +370,7 @@ function renderizarCofrinhos() {
     if (list.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="8" style="text-align: center; padding: 32px; color: var(--text-sub);">
+                <td colspan="9" style="text-align: center; padding: 32px; color: var(--text-sub);">
                     Nenhum Cofrinho cadastrado ainda. Clique em "<strong>Novo Cofrinho</strong>" acima para começar!
                 </td>
             </tr>
@@ -228,12 +386,18 @@ function renderizarCofrinhos() {
             </td>
             <td>${formatarMoeda(item.valorInvestido)}</td>
             <td><strong style="color: var(--color-income);">${formatarMoeda(item.rendaPorDia)}</strong></td>
-            <td>${metricas.dias}º dia</td>
+            <td>${metricas.diasCorridos}º dia corrido
+                <div style="font-size: 0.75rem; color: var(--text-sub);">${metricas.diasUteis} dia(s) útil(eis)</div>
+            </td>
             <td>${formatarMoeda(metricas.rendimentoBruto)}</td>
             <td>${metricas.iofPct > 0
                 ? `<span style="color: var(--color-expense); font-weight: 700;">${metricas.iofPct}% (${formatarMoeda(metricas.iofValor)})</span>`
                 : `<span style="color: var(--color-income); font-weight: 700;">Isento</span>`}</td>
-            <td><strong style="color: var(--text-main);">${formatarMoeda(metricas.saldoLiquido)}</strong></td>
+            <td><span style="color: var(--color-expense); font-weight: 700;">${metricas.irPct}% (${formatarMoeda(metricas.irValor)})</span></td>
+            <td>
+                <strong style="color: ${metricas.saldoLiquido < item.valorInvestido ? 'var(--color-expense)' : 'var(--text-main)'};">${formatarMoeda(metricas.saldoLiquido)}</strong>
+                ${metricas.saldoLiquido < item.valorInvestido ? '<div style="font-size: 0.72rem; color: var(--color-expense);">Abaixo do investido</div>' : ''}
+            </td>
             <td>
                 <div class="table-action-btns">
                     <button class="btn-cofre-action" onclick="abrirModalProjecao('${item.id}')" title="Ver projeção dia a dia">
@@ -347,18 +511,23 @@ function abrirModalProjecao(id) {
     stateCofrinho.cofrinhoEmProjecao = item;
     document.getElementById('projecaoModalTitle').textContent = `Projeção: ${item.nome}`;
 
-    const diaAtual = calcularDiasInvestidos(item.dataInicio);
+    const diaAtual = calcularDiasCorridos(item.dataInicio);
     const linhas = gerarProjecao(item);
 
     const tbody = document.getElementById('projecaoTableBody');
     tbody.innerHTML = linhas.map(l => `
         <tr class="${l.dia === diaAtual ? 'linha-hoje' : ''}">
-            <td>${l.dia}º dia${l.dia === diaAtual ? ' (hoje)' : ''}</td>
+            <td>
+                ${l.dia}º dia${l.dia === diaAtual ? ' (hoje)' : ''}
+                ${!l.diaUtil ? '<div style="font-size: 0.72rem; color: var(--text-sub);">Fim de semana/feriado — sem renda</div>' : ''}
+            </td>
             <td>${formatarMoeda(l.saldoBruto)}</td>
             <td style="color: var(--color-income);">${formatarMoeda(l.rendimentoBruto)}</td>
             <td>${l.iofPct > 0 ? `<span style="color: var(--color-expense);">${l.iofPct}%</span>` : `<span style="color: var(--color-income);">Isento</span>`}</td>
             <td>${l.iofPct > 0 ? formatarMoeda(l.iofValor) : '—'}</td>
-            <td><strong>${formatarMoeda(l.saldoLiquido)}</strong></td>
+            <td><span style="color: var(--color-expense);">${l.irPct}%</span></td>
+            <td>${formatarMoeda(l.irValor)}</td>
+            <td><strong style="${l.saldoLiquido < item.valorInvestido ? 'color: var(--color-expense);' : ''}">${formatarMoeda(l.saldoLiquido)}</strong></td>
         </tr>
     `).join('');
 

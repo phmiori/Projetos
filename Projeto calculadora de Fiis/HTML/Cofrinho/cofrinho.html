@@ -233,7 +233,7 @@
                         </div>
                         <div class="kpi-body">
                             <div class="kpi-value text-income" id="kpiCofreRendaDia">R$ 0,00</div>
-                            <div class="kpi-status-tag tag-income">Recebido por dia, hoje</div>
+                            <div class="kpi-status-tag tag-income">Recebido em dias úteis</div>
                         </div>
                     </article>
 
@@ -265,7 +265,7 @@
                         </div>
                         <div class="kpi-body">
                             <div class="kpi-value" id="kpiCofreSaldoLiquido">R$ 0,00</div>
-                            <div class="kpi-status-tag tag-accent">Se resgatasse tudo agora (após IOF)</div>
+                            <div class="kpi-status-tag tag-accent" id="kpiCofreSaldoLiquidoTag">Se resgatasse tudo agora (após IOF e IR)</div>
                         </div>
                     </article>
                 </div>
@@ -301,6 +301,7 @@
                                     <th>Dias Investidos</th>
                                     <th>Rendimento Bruto</th>
                                     <th>IOF Atual</th>
+                                    <th>IR Atual</th>
                                     <th>Saldo Líquido Hoje</th>
                                     <th style="text-align: right;">Ações</th>
                                 </tr>
@@ -378,7 +379,7 @@
             <header class="modal-header">
                 <div>
                     <h2 class="modal-title" id="projecaoModalTitle">Projeção: Cofrinho</h2>
-                    <p class="modal-subtitle">Saldo bruto, IOF regressivo e saldo líquido calculados automaticamente dia a dia (não considera Imposto de Renda)</p>
+                    <p class="modal-subtitle">Saldo bruto, IOF e IR regressivos e saldo líquido calculados automaticamente dia a dia — a renda só é creditada em dias úteis</p>
                 </div>
                 <button class="modal-close-btn" id="modalProjecaoClose" aria-label="Fechar">&times;</button>
             </header>
@@ -393,6 +394,8 @@
                                 <th>Rendimento Acumulado</th>
                                 <th>IOF (%)</th>
                                 <th>IOF (R$)</th>
+                                <th>IR (%)</th>
+                                <th>IR (R$)</th>
                                 <th>Saldo Líquido</th>
                             </tr>
                         </thead>
