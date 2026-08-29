@@ -138,7 +138,7 @@ async function carregarBadgeFii() {
     const badge = document.getElementById('badgeFiiCountIndex');
 
     try {
-        const response = await fetch('/api/fii');
+        const response = await fetch('/api/fii', { cache: 'no-store' });
         if (!response.ok) throw new Error('API indisponível');
         const fundos = await response.json();
 
@@ -169,6 +169,7 @@ async function carregarBadgeFii() {
         if (moduleFiiYield) moduleFiiYield.textContent = `${yieldMedio.toFixed(2)}% a.m.`;
     } catch (err) {
         console.warn('[FinanceHub] Não foi possível carregar o total de fundos imobiliários.', err.message);
+        if (badge) badge.textContent = '0';
     }
 }
 

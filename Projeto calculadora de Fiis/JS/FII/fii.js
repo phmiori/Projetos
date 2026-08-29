@@ -148,7 +148,7 @@ function mapFiiToApi(item) {
  */
 async function carregarCarteira() {
     try {
-        const response = await fetch(`${API_BASE}/fii`);
+        const response = await fetch(`${API_BASE}/fii`, { cache: 'no-store' });
         if (!response.ok) throw new Error('API indisponível');
 
         const dados = await response.json();

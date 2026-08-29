@@ -80,12 +80,21 @@
     color: var(--text-main);
 }
 
+.modal-form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
 .form-sections-wrapper {
     padding: 24px;
     display: flex;
     flex-direction: column;
     gap: 18px;
     overflow-y: auto;
+    flex: 1;
+    min-height: 0;
     background-color: var(--bg-surface);
 }
 
