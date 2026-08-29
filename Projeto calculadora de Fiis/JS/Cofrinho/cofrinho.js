@@ -272,16 +272,29 @@ function contarDiasUteis(dataInicio, diasCorridos) {
 }
 
 /**
- * Calcula as métricas atuais de um cofrinho: rendimento bruto acumulado (só em dias úteis),
- * IOF e IR vigentes (em dias corridos) e saldo líquido.
+ * Deriva a taxa diária implícita do cofrinho a partir da renda recebida no Dia 1
+ * (informada uma única vez), dividindo-a pelo valor investido. Como o rendimento
+ * diário real muda constantemente (CDI/Selic variam dia a dia), usamos essa taxa
+ * do primeiro dia como aproximação constante, aplicada sobre o saldo total.
+ */
+function taxaDiariaDoItem(item) {
+    return item.valorInvestido > 0 ? item.rendaPorDia / item.valorInvestido : 0;
+}
+
+/**
+ * Calcula as métricas atuais de um cofrinho: saldo bruto com juros compostos sobre o
+ * valor total (a taxa diária incide sobre o saldo já rendido, não apenas sobre o
+ * valor original), IOF e IR vigentes (em dias corridos) e saldo líquido.
  * Ordem oficial de apuração: o IOF é descontado primeiro sobre o rendimento bruto,
  * e o IR incide depois sobre o que sobrar (rendimento já líquido de IOF) — não sobre o bruto.
  */
 function calcularMetricasCofrinho(item) {
     const diasCorridos = calcularDiasCorridos(item.dataInicio);
     const diasUteis = contarDiasUteis(item.dataInicio, diasCorridos);
-    const rendimentoBruto = item.rendaPorDia * diasUteis;
-    const saldoBruto = item.valorInvestido + rendimentoBruto;
+    const taxaDiaria = taxaDiariaDoItem(item);
+    const saldoBruto = item.valorInvestido * Math.pow(1 + taxaDiaria, diasUteis);
+    const rendimentoBruto = saldoBruto - item.valorInvestido;
+    const rendaDiariaAtual = saldoBruto * taxaDiaria;
     const iofPct = obterPercentualIOF(diasCorridos);
     const iofValor = rendimentoBruto * (iofPct / 100);
     const rendimentoAposIOF = rendimentoBruto - iofValor;
@@ -289,7 +302,7 @@ function calcularMetricasCofrinho(item) {
     const irValor = rendimentoAposIOF * (irPct / 100);
     const saldoLiquido = saldoBruto - iofValor - irValor;
 
-    return { diasCorridos, diasUteis, rendimentoBruto, saldoBruto, iofPct, iofValor, irPct, irValor, saldoLiquido };
+    return { diasCorridos, diasUteis, rendimentoBruto, saldoBruto, rendaDiariaAtual, iofPct, iofValor, irPct, irValor, saldoLiquido };
 }
 
 /**
@@ -299,6 +312,7 @@ function calcularMetricasCofrinho(item) {
 function gerarProjecao(item) {
     const inicio = parseDataLocal(item.dataInicio);
     inicio.setHours(0, 0, 0, 0);
+    const taxaDiaria = taxaDiariaDoItem(item);
 
     const linhas = [];
     let diasUteisAcumulados = 0;
@@ -310,8 +324,8 @@ function gerarProjecao(item) {
         const diaUtil = ehDiaUtil(dataDoDia);
         if (diaUtil) diasUteisAcumulados++;
 
-        const rendimentoBruto = item.rendaPorDia * diasUteisAcumulados;
-        const saldoBruto = item.valorInvestido + rendimentoBruto;
+        const saldoBruto = item.valorInvestido * Math.pow(1 + taxaDiaria, diasUteisAcumulados);
+        const rendimentoBruto = saldoBruto - item.valorInvestido;
         const iofPct = obterPercentualIOF(dia);
         const iofValor = rendimentoBruto * (iofPct / 100);
         const rendimentoAposIOF = rendimentoBruto - iofValor;
@@ -339,7 +353,7 @@ function renderizarCofrinhos() {
     const linhas = list.map(item => {
         const metricas = calcularMetricasCofrinho(item);
         totalInvestido += item.valorInvestido;
-        totalRendaDia += item.rendaPorDia;
+        totalRendaDia += metricas.rendaDiariaAtual;
         totalRendimentoBruto += metricas.rendimentoBruto;
         totalSaldoLiquido += metricas.saldoLiquido;
         return { item, metricas };
@@ -385,7 +399,7 @@ function renderizarCofrinhos() {
                 ${item.observacoes ? `<div style="font-size: 0.75rem; color: var(--text-sub); margin-top: 4px;">${escapeHTML(item.observacoes)}</div>` : ''}
             </td>
             <td>${formatarMoeda(item.valorInvestido)}</td>
-            <td><strong style="color: var(--color-income);">${formatarMoeda(item.rendaPorDia)}</strong></td>
+            <td><strong style="color: var(--color-income);">${formatarMoeda(metricas.rendaDiariaAtual)}</strong></td>
             <td>${metricas.diasCorridos}º dia corrido
                 <div style="font-size: 0.75rem; color: var(--text-sub);">${metricas.diasUteis} dia(s) útil(eis)</div>
             </td>

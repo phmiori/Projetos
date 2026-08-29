@@ -30,12 +30,17 @@ async function carregarBadgeCofrinho() {
         let totalRendimentoBruto = 0;
 
         cofrinhos.forEach(item => {
-            totalInvestido += Number(item.valorInvestido) || 0;
-            totalRendaDia += Number(item.rendaPorDia) || 0;
+            const valorInvestido = Number(item.valorInvestido) || 0;
+            const rendaPorDia = Number(item.rendaPorDia) || 0;
+            const taxaDiaria = valorInvestido > 0 ? rendaPorDia / valorInvestido : 0;
 
             const diasCorridos = calcularDiasCorridosCofrinho(item.dataInicio);
             const diasUteis = contarDiasUteisCofrinho(item.dataInicio, diasCorridos);
-            totalRendimentoBruto += (Number(item.rendaPorDia) || 0) * diasUteis;
+            const saldoBruto = valorInvestido * Math.pow(1 + taxaDiaria, diasUteis);
+
+            totalInvestido += valorInvestido;
+            totalRendaDia += saldoBruto * taxaDiaria;
+            totalRendimentoBruto += saldoBruto - valorInvestido;
         });
 
         const moduleCofrinhoCount = document.getElementById('moduleCofrinhoCount');
