@@ -1,4 +1,4 @@
-/**
+  /**
  * JS/Notificacao/notificacao.js
  * Sino de Notificações do Cabeçalho (compartilhado por todos os módulos do Hub)
  * Busca periodicamente os lembretes de eventos do Calendário e alerta o usuário.
