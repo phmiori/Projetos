@@ -115,6 +115,26 @@
     gap: 12px;
 }
 
+.btn-primary-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background-color: var(--accent-color);
+    color: var(--accent-text);
+    border: 1px solid var(--accent-color);
+    border-radius: var(--radius-button);
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.btn-primary-action:hover {
+    filter: brightness(0.92);
+    transform: translateY(-1px);
+}
+
 .theme-toggle-btn {
     display: inline-flex;
     align-items: center;
