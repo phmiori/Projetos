@@ -148,7 +148,14 @@ function initCalculationTriggers() {
     const calcInputs = document.querySelectorAll('.calc-trigger');
     calcInputs.forEach(input => {
         input.addEventListener('input', recalcularPrevisoesModal);
+        input.addEventListener('change', recalcularPrevisoesModal);
     });
+}
+
+function calcularPagamento(valorArremate, metodoPagamento) {
+    const valorEntrada = metodoPagamento === 'Parcelado' ? valorArremate * 0.25 : 0;
+    const valorParcelado = metodoPagamento === 'Parcelado' ? valorArremate - valorEntrada : 0;
+    return { valorEntrada, valorParcelado };
 }
 
 function recalcularPrevisoesModal() {
@@ -158,6 +165,18 @@ function recalcularPrevisoesModal() {
     const custoGuincho = parseFloat(document.getElementById('inputCustoGuincho').value) || 0;
 
     const totalAquisicao = valorArremate + (valorArremate * (comissaoPct / 100)) + taxasPatio + custoGuincho;
+
+    const metodoPagamento = document.getElementById('inputMetodoPagamento').value;
+    const { valorEntrada, valorParcelado } = calcularPagamento(valorArremate, metodoPagamento);
+
+    const paymentPreviewBox = document.getElementById('paymentPreviewBox');
+    if (metodoPagamento === 'Parcelado') {
+        paymentPreviewBox.style.display = 'flex';
+        document.getElementById('previewValorEntrada').textContent = formatarMoeda(valorEntrada);
+        document.getElementById('previewValorParcelado').textContent = formatarMoeda(valorParcelado);
+    } else {
+        paymentPreviewBox.style.display = 'none';
+    }
 
     const gastoMecanica = parseFloat(document.getElementById('inputGastoMecanica').value) || 0;
     const gastoFunilaria = parseFloat(document.getElementById('inputGastoFunilaria').value) || 0;
@@ -335,6 +354,7 @@ function criarCardVeiculoHTML(v) {
                         <span class="car-tag">${v.ano}</span>
                         ${v.placa ? `<span class="car-tag tag-placa">${escapeHTML(v.placa)}</span>` : ''}
                         <span class="car-tag">${escapeHTML(v.origem || 'Leilão')}</span>
+                        <span class="car-tag tag-pagamento">${v.metodoPagamento === 'Parcelado' ? 'Parcelado' : 'À Vista'}</span>
                     </div>
                 </div>
                 <span class="status-badge ${statusClass}">${escapeHTML(v.status)}</span>
@@ -438,6 +458,7 @@ function abrirModalCadastro() {
     document.getElementById('inputAno').value = new Date().getFullYear();
     document.getElementById('inputComissaoPct').value = 5;
     document.getElementById('inputStatus').value = 'Em Trânsito';
+    document.getElementById('inputMetodoPagamento').value = 'À Vista';
     document.getElementById('inputTaxasPatio').value = 0;
     document.getElementById('inputCustoGuincho').value = 0;
     document.getElementById('inputGastoMecanica').value = 0;
@@ -478,6 +499,7 @@ function abrirModalEdicao(id) {
 
     document.getElementById('inputValorArremate').value = veiculo.valorArremate || 0;
     document.getElementById('inputComissaoPct').value = veiculo.comissaoPct || 5;
+    document.getElementById('inputMetodoPagamento').value = veiculo.metodoPagamento || 'À Vista';
     document.getElementById('inputTaxasPatio').value = veiculo.taxasPatio || 0;
     document.getElementById('inputCustoGuincho').value = veiculo.custoGuincho || 0;
 
@@ -515,6 +537,9 @@ async function salvarVeiculo(e) {
     const taxasPatio = parseFloat(document.getElementById('inputTaxasPatio').value) || 0;
     const custoGuincho = parseFloat(document.getElementById('inputCustoGuincho').value) || 0;
     const totalAquisicao = valorArremate + (valorArremate * (comissaoPct / 100)) + taxasPatio + custoGuincho;
+
+    const metodoPagamento = document.getElementById('inputMetodoPagamento').value;
+    const { valorEntrada, valorParcelado } = calcularPagamento(valorArremate, metodoPagamento);
 
     const gastoMecanica = parseFloat(document.getElementById('inputGastoMecanica').value) || 0;
     const gastoFunilaria = parseFloat(document.getElementById('inputGastoFunilaria').value) || 0;
@@ -557,6 +582,9 @@ async function salvarVeiculo(e) {
         taxasPatio,
         custoGuincho,
         totalAquisicao,
+        metodoPagamento,
+        valorEntrada,
+        valorParcelado,
         gastoMecanica,
         gastoFunilaria,
         gastoEstetica,
@@ -687,6 +715,20 @@ function abrirModalDetalhes(id) {
                     <span class="expense-kpi-label">${isVendido ? 'Lucro Realizado (Venda)' : 'Lucro Estimado (Anúncio)'}</span>
                     <span class="expense-kpi-val ${lucroExibido >= 0 ? 'income' : 'expense'}">${formatarMoeda(lucroExibido)}</span>
                 </div>
+                <div class="expense-kpi-box">
+                    <span class="expense-kpi-label">Método de Arrematação</span>
+                    <span class="expense-kpi-val accent">${v.metodoPagamento === 'Parcelado' ? 'Parcelado' : 'À Vista'}</span>
+                </div>
+                ${v.metodoPagamento === 'Parcelado' ? `
+                <div class="expense-kpi-box">
+                    <span class="expense-kpi-label">Entrada Paga (25%, sem comissão)</span>
+                    <span class="expense-kpi-val">${formatarMoeda(v.valorEntrada || 0)}</span>
+                </div>
+                <div class="expense-kpi-box">
+                    <span class="expense-kpi-label">Saldo Parcelado (75%)</span>
+                    <span class="expense-kpi-val">${formatarMoeda(v.valorParcelado || 0)}</span>
+                </div>
+                ` : ''}
             </div>
         </div>
 

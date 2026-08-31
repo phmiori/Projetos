@@ -149,6 +149,11 @@ function calcularMetricas(data) {
     // Total de Aquisição: Lance + Comissão R$ + Taxas + Guincho
     const totalAquisicao = valorArremate + (valorArremate * (comissaoPct / 100)) + taxasPatio + custoGuincho;
 
+    // Método de Arrematação: À Vista ou Parcelado (25% de entrada sobre o lance, desconsiderando a comissão do leiloeiro)
+    const metodoPagamento = data.metodoPagamento === 'Parcelado' ? 'Parcelado' : 'À Vista';
+    const valorEntrada = metodoPagamento === 'Parcelado' ? valorArremate * 0.25 : 0;
+    const valorParcelado = metodoPagamento === 'Parcelado' ? valorArremate - valorEntrada : 0;
+
     const gastoMecanica = Number(data.gastoMecanica) || 0;
     const gastoFunilaria = Number(data.gastoFunilaria) || 0;
     const gastoEstetica = Number(data.gastoEstetica) || 0;
@@ -201,6 +206,9 @@ function calcularMetricas(data) {
         taxasPatio,
         custoGuincho,
         totalAquisicao,
+        metodoPagamento,
+        valorEntrada,
+        valorParcelado,
         gastoMecanica,
         gastoFunilaria,
         gastoEstetica,

@@ -36,6 +36,11 @@ model Veiculo {
   custoGuincho    Float     @default(0)
   totalAquisicao  Float     @default(0)
 
+  // Método de Arrematação: À Vista ou Parcelado (25% de entrada sobre o lance, sem a comissão do leiloeiro)
+  metodoPagamento String    @default("À Vista")
+  valorEntrada    Float     @default(0)
+  valorParcelado  Float     @default(0)
+
   // 3. Custos de Preparação e Regularização
   gastoMecanica     Float   @default(0)
   gastoFunilaria    Float   @default(0)

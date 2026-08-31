@@ -17,6 +17,7 @@
 - [x] Documentar execução e arquitetura no `README.md`
 - [x] Modal de edição de veículos 100% opaca e com backdrop blur
 - [x] Módulo completo de Lançador de Gastos & Planilha de Serviços do Veículo (design analítico, exportação CSV e venda rápida)
+- [x] Campo **Método de Arrematação** (À Vista / Parcelado) no cadastro do veículo: quando Parcelado, calcula automaticamente a **entrada de 25% sobre o valor do lance (desconsiderando a comissão do leiloeiro)** e o saldo restante de 75%, com preview em tempo real, exibição no card (tag) e no Extrato Analítico
 
 ## 🏢 Módulo de Fundos Imobiliários (FIIs Hub)
 - [x] Criada estrutura modular: `HTML/FII/FundoImobiliário.html`, `CSS/FII/fii.css` e `JS/FII/fii.js`
@@ -57,6 +58,8 @@
 - [x] Verificação automática a cada 60 segundos
 
 > ⚠️ Pendência manual: rodar `npm run prisma:push` (com o servidor Node parado, para evitar o erro EPERM de arquivo em uso no Windows) para criar as tabelas `Evento`, `LocalClimaSalvo`, `GastoCasa`, `ItemDespensa`, `TarefaCasa`, `BlocoTreino`, `ExercicioTreino`, `RegistroSaude`, `VeiculoGaragem` e `ManutencaoGaragem` no banco SQLite local antes de usar os módulos Calendário/Notificação, Locais Salvos do Clima, Finanças & Casa, Treinos & Saúde e Garagem.
+>
+> ⚠️ Pendência manual: rodar `npm run prisma:push` novamente para adicionar as novas colunas `metodoPagamento`, `valorEntrada` e `valorParcelado` na tabela `Veiculo` (módulo Leilão) antes de cadastrar/editar veículos com o novo campo Método de Arrematação.
 
 ## 🌤️ Módulo Clima (Hub Pessoal)
 - [x] Novo módulo dedicado: `HTML/Clima/clima.html`, `CSS/Clima/clima.css` e `JS/Clima/clima.js` — sem necessidade de tabela no banco (dados sempre em tempo real via APIs públicas e gratuitas, sem chave de API)
