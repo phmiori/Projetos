@@ -1604,7 +1604,8 @@ app.put('/api/eventos/:id', async (req, res) => {
                 cor: cor ? String(cor).trim() : existente.cor,
                 lembreteMinutos: lembreteMinutos !== undefined
                     ? (lembreteMinutos === null || lembreteMinutos === '' ? null : parseInt(lembreteMinutos, 10))
-                    : existente.lembreteMinutos
+                    : existente.lembreteMinutos,
+                notificacaoDispensada: false
             }
         });
 
@@ -2618,6 +2619,31 @@ app.delete('/api/garagem/manutencoes/:id', async (req, res) => {
 });
 
 /**
+ * Busca os eventos do usuário cujo lembrete configurado já está dentro da janela de aviso
+ * (do horário do lembrete até o término do evento) e que ainda não foram dispensados.
+ */
+async function buscarEventosComNotificacaoAtiva(usuarioId) {
+    const agora = new Date();
+    const limiteFuturo = new Date(agora.getTime() + 24 * 60 * 60 * 1000);
+
+    const eventos = await prisma.evento.findMany({
+        where: {
+            usuarioId,
+            lembreteMinutos: { not: null },
+            notificacaoDispensada: false,
+            fim: { gte: agora },
+            inicio: { lte: limiteFuturo }
+        },
+        orderBy: { inicio: 'asc' }
+    });
+
+    return eventos.filter(ev => {
+        const horarioLembrete = new Date(ev.inicio.getTime() - (ev.lembreteMinutos || 0) * 60 * 1000);
+        return agora >= horarioLembrete;
+    });
+}
+
+/**
  * ROTA: Notificações Pendentes (sino do cabeçalho)
  * Retorna os eventos cujo lembrete configurado já está dentro da janela de aviso
  * (do horário do lembrete até o término do evento), para alertar o usuário.
@@ -2626,38 +2652,73 @@ app.delete('/api/garagem/manutencoes/:id', async (req, res) => {
 app.get('/api/notificacoes', async (req, res) => {
     try {
         const agora = new Date();
-        const limiteFuturo = new Date(agora.getTime() + 24 * 60 * 60 * 1000);
+        const eventos = await buscarEventosComNotificacaoAtiva(req.session.userId);
 
-        const eventos = await prisma.evento.findMany({
-            where: {
-                usuarioId: req.session.userId,
-                lembreteMinutos: { not: null },
-                fim: { gte: agora },
-                inicio: { lte: limiteFuturo }
-            },
-            orderBy: { inicio: 'asc' }
-        });
-
-        const notificacoes = eventos
-            .filter(ev => {
-                const horarioLembrete = new Date(ev.inicio.getTime() - (ev.lembreteMinutos || 0) * 60 * 1000);
-                return agora >= horarioLembrete;
-            })
-            .map(ev => ({
-                id: ev.id,
-                titulo: ev.titulo,
-                local: ev.local,
-                inicio: ev.inicio,
-                fim: ev.fim,
-                diaTodo: ev.diaTodo,
-                cor: ev.cor,
-                emAndamento: agora >= ev.inicio && agora <= ev.fim
-            }));
+        const notificacoes = eventos.map(ev => ({
+            id: ev.id,
+            titulo: ev.titulo,
+            local: ev.local,
+            inicio: ev.inicio,
+            fim: ev.fim,
+            diaTodo: ev.diaTodo,
+            cor: ev.cor,
+            atualizadoEm: ev.updatedAt,
+            emAndamento: agora >= ev.inicio && agora <= ev.fim
+        }));
 
         res.json(notificacoes);
     } catch (err) {
         console.error('Erro ao buscar notificações:', err);
         res.status(500).json({ error: 'Erro ao buscar notificações' });
+    }
+});
+
+/**
+ * ROTA: Dispensar Todas as Notificações Ativas do Usuário
+ * (marca os eventos correspondentes como notificacaoDispensada, sem apagar os eventos)
+ * DELETE /api/notificacoes
+ */
+app.delete('/api/notificacoes', async (req, res) => {
+    try {
+        const eventos = await buscarEventosComNotificacaoAtiva(req.session.userId);
+        const ids = eventos.map(ev => ev.id);
+
+        if (ids.length > 0) {
+            await prisma.evento.updateMany({
+                where: { id: { in: ids }, usuarioId: req.session.userId },
+                data: { notificacaoDispensada: true }
+            });
+        }
+
+        res.json({ success: true, removidas: ids.length });
+    } catch (err) {
+        console.error('Erro ao apagar notificações:', err);
+        res.status(500).json({ error: 'Erro ao apagar notificações' });
+    }
+});
+
+/**
+ * ROTA: Dispensar uma Notificação Específica
+ * (marca o evento como notificacaoDispensada, sem apagar o evento em si)
+ * DELETE /api/notificacoes/:id
+ */
+app.delete('/api/notificacoes/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+
+        const resultado = await prisma.evento.updateMany({
+            where: { id, usuarioId: req.session.userId },
+            data: { notificacaoDispensada: true }
+        });
+
+        if (resultado.count === 0) {
+            return res.status(404).json({ error: 'Notificação não encontrada' });
+        }
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Erro ao apagar notificação:', err);
+        res.status(500).json({ error: 'Erro ao apagar notificação' });
     }
 });
 

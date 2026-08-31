@@ -266,6 +266,7 @@ model Evento {
   diaTodo         Boolean   @default(false)
   cor             String    @default("#EEBB00")
   lembreteMinutos Int?      // Minutos de antecedência para o sino de notificação (null = sem lembrete)
+  notificacaoDispensada Boolean @default(false) // true quando o usuário exclui a notificação no sino (o evento em si não é apagado)
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
