@@ -11,6 +11,7 @@
     <link rel="stylesheet" href="../../CSS/Index/index.css">
     <link rel="stylesheet" href="../../CSS/Notificacao/notificacao.css">
     <link rel="stylesheet" href="../../CSS/FII/fii.css">
+    <link rel="stylesheet" href="../../CSS/Clima/clima-header-widget.css">
 
     <!-- Chart.js para os Gráficos Analíticos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -20,6 +21,10 @@
 
     <!-- Script do Sino de Notificações (compartilhado por todos os módulos) -->
     <script src="../../JS/Notificacao/notificacao.js" defer></script>
+
+    <!-- Widget de Clima Favorito no Cabeçalho (compartilhado por todos os módulos) -->
+    <script src="../../JS/Clima/clima-codigos.js" defer></script>
+    <script src="../../JS/Clima/clima-header-widget.js" defer></script>
 
     <!-- Script do Módulo FII -->
     <script src="../../JS/FII/fii.js" defer></script>
@@ -64,6 +69,12 @@
         </nav>
 
         <div class="header-right">
+            <!-- Widget de Clima do Local Favorito (compartilhado por todos os módulos) -->
+            <a href="../Clima/clima.html" class="clima-header-widget" id="climaHeaderWidget" style="display:none;" aria-label="Ver clima completo">
+                <span class="clima-header-widget-icon" id="climaHeaderWidgetIcon">🌡️</span>
+                <span class="clima-header-widget-temp" id="climaHeaderWidgetTemp">--°</span>
+            </a>
+
             <!-- Sino de Notificações (compartilhado por todos os módulos) -->
             <div class="notification-menu" id="notificationMenu">
                 <button class="notification-bell-btn" id="btnNotificacoes" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Ver notificações">

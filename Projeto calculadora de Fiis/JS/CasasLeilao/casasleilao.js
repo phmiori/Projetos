@@ -72,11 +72,9 @@ function initMobileNavigation() {
 }
 
 function initEventListeners() {
-    const btnHeader = document.getElementById('btnNovoImovelHeader');
     const btnWelcome = document.getElementById('btnCadastrarNovoImovel');
     const btnEmpty = document.getElementById('btnEmptyCadastrar');
 
-    if (btnHeader) btnHeader.addEventListener('click', () => abrirModalCadastro());
     if (btnWelcome) btnWelcome.addEventListener('click', () => abrirModalCadastro());
     if (btnEmpty) btnEmpty.addEventListener('click', () => abrirModalCadastro());
 

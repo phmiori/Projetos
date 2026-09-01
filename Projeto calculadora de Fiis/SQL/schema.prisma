@@ -251,6 +251,8 @@ model LocalClimaSalvo {
   lat       Float
   lon       Float
 
+  favoritoHeader Boolean @default(false)
+
   createdAt DateTime @default(now())
 }
 

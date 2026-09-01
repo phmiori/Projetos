@@ -157,6 +157,36 @@
     transform: translateY(-2px);
 }
 
+.clima-saved-card.is-header-favorito {
+    border-color: var(--accent-color);
+}
+
+.clima-saved-pin {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: var(--text-sub);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.clima-saved-pin:hover {
+    background-color: var(--bg-main);
+    color: var(--accent-color);
+}
+
+.clima-saved-pin.is-active {
+    color: var(--accent-color);
+}
+
 .clima-saved-remove {
     position: absolute;
     top: 4px;

@@ -1820,6 +1820,79 @@ app.delete('/api/clima/salvos/:id', async (req, res) => {
 });
 
 /**
+ * ROTA: Definir/Remover o Local Favorito exibido no widget do cabeçalho
+ * PUT /api/clima/salvos/:id/favorito
+ */
+app.put('/api/clima/salvos/:id/favorito', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const favorito = !!req.body.favorito;
+        const usuarioId = req.session.userId;
+
+        const local = await prisma.localClimaSalvo.findFirst({ where: { id, usuarioId } });
+        if (!local) {
+            return res.status(404).json({ error: 'Local não encontrado' });
+        }
+
+        if (favorito) {
+            await prisma.localClimaSalvo.updateMany({
+                where: { usuarioId, favoritoHeader: true },
+                data: { favoritoHeader: false }
+            });
+        }
+
+        const atualizado = await prisma.localClimaSalvo.update({
+            where: { id },
+            data: { favoritoHeader: favorito }
+        });
+
+        res.json(atualizado);
+    } catch (err) {
+        console.error('Erro ao definir local favorito:', err);
+        res.status(500).json({ error: 'Erro ao definir local favorito' });
+    }
+});
+
+/**
+ * ROTA: Clima Atual do Local Favorito (widget compartilhado no cabeçalho de todos os módulos)
+ * GET /api/clima/favorito
+ */
+app.get('/api/clima/favorito', async (req, res) => {
+    try {
+        const local = await prisma.localClimaSalvo.findFirst({
+            where: { usuarioId: req.session.userId, favoritoHeader: true }
+        });
+
+        if (!local) {
+            return res.json(null);
+        }
+
+        const params = new URLSearchParams({
+            latitude: local.lat,
+            longitude: local.lon,
+            current: 'temperature_2m,weather_code,is_day',
+            timezone: 'auto'
+        });
+
+        const response = await fetch(`https://api.open-meteo.com/v1/forecast?${params.toString()}`);
+        if (!response.ok) {
+            throw new Error('Serviço de previsão indisponível');
+        }
+
+        const dados = await response.json();
+        res.json({
+            nome: local.nome,
+            estado: local.estado,
+            pais: local.pais,
+            current: dados.current
+        });
+    } catch (err) {
+        console.error('Erro ao buscar clima do local favorito:', err);
+        res.status(500).json({ error: 'Erro ao buscar clima do local favorito' });
+    }
+});
+
+/**
  * ROTA: Listar Gastos da Casa (opcionalmente filtrado por mês/ano/categoria)
  * GET /api/casa/gastos?mes=&ano=&categoria=
  */

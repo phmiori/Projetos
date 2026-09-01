@@ -174,9 +174,7 @@ function initMobileNav() {
 }
 
 function initEventListeners() {
-    const btnNovoCofrinhoHeader = document.getElementById('btnNovoCofrinhoHeader');
     const btnAdicionarCofrinho = document.getElementById('btnAdicionarCofrinho');
-    if (btnNovoCofrinhoHeader) btnNovoCofrinhoHeader.addEventListener('click', () => abrirModalCofrinho());
     if (btnAdicionarCofrinho) btnAdicionarCofrinho.addEventListener('click', () => abrirModalCofrinho());
 
     const modalCofrinhoClose = document.getElementById('modalCofrinhoClose');

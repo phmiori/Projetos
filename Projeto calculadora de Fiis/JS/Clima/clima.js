@@ -8,37 +8,6 @@ const API_BASE = '/api';
 const CLIMA_RECENTES_KEY = 'financehub_clima_recentes';
 const DIAS_SEMANA = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 
-const CODIGO_CLIMA = {
-    0: { icone: '☀️', iconeNoite: '🌙', texto: 'Céu limpo' },
-    1: { icone: '🌤️', iconeNoite: '🌤️', texto: 'Poucas nuvens' },
-    2: { icone: '⛅', iconeNoite: '☁️', texto: 'Parcialmente nublado' },
-    3: { icone: '☁️', texto: 'Nublado' },
-    45: { icone: '🌫️', texto: 'Neblina' },
-    48: { icone: '🌫️', texto: 'Neblina com geada' },
-    51: { icone: '🌦️', texto: 'Garoa leve' },
-    53: { icone: '🌦️', texto: 'Garoa moderada' },
-    55: { icone: '🌧️', texto: 'Garoa densa' },
-    56: { icone: '🌧️', texto: 'Garoa congelante' },
-    57: { icone: '🌧️', texto: 'Garoa congelante densa' },
-    61: { icone: '🌧️', texto: 'Chuva leve' },
-    63: { icone: '🌧️', texto: 'Chuva moderada' },
-    65: { icone: '🌧️', texto: 'Chuva forte' },
-    66: { icone: '🌧️', texto: 'Chuva congelante' },
-    67: { icone: '🌧️', texto: 'Chuva congelante forte' },
-    71: { icone: '🌨️', texto: 'Neve leve' },
-    73: { icone: '🌨️', texto: 'Neve moderada' },
-    75: { icone: '❄️', texto: 'Neve forte' },
-    77: { icone: '❄️', texto: 'Grãos de neve' },
-    80: { icone: '🌦️', texto: 'Pancadas de chuva leves' },
-    81: { icone: '🌧️', texto: 'Pancadas de chuva moderadas' },
-    82: { icone: '⛈️', texto: 'Pancadas de chuva fortes' },
-    85: { icone: '🌨️', texto: 'Pancadas de neve leves' },
-    86: { icone: '🌨️', texto: 'Pancadas de neve fortes' },
-    95: { icone: '⛈️', texto: 'Trovoada' },
-    96: { icone: '⛈️', texto: 'Trovoada com granizo leve' },
-    99: { icone: '⛈️', texto: 'Trovoada com granizo forte' }
-};
-
 const stateClima = { local: null };
 let debounceBuscaClima = null;
 let locaisSalvosCache = [];
@@ -169,7 +138,7 @@ function renderLocaisSalvos() {
 
 function criarCardLocalSalvo(local) {
     const card = document.createElement('div');
-    card.className = 'clima-saved-card';
+    card.className = local.favoritoHeader ? 'clima-saved-card is-header-favorito' : 'clima-saved-card';
 
     const btnRemover = document.createElement('button');
     btnRemover.type = 'button';
@@ -179,6 +148,17 @@ function criarCardLocalSalvo(local) {
     btnRemover.addEventListener('click', (e) => {
         e.stopPropagation();
         removerLocalSalvo(local.id);
+    });
+
+    const btnFavoritoHeader = document.createElement('button');
+    btnFavoritoHeader.type = 'button';
+    btnFavoritoHeader.className = local.favoritoHeader ? 'clima-saved-pin is-active' : 'clima-saved-pin';
+    btnFavoritoHeader.title = local.favoritoHeader ? 'Remover do cabeçalho' : 'Mostrar no cabeçalho';
+    btnFavoritoHeader.setAttribute('aria-label', btnFavoritoHeader.title);
+    btnFavoritoHeader.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v5"></path><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"></path></svg>';
+    btnFavoritoHeader.addEventListener('click', (e) => {
+        e.stopPropagation();
+        definirFavoritoHeader(local.id, !local.favoritoHeader);
     });
 
     const icone = document.createElement('span');
@@ -195,6 +175,7 @@ function criarCardLocalSalvo(local) {
     nome.title = local.nome;
 
     card.appendChild(btnRemover);
+    card.appendChild(btnFavoritoHeader);
     card.appendChild(icone);
     card.appendChild(temp);
     card.appendChild(nome);
@@ -239,10 +220,32 @@ async function removerLocalSalvo(id) {
         if (!resp.ok) throw new Error('Erro ao remover local');
 
         await carregarLocaisSalvos();
+        atualizarWidgetHeaderClima();
     } catch (err) {
         console.warn('[Clima] Erro ao remover local salvo.', err.message);
         alert('Não foi possível remover este local agora.');
     }
+}
+
+async function definirFavoritoHeader(id, favorito) {
+    try {
+        const resp = await fetch(`${API_BASE}/clima/salvos/${id}/favorito`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ favorito })
+        });
+        if (!resp.ok) throw new Error('Erro ao definir local favorito');
+
+        await carregarLocaisSalvos();
+        atualizarWidgetHeaderClima();
+    } catch (err) {
+        console.warn('[Clima] Erro ao definir local favorito do cabeçalho.', err.message);
+        alert('Não foi possível atualizar o favorito do cabeçalho agora.');
+    }
+}
+
+function atualizarWidgetHeaderClima() {
+    if (typeof carregarClimaHeaderWidget === 'function') carregarClimaHeaderWidget();
 }
 
 // =========================================================
@@ -370,12 +373,6 @@ async function carregarPrevisao(lat, lon) {
         console.warn('[Clima] Erro ao carregar previsão.', err.message);
         mostrarStatus('Não foi possível carregar a previsão do tempo agora. Tente novamente mais tarde.', true);
     }
-}
-
-function obterInfoClima(codigo, isDay) {
-    const info = CODIGO_CLIMA[codigo] || { icone: '🌡️', texto: 'Condição desconhecida' };
-    const icone = (isDay === 0 && info.iconeNoite) ? info.iconeNoite : info.icone;
-    return { icone, texto: info.texto };
 }
 
 function renderClimaAtual(current, daily) {

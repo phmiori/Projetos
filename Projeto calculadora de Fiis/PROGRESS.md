@@ -60,6 +60,8 @@
 > ⚠️ Pendência manual: rodar `npm run prisma:push` (com o servidor Node parado, para evitar o erro EPERM de arquivo em uso no Windows) para criar as tabelas `Evento`, `LocalClimaSalvo`, `GastoCasa`, `ItemDespensa`, `TarefaCasa`, `BlocoTreino`, `ExercicioTreino`, `RegistroSaude`, `VeiculoGaragem` e `ManutencaoGaragem` no banco SQLite local antes de usar os módulos Calendário/Notificação, Locais Salvos do Clima, Finanças & Casa, Treinos & Saúde e Garagem.
 >
 > ⚠️ Pendência manual: rodar `npm run prisma:push` novamente para adicionar as novas colunas `metodoPagamento`, `valorEntrada`, `valorParcelado`, `qtdParcelas` e `valorParcela` na tabela `Veiculo` (módulo Leilão) antes de cadastrar/editar veículos com o novo campo Método de Arrematação.
+>
+> ⚠️ Pendência manual: rodar `npm run prisma:push` novamente (com o servidor Node parado) para adicionar a nova coluna `favoritoHeader` na tabela `LocalClimaSalvo` antes de usar o botão de "pin" que define o local exibido no Widget de Clima do Cabeçalho.
 
 ## 🌤️ Módulo Clima (Hub Pessoal)
 - [x] Novo módulo dedicado: `HTML/Clima/clima.html`, `CSS/Clima/clima.css` e `JS/Clima/clima.js` — sem necessidade de tabela no banco (dados sempre em tempo real via APIs públicas e gratuitas, sem chave de API)
@@ -69,6 +71,7 @@
 - [x] Fallback automático para o último local buscado quando a geolocalização é negada ou indisponível
 - [x] Integração da navegação (sidebar) no Hub Pessoal de todos os módulos
 - [x] Locais Salvos persistentes: modelo `LocalClimaSalvo` no Prisma vinculado ao usuário, com API REST própria (`GET/POST/DELETE /api/clima/salvos`) — botão de estrela no card do clima atual para salvar/remover, e seção "Meus Locais Salvos" (com mini-previsão de cada um) sempre visível ao entrar no módulo
+- [x] **Widget de Clima no Cabeçalho** (ícone + temperatura, presente em todos os módulos): campo `favoritoHeader` no modelo `LocalClimaSalvo`, com botão de "pin" em cada card de Local Salvo para escolher qual local aparece no cabeçalho (`PUT /api/clima/salvos/:id/favorito`, apenas um favorito por vez) e rota combinada `GET /api/clima/favorito` que já retorna o clima atual do local marcado — tabela de códigos/ícones extraída para `JS/Clima/clima-codigos.js` (compartilhada entre o módulo Clima e o widget) e widget em `JS/Clima/clima-header-widget.js` + `CSS/Clima/clima-header-widget.css`, incluído no cabeçalho de todos os módulos do Hub
 
 ## 🏠 Módulo Finanças & Casa (Hub Pessoal)
 - [x] Novo módulo dedicado: `HTML/FinancasCasa/financascasa.html`, `CSS/FinancasCasa/financascasa.css` e `JS/FinancasCasa/financascasa.js`, com 3 sub-abas (padrão de sub-navegação já usado no módulo FII)

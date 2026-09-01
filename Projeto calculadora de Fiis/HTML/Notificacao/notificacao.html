@@ -10,12 +10,17 @@
     <link rel="stylesheet" href="../../CSS/Global/global_tokens.css">
     <link rel="stylesheet" href="../../CSS/Index/index.css">
     <link rel="stylesheet" href="../../CSS/Notificacao/notificacao.css">
+    <link rel="stylesheet" href="../../CSS/Clima/clima-header-widget.css">
 
     <!-- Guarda de Autenticação (deve carregar antes do script do módulo) -->
     <script src="../../JS/Global/auth.js" defer></script>
 
     <!-- Script do Sino / Central de Notificações -->
     <script src="../../JS/Notificacao/notificacao.js" defer></script>
+
+    <!-- Widget de Clima Favorito no Cabeçalho (compartilhado por todos os módulos) -->
+    <script src="../../JS/Clima/clima-codigos.js" defer></script>
+    <script src="../../JS/Clima/clima-header-widget.js" defer></script>
 </head>
 <body class="auth-pending" data-standalone-chrome="true">
 
@@ -51,6 +56,12 @@
         </nav>
 
         <div class="header-right">
+            <!-- Widget de Clima do Local Favorito (compartilhado por todos os módulos) -->
+            <a href="../Clima/clima.html" class="clima-header-widget" id="climaHeaderWidget" style="display:none;" aria-label="Ver clima completo">
+                <span class="clima-header-widget-icon" id="climaHeaderWidgetIcon">🌡️</span>
+                <span class="clima-header-widget-temp" id="climaHeaderWidgetTemp">--°</span>
+            </a>
+
             <!-- Sino de Notificações (compartilhado por todos os módulos) -->
             <div class="notification-menu" id="notificationMenu">
                 <button class="notification-bell-btn" id="btnNotificacoes" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Ver notificações">
