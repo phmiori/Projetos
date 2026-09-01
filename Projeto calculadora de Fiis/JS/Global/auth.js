@@ -10,6 +10,7 @@
         .then(usuario => {
             document.body.classList.remove('auth-pending');
             inicializarMenuConta(usuario);
+            aplicarModulosOcultos();
         })
         .catch(() => {
             window.location.replace('../Login/login.html');
@@ -28,6 +29,7 @@ function inicializarMenuConta(usuario) {
     if (nomeLabel) nomeLabel.textContent = usuario.nome;
     if (dropdownNome) dropdownNome.textContent = usuario.nome;
     if (dropdownUsername) dropdownUsername.textContent = '@' + usuario.username;
+    atualizarAvatarHeader(usuario.fotoUrl);
 
     btnAccount.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -59,6 +61,48 @@ function inicializarMenuConta(usuario) {
             await fetch('/api/auth/logout', { method: 'POST' });
             window.location.replace('../Login/login.html');
         });
+    }
+}
+
+/**
+ * Atualiza a foto (ou ícone padrão) exibida no botão de conta do cabeçalho.
+ * Exposta em window para ser chamada também pelo módulo de Configurações após salvar uma nova foto.
+ */
+function atualizarAvatarHeader(fotoUrl) {
+    const avatarImg = document.getElementById('accountAvatarImg');
+    const iconWrap = document.getElementById('accountIconWrap');
+    if (!avatarImg || !iconWrap) return;
+
+    if (fotoUrl) {
+        avatarImg.src = fotoUrl;
+        avatarImg.style.display = 'block';
+        iconWrap.style.display = 'none';
+    } else {
+        avatarImg.removeAttribute('src');
+        avatarImg.style.display = 'none';
+        iconWrap.style.display = 'inline-flex';
+    }
+}
+window.atualizarAvatarHeader = atualizarAvatarHeader;
+
+/**
+ * Oculta da sidebar e dos cards do Hub Financeiro os módulos (negócios) que o usuário
+ * escolheu esconder em Configurações, marcados no HTML pelo atributo data-modulo.
+ */
+async function aplicarModulosOcultos() {
+    try {
+        const response = await fetch('/api/auth/modulos-ocultos');
+        if (!response.ok) return;
+        const ocultos = await response.json();
+
+        ocultos.forEach(modulo => {
+            document.querySelectorAll(`[data-modulo="${modulo}"]`).forEach(el => {
+                const li = el.closest('li');
+                (li || el).style.display = 'none';
+            });
+        });
+    } catch (err) {
+        console.error('Erro ao aplicar módulos ocultos:', err);
     }
 }
 
