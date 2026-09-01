@@ -71,6 +71,7 @@ model Usuario {
   username    String   @unique
   nome        String
   senhaHash   String
+  fotoUrl     String?  // Foto de perfil em Data URL (Base64), definida em Configurações
 
   veiculos    Veiculo[]
   imoveis     ImovelLeilao[]
@@ -85,9 +86,23 @@ model Usuario {
   blocosTreino   BlocoTreino[]
   registrosSaude RegistroSaude[]
   veiculosGaragem VeiculoGaragem[]
+  modulosOcultos  ModuloOculto[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model ModuloOculto {
+  id        Int      @id @default(autoincrement())
+
+  usuarioId Int
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  modulo    String   // Chave do módulo do Hub Financeiro ocultado: fii, cripto, leilao, casasleilao, cofrinho
+
+  createdAt DateTime @default(now())
+
+  @@unique([usuarioId, modulo])
 }
 
 model VeiculoGaragem {

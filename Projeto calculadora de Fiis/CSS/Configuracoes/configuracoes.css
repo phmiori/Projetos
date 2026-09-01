@@ -1,0 +1,236 @@
+/* CSS/Configuracoes/configuracoes.css */
+/* Estilos específicos do Módulo de Configurações da Conta (Perfil e Hub Financeiro) */
+
+.config-card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.config-card-header {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.config-card-title {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.config-card-subtitle {
+    font-size: 0.9rem;
+    color: var(--text-sub);
+}
+
+/* --- Perfil: Avatar + Formulário --- */
+.perfil-body {
+    display: flex;
+    align-items: flex-start;
+    gap: 28px;
+    flex-wrap: wrap;
+}
+
+.avatar-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.avatar-preview {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    background-color: var(--bg-main);
+    border: 2px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-size: 2rem;
+    font-weight: 800;
+    color: var(--accent-color);
+}
+
+.avatar-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.avatar-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 140px;
+}
+
+.btn-avatar-upload,
+.btn-avatar-remove {
+    display: block;
+    text-align: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: var(--radius-button);
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: var(--transition-fast);
+    border: 1px solid var(--border-color);
+}
+
+.btn-avatar-upload {
+    background-color: var(--accent-color);
+    color: var(--accent-text);
+    border-color: var(--accent-color);
+}
+
+.btn-avatar-upload:hover {
+    filter: brightness(0.9);
+}
+
+.btn-avatar-remove {
+    background-color: transparent;
+    color: var(--color-expense);
+}
+
+.btn-avatar-remove:hover {
+    background-color: var(--bg-main);
+}
+
+.perfil-form {
+    flex: 1;
+    min-width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.config-field-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-sub);
+    margin-top: 4px;
+}
+
+.perfil-form .btn-missao-primary {
+    align-self: flex-start;
+    margin-top: 6px;
+}
+
+/* --- Lista de Módulos do Hub Financeiro --- */
+.modulos-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    list-style: none;
+}
+
+.modulo-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 8px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.modulo-item:last-child {
+    border-bottom: none;
+}
+
+.modulo-icon-wrap {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-button);
+    background-color: var(--bg-main);
+    color: var(--accent-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.modulo-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.modulo-nome {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.modulo-desc {
+    font-size: 0.8rem;
+    color: var(--text-sub);
+}
+
+/* --- Interruptor (Toggle Switch) --- */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    inset: 0;
+    background-color: var(--border-color);
+    border-radius: 24px;
+    transition: var(--transition-fast);
+}
+
+.toggle-slider::before {
+    content: "";
+    position: absolute;
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: var(--missao-white);
+    border-radius: 50%;
+    transition: var(--transition-fast);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: var(--accent-color);
+}
+
+.toggle-switch input:checked + .toggle-slider::before {
+    transform: translateX(20px);
+}
+
+/* --- Responsividade Mobile --- */
+@media (max-width: 480px) {
+    .perfil-body {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+    }
+
+    .perfil-form {
+        width: 100%;
+    }
+
+    .perfil-form .btn-missao-primary {
+        align-self: stretch;
+    }
+}

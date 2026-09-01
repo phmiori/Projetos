@@ -123,6 +123,17 @@ body.auth-pending {
     position: relative;
 }
 
+.account-icon-wrap {
+    display: inline-flex;
+}
+
+.account-avatar-img {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
 .account-dropdown {
     display: none;
     position: absolute;
@@ -161,8 +172,10 @@ body.auth-pending {
 }
 
 .account-dropdown-item {
+    display: block;
     width: 100%;
     text-align: left;
+    text-decoration: none;
     background: none;
     border: none;
     color: var(--text-main);

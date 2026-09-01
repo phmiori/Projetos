@@ -92,3 +92,10 @@
 - [x] **Aba Histórico de Vendidos**: veículos com status "Vendido" saem da garagem ativa e entram numa tabela histórica mostrando data/valor de compra, data/valor de venda, gasto total em manutenção e o resultado financeiro (venda − custo total) de cada um, com KPI de resultado total acumulado
 - [x] Integração da navegação (sidebar) no Hub Pessoal de todos os módulos
 
+## ⚙️ Módulo Configurações (Conta do Usuário)
+- [x] Novo módulo dedicado: `HTML/Configuracoes/configuracoes.html`, `CSS/Configuracoes/configuracoes.css` e `JS/Configuracoes/configuracoes.js`, acessível pelo novo link "Configurações" no menu de conta do cabeçalho (todas as páginas)
+- [x] **Cartão Perfil**: alteração do nome de exibição (`PUT /api/auth/perfil`) e upload de foto de perfil (redimensionada no navegador via `<canvas>` e salva como Data URL Base64 no campo `Usuario.fotoUrl`), com botão de remover foto — avatar exibido em tempo real no botão de conta do cabeçalho em todas as páginas
+- [x] **Cartão Negócios do Hub Financeiro**: lista com interruptor (toggle) para cada negócio (Fundos Imobiliários, Cripto, Carros de Leilão, Casas de Leilão, Cofrinho) — ao desativar, o modelo `ModuloOculto` grava a preferência (`POST/DELETE /api/auth/modulos-ocultos/:modulo`) e o item some da sidebar e dos cards da Visão Geral em todas as páginas (via atributo `data-modulo` + `aplicarModulosOcultos()` em `JS/Global/auth.js`)
+
+> ⚠️ Pendência manual: rodar `npm run prisma:push` (com o servidor Node parado, para evitar o erro EPERM de arquivo em uso no Windows) para criar a tabela `ModuloOculto` e a coluna `fotoUrl` em `Usuario` antes de usar o módulo Configurações.
+
