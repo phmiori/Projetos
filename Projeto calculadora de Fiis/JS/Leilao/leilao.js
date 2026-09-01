@@ -152,10 +152,11 @@ function initCalculationTriggers() {
     });
 }
 
-function calcularPagamento(valorArremate, metodoPagamento) {
+function calcularPagamento(valorArremate, metodoPagamento, qtdParcelas) {
     const valorEntrada = metodoPagamento === 'Parcelado' ? valorArremate * 0.25 : 0;
     const valorParcelado = metodoPagamento === 'Parcelado' ? valorArremate - valorEntrada : 0;
-    return { valorEntrada, valorParcelado };
+    const valorParcela = qtdParcelas > 0 ? valorParcelado / qtdParcelas : 0;
+    return { valorEntrada, valorParcelado, valorParcela };
 }
 
 function recalcularPrevisoesModal() {
@@ -167,14 +168,19 @@ function recalcularPrevisoesModal() {
     const totalAquisicao = valorArremate + (valorArremate * (comissaoPct / 100)) + taxasPatio + custoGuincho;
 
     const metodoPagamento = document.getElementById('inputMetodoPagamento').value;
-    const { valorEntrada, valorParcelado } = calcularPagamento(valorArremate, metodoPagamento);
+    const qtdParcelas = parseInt(document.getElementById('inputQtdParcelas').value, 10) || 0;
+    const { valorEntrada, valorParcelado, valorParcela } = calcularPagamento(valorArremate, metodoPagamento, qtdParcelas);
 
+    const qtdParcelasField = document.getElementById('qtdParcelasField');
     const paymentPreviewBox = document.getElementById('paymentPreviewBox');
     if (metodoPagamento === 'Parcelado') {
+        qtdParcelasField.style.display = 'flex';
         paymentPreviewBox.style.display = 'flex';
         document.getElementById('previewValorEntrada').textContent = formatarMoeda(valorEntrada);
         document.getElementById('previewValorParcelado').textContent = formatarMoeda(valorParcelado);
+        document.getElementById('previewValorParcela').textContent = qtdParcelas > 0 ? formatarMoeda(valorParcela) : '--';
     } else {
+        qtdParcelasField.style.display = 'none';
         paymentPreviewBox.style.display = 'none';
     }
 
@@ -354,7 +360,7 @@ function criarCardVeiculoHTML(v) {
                         <span class="car-tag">${v.ano}</span>
                         ${v.placa ? `<span class="car-tag tag-placa">${escapeHTML(v.placa)}</span>` : ''}
                         <span class="car-tag">${escapeHTML(v.origem || 'Leilão')}</span>
-                        <span class="car-tag tag-pagamento">${v.metodoPagamento === 'Parcelado' ? 'Parcelado' : 'À Vista'}</span>
+                        <span class="car-tag tag-pagamento">${v.metodoPagamento === 'Parcelado' ? `Parcelado ${v.qtdParcelas ? 'em ' + v.qtdParcelas + 'x' : ''}` : 'À Vista'}</span>
                     </div>
                 </div>
                 <span class="status-badge ${statusClass}">${escapeHTML(v.status)}</span>
@@ -459,6 +465,7 @@ function abrirModalCadastro() {
     document.getElementById('inputComissaoPct').value = 5;
     document.getElementById('inputStatus').value = 'Em Trânsito';
     document.getElementById('inputMetodoPagamento').value = 'À Vista';
+    document.getElementById('inputQtdParcelas').value = '';
     document.getElementById('inputTaxasPatio').value = 0;
     document.getElementById('inputCustoGuincho').value = 0;
     document.getElementById('inputGastoMecanica').value = 0;
@@ -500,6 +507,7 @@ function abrirModalEdicao(id) {
     document.getElementById('inputValorArremate').value = veiculo.valorArremate || 0;
     document.getElementById('inputComissaoPct').value = veiculo.comissaoPct || 5;
     document.getElementById('inputMetodoPagamento').value = veiculo.metodoPagamento || 'À Vista';
+    document.getElementById('inputQtdParcelas').value = veiculo.qtdParcelas || '';
     document.getElementById('inputTaxasPatio').value = veiculo.taxasPatio || 0;
     document.getElementById('inputCustoGuincho').value = veiculo.custoGuincho || 0;
 
@@ -539,7 +547,8 @@ async function salvarVeiculo(e) {
     const totalAquisicao = valorArremate + (valorArremate * (comissaoPct / 100)) + taxasPatio + custoGuincho;
 
     const metodoPagamento = document.getElementById('inputMetodoPagamento').value;
-    const { valorEntrada, valorParcelado } = calcularPagamento(valorArremate, metodoPagamento);
+    const qtdParcelas = parseInt(document.getElementById('inputQtdParcelas').value, 10) || 0;
+    const { valorEntrada, valorParcelado, valorParcela } = calcularPagamento(valorArremate, metodoPagamento, qtdParcelas);
 
     const gastoMecanica = parseFloat(document.getElementById('inputGastoMecanica').value) || 0;
     const gastoFunilaria = parseFloat(document.getElementById('inputGastoFunilaria').value) || 0;
@@ -585,6 +594,8 @@ async function salvarVeiculo(e) {
         metodoPagamento,
         valorEntrada,
         valorParcelado,
+        qtdParcelas,
+        valorParcela,
         gastoMecanica,
         gastoFunilaria,
         gastoEstetica,
@@ -727,6 +738,10 @@ function abrirModalDetalhes(id) {
                 <div class="expense-kpi-box">
                     <span class="expense-kpi-label">Saldo Parcelado (75%)</span>
                     <span class="expense-kpi-val">${formatarMoeda(v.valorParcelado || 0)}</span>
+                </div>
+                <div class="expense-kpi-box">
+                    <span class="expense-kpi-label">Parcelas Combinadas</span>
+                    <span class="expense-kpi-val">${v.qtdParcelas ? `${v.qtdParcelas}x de ${formatarMoeda(v.valorParcela || 0)}` : 'Não informado'}</span>
                 </div>
                 ` : ''}
             </div>

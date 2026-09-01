@@ -153,6 +153,8 @@ function calcularMetricas(data) {
     const metodoPagamento = data.metodoPagamento === 'Parcelado' ? 'Parcelado' : 'À Vista';
     const valorEntrada = metodoPagamento === 'Parcelado' ? valorArremate * 0.25 : 0;
     const valorParcelado = metodoPagamento === 'Parcelado' ? valorArremate - valorEntrada : 0;
+    const qtdParcelas = metodoPagamento === 'Parcelado' ? (parseInt(data.qtdParcelas, 10) || 0) : 0;
+    const valorParcela = qtdParcelas > 0 ? valorParcelado / qtdParcelas : 0;
 
     const gastoMecanica = Number(data.gastoMecanica) || 0;
     const gastoFunilaria = Number(data.gastoFunilaria) || 0;
@@ -209,6 +211,8 @@ function calcularMetricas(data) {
         metodoPagamento,
         valorEntrada,
         valorParcelado,
+        qtdParcelas,
+        valorParcela,
         gastoMecanica,
         gastoFunilaria,
         gastoEstetica,

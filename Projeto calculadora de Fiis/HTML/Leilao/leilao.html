@@ -583,6 +583,10 @@
                                     <option value="Parcelado">Parcelado (25% de entrada)</option>
                                 </select>
                             </div>
+                            <div class="input-field" id="qtdParcelasField" style="display: none;">
+                                <label for="inputQtdParcelas">Quantidade de Parcelas Combinadas</label>
+                                <input type="number" id="inputQtdParcelas" class="input-missao calc-trigger" min="1" step="1" placeholder="Ex: 10">
+                            </div>
                         </div>
 
                         <div class="payment-preview-box" id="paymentPreviewBox" style="display: none;">
@@ -593,6 +597,10 @@
                             <div class="payment-preview-item">
                                 <span class="payment-preview-label">Saldo Parcelado (75% do lance):</span>
                                 <strong id="previewValorParcelado">R$ 0,00</strong>
+                            </div>
+                            <div class="payment-preview-item">
+                                <span class="payment-preview-label">Valor de Cada Parcela:</span>
+                                <strong id="previewValorParcela">R$ 0,00</strong>
                             </div>
                         </div>
                     </div>
