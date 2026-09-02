@@ -468,11 +468,11 @@ app.get('/api/veiculos', async (req, res) => {
 
         if (search) {
             where.OR = [
-                { modelo: { contains: search } },
-                { marca: { contains: search } },
-                { placa: { contains: search } },
-                { origem: { contains: search } },
-                { leiloeiro: { contains: search } }
+                { modelo: { contains: search, mode: 'insensitive' } },
+                { marca: { contains: search, mode: 'insensitive' } },
+                { placa: { contains: search, mode: 'insensitive' } },
+                { origem: { contains: search, mode: 'insensitive' } },
+                { leiloeiro: { contains: search, mode: 'insensitive' } }
             ];
         }
 
@@ -906,11 +906,11 @@ app.get('/api/imoveis', async (req, res) => {
 
         if (search) {
             where.OR = [
-                { endereco: { contains: search } },
-                { cidade: { contains: search } },
-                { matricula: { contains: search } },
-                { origem: { contains: search } },
-                { leiloeiro: { contains: search } }
+                { endereco: { contains: search, mode: 'insensitive' } },
+                { cidade: { contains: search, mode: 'insensitive' } },
+                { matricula: { contains: search, mode: 'insensitive' } },
+                { origem: { contains: search, mode: 'insensitive' } },
+                { leiloeiro: { contains: search, mode: 'insensitive' } }
             ];
         }
 
@@ -2585,9 +2585,9 @@ app.get('/api/garagem/veiculos', async (req, res) => {
 
         if (search) {
             where.OR = [
-                { modelo: { contains: search } },
-                { marca: { contains: search } },
-                { placa: { contains: search } }
+                { modelo: { contains: search, mode: 'insensitive' } },
+                { marca: { contains: search, mode: 'insensitive' } },
+                { placa: { contains: search, mode: 'insensitive' } }
             ];
         }
 

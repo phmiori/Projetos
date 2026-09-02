@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js",
+    "dev": "node --env-file=.env --watch server.js",
     "prisma:generate": "prisma generate --schema=./SQL/schema.prisma",
     "prisma:push": "prisma db push --schema=./SQL/schema.prisma",
     "prisma:studio": "prisma studio --schema=./SQL/schema.prisma"
