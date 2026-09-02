@@ -110,6 +110,12 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarCarteira();
     renderizarRadar();
 
+    setInterval(() => {
+        if (document.visibilityState === 'visible') {
+            atualizarCotacoes({ silencioso: true });
+        }
+    }, FII_COTACOES_AUTO_MS);
+
     // Iniciar simulação padrão da calculadora
     executarSimulacao();
 });
@@ -162,15 +168,20 @@ async function carregarCarteira() {
     atualizarLabelUltimaAtualizacao();
 }
 
+const FII_COTACOES_AUTO_MS = 5 * 60 * 1000;
+
 /**
- * Busca as cotações de mercado atuais de todos os FIIs da carteira (Yahoo Finance via backend)
+ * Busca as cotações de mercado atuais de todos os FIIs da carteira (Yahoo Finance via backend).
+ * Com { silencioso: true } (usado pelo polling automático) não mexe no botão nem exibe alertas de erro.
  */
-async function atualizarCotacoes() {
+async function atualizarCotacoes({ silencioso = false } = {}) {
     const btn = document.getElementById('btnAtualizarCotacoes');
     const btnLabel = btn ? btn.querySelector('span') : null;
 
-    if (btn) btn.disabled = true;
-    if (btnLabel) btnLabel.textContent = 'Atualizando...';
+    if (!silencioso) {
+        if (btn) btn.disabled = true;
+        if (btnLabel) btnLabel.textContent = 'Atualizando...';
+    }
 
     try {
         const response = await fetch(`${API_BASE}/fii/atualizar-precos`, { method: 'POST' });
@@ -182,15 +193,19 @@ async function atualizarCotacoes() {
         atualizarLabelUltimaAtualizacao();
 
         const falhas = (data.resultados || []).filter(r => !r.sucesso);
-        if (falhas.length > 0) {
+        if (falhas.length > 0 && !silencioso) {
             alert(`Não foi possível atualizar a cotação de: ${falhas.map(f => f.ticker).join(', ')}`);
         }
     } catch (err) {
         console.error('Erro ao atualizar cotações:', err);
-        alert('Erro ao buscar cotações atualizadas. Tente novamente em instantes.');
+        if (!silencioso) {
+            alert('Erro ao buscar cotações atualizadas. Tente novamente em instantes.');
+        }
     } finally {
-        if (btn) btn.disabled = false;
-        if (btnLabel) btnLabel.textContent = 'Atualizar Cotações';
+        if (!silencioso) {
+            if (btn) btn.disabled = false;
+            if (btnLabel) btnLabel.textContent = 'Atualizar Cotações';
+        }
     }
 }
 
@@ -353,7 +368,7 @@ function initEventListeners() {
 
     // Atualização de Cotações de Mercado
     const btnAtualizarCotacoes = document.getElementById('btnAtualizarCotacoes');
-    if (btnAtualizarCotacoes) btnAtualizarCotacoes.addEventListener('click', atualizarCotacoes);
+    if (btnAtualizarCotacoes) btnAtualizarCotacoes.addEventListener('click', () => atualizarCotacoes());
 
     // Exportação CSV
     const btnExportPortfolioCsv = document.getElementById('btnExportPortfolioCsv');
