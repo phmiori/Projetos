@@ -13,7 +13,193 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarBadgeFii();
     carregarModuloCasas();
     carregarModuloCripto();
+    carregarGraficosHub();
 });
+
+/**
+ * Cores fixas por módulo, espelhando os acentos usados nos cards da grade
+ * (ver .module-feature-card[data-modulo] em CSS/Index/index.css).
+ */
+const CORES_MODULOS_HUB = {
+    fii: '#EEBB00',
+    cripto: '#3B82F6',
+    leilao: '#F97316',
+    casasleilao: '#8B5CF6',
+    cofrinho: '#EC4899'
+};
+
+let chartAlocacaoModulos = null;
+let chartResultadoModulos = null;
+let ultimosDadosGraficosHub = null;
+
+async function carregarGraficosHub() {
+    if (typeof Chart === 'undefined') return;
+
+    const [fiiRes, criptoRes, cofrinhoRes, imoveisRes, dashboardRes] = await Promise.allSettled([
+        fetch('/api/fii', { cache: 'no-store' }),
+        fetch('/api/cripto'),
+        fetch('/api/cofrinhos'),
+        fetch('/api/imoveis'),
+        fetch('/api/dashboard')
+    ]);
+
+    const lerJson = async (resultado) => {
+        if (resultado.status !== 'fulfilled' || !resultado.value.ok) return [];
+        try { return await resultado.value.json(); } catch { return []; }
+    };
+
+    const fundos = await lerJson(fiiRes);
+    const moedas = await lerJson(criptoRes);
+    const cofrinhos = await lerJson(cofrinhoRes);
+    const imoveis = await lerJson(imoveisRes);
+    const dashboard = dashboardRes.status === 'fulfilled' && dashboardRes.value.ok
+        ? await dashboardRes.value.json().catch(() => ({}))
+        : {};
+
+    // FII: patrimônio de mercado e renda mensal estimada
+    let fiiPatrimonio = 0, fiiRendaMensal = 0;
+    (Array.isArray(fundos) ? fundos : []).forEach(item => {
+        const cotas = item.cotas || 0;
+        const precoRef = item.precoAtual != null ? item.precoAtual : item.precoMedio;
+        fiiPatrimonio += cotas * (precoRef || 0);
+        fiiRendaMensal += cotas * (item.ultimoDividendo || 0);
+    });
+
+    // Cripto: patrimônio de mercado e valorização em R$
+    let criptoPatrimonio = 0, criptoInvestido = 0;
+    (Array.isArray(moedas) ? moedas : []).forEach(m => {
+        const precoRef = m.precoAtual != null ? m.precoAtual : m.precoMedio;
+        criptoInvestido += (m.quantidade || 0) * (m.precoMedio || 0);
+        criptoPatrimonio += (m.quantidade || 0) * (precoRef || 0);
+    });
+    const criptoValorizacaoRS = criptoPatrimonio - criptoInvestido;
+
+    // Cofrinho: valor investido e rendimento bruto acumulado
+    let cofrinhoInvestido = 0, cofrinhoRendimento = 0;
+    (Array.isArray(cofrinhos) ? cofrinhos : []).forEach(item => {
+        const valorInvestido = Number(item.valorInvestido) || 0;
+        const rendaPorDia = Number(item.rendaPorDia) || 0;
+        const taxaDiaria = valorInvestido > 0 ? rendaPorDia / valorInvestido : 0;
+        const diasCorridos = calcularDiasCorridosCofrinho(item.dataInicio);
+        const diasUteis = contarDiasUteisCofrinho(item.dataInicio, diasCorridos);
+        const saldoBruto = valorInvestido * Math.pow(1 + taxaDiaria, diasUteis);
+
+        cofrinhoInvestido += valorInvestido;
+        cofrinhoRendimento += saldoBruto - valorInvestido;
+    });
+
+    // Casas de Leilão: capital alocado em estoque e lucro apurado em vendas
+    let casasCapital = 0, casasLucro = 0;
+    (Array.isArray(imoveis) ? imoveis : []).forEach(im => {
+        if (im.status === 'Vendido') {
+            if (im.lucroBruto !== null && im.lucroBruto !== undefined) casasLucro += Number(im.lucroBruto);
+        } else {
+            casasCapital += Number(im.custoTotal || 0);
+        }
+    });
+
+    // Carros de Leilão: capital alocado e lucro acumulado (via /api/dashboard)
+    const kpis = dashboard.kpis || {};
+    const leilaoCapital = Number(kpis.capitalInvestidoParado || 0);
+    const leilaoLucro = Number(kpis.lucroTotalAcumulado || 0);
+
+    ultimosDadosGraficosHub = {
+        alocacao: [fiiPatrimonio, criptoPatrimonio, cofrinhoInvestido, casasCapital, leilaoCapital],
+        resultado: [fiiRendaMensal, criptoValorizacaoRS, cofrinhoRendimento, casasLucro, leilaoLucro]
+    };
+    renderizarGraficosHub(ultimosDadosGraficosHub);
+}
+
+function renderizarGraficosHub({ alocacao, resultado }) {
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const textColor = isDark ? '#FFFFFF' : '#1C1C1E';
+    const borderColor = isDark ? '#2C2C2E' : '#E5E5EA';
+    const labels = ['FIIs', 'Cripto', 'Cofrinho', 'Casas de Leilão', 'Carros de Leilão'];
+    const cores = [
+        CORES_MODULOS_HUB.fii,
+        CORES_MODULOS_HUB.cripto,
+        CORES_MODULOS_HUB.cofrinho,
+        CORES_MODULOS_HUB.casasleilao,
+        CORES_MODULOS_HUB.leilao
+    ];
+
+    const ctxAlocacao = document.getElementById('chartAlocacaoModulos');
+    if (ctxAlocacao) {
+        if (chartAlocacaoModulos) chartAlocacaoModulos.destroy();
+
+        const temDados = alocacao.some(v => v > 0);
+        chartAlocacaoModulos = new Chart(ctxAlocacao, {
+            type: 'doughnut',
+            data: {
+                labels: temDados ? labels : ['Sem dados ainda'],
+                datasets: [{
+                    data: temDados ? alocacao : [1],
+                    backgroundColor: temDados ? cores : [borderColor],
+                    borderColor: isDark ? '#1C1C1E' : '#FFFFFF',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { color: textColor, font: { weight: '600', size: 11 } }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => ` ${ctx.label}: ${formatarMoeda(ctx.raw)}`
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    const ctxResultado = document.getElementById('chartResultadoModulos');
+    if (ctxResultado) {
+        if (chartResultadoModulos) chartResultadoModulos.destroy();
+
+        chartResultadoModulos = new Chart(ctxResultado, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Resultado (R$)',
+                    data: resultado,
+                    backgroundColor: cores,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => ` ${formatarMoeda(ctx.raw)}`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: textColor }
+                    },
+                    y: {
+                        grid: { color: borderColor },
+                        ticks: {
+                            color: textColor,
+                            callback: (v) => formatarMoeda(v)
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
 
 async function carregarBadgeCofrinho() {
     const badge = document.getElementById('badgeCofrinhoCountIndex');
@@ -275,6 +461,7 @@ function initTheme() {
             const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
             applyTheme(nextTheme);
             localStorage.setItem(STORAGE_KEY, nextTheme);
+            if (ultimosDadosGraficosHub) renderizarGraficosHub(ultimosDadosGraficosHub);
         });
     }
 
