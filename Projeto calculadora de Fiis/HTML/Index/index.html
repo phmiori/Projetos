@@ -12,6 +12,9 @@
     <link rel="stylesheet" href="../../CSS/Notificacao/notificacao.css">
     <link rel="stylesheet" href="../../CSS/Clima/clima-header-widget.css">
 
+    <!-- Chart.js para os Gráficos Analíticos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <!-- Guarda de Autenticação (deve carregar antes do script do módulo) -->
     <script src="../../JS/Global/auth.js" defer></script>
 
@@ -398,6 +401,38 @@
                             </div>
                         </article>
 
+                    </div>
+                </section>
+
+                <!-- Seção de Gráficos Analíticos do Hub -->
+                <section class="charts-section" aria-label="Análise Visual Consolidada">
+                    <div class="section-header">
+                        <div>
+                            <h2 class="section-title">Análise Visual do Portfólio</h2>
+                            <p class="section-subtitle">Distribuição de capital e resultado financeiro entre os módulos ativos.</p>
+                        </div>
+                    </div>
+
+                    <div class="charts-grid">
+                        <article class="chart-card">
+                            <div class="chart-card-header">
+                                <h3 class="chart-card-title">Alocação de Capital por Módulo</h3>
+                                <p class="chart-card-subtitle">Onde seu patrimônio está concentrado hoje</p>
+                            </div>
+                            <div class="chart-canvas-wrap">
+                                <canvas id="chartAlocacaoModulos" role="img" aria-label="Gráfico de alocação de capital por módulo"></canvas>
+                            </div>
+                        </article>
+
+                        <article class="chart-card">
+                            <div class="chart-card-header">
+                                <h3 class="chart-card-title">Resultado Financeiro por Módulo</h3>
+                                <p class="chart-card-subtitle">Renda, lucro e valorização apurados em cada módulo</p>
+                            </div>
+                            <div class="chart-canvas-wrap">
+                                <canvas id="chartResultadoModulos" role="img" aria-label="Gráfico de resultado financeiro por módulo"></canvas>
+                            </div>
+                        </article>
                     </div>
                 </section>
 
