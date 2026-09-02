@@ -134,7 +134,8 @@ function mapFiiFromApi(r) {
         lastDividend: r.ultimoDividendo,
         notes: r.observacoes || '',
         currentPrice: r.precoAtual,
-        priceUpdatedAt: r.precoAtualizadoEm
+        priceUpdatedAt: r.precoAtualizadoEm,
+        alertPrice: r.alertaPrecoAbaixoDe
     };
 }
 
@@ -145,7 +146,8 @@ function mapFiiToApi(item) {
         cotas: item.shares,
         precoMedio: item.avgPrice,
         ultimoDividendo: item.lastDividend,
-        observacoes: item.notes
+        observacoes: item.notes,
+        alertaPrecoAbaixoDe: item.alertPrice
     };
 }
 
@@ -508,6 +510,7 @@ function renderizarCarteira() {
                     <td>
                         <span class="ticker-badge-cell">${escapeHTML(item.ticker)}</span>
                         ${item.notes ? `<div style="font-size: 0.75rem; color: var(--text-sub); margin-top: 2px;">${escapeHTML(item.notes)}</div>` : ''}
+                        ${item.alertPrice != null ? `<div style="font-size: 0.75rem; color: var(--accent-color); margin-top: 2px;" title="Alerta por e-mail se cair abaixo deste valor">🔔 abaixo de ${formatarMoeda(item.alertPrice)}</div>` : ''}
                     </td>
                     <td><span class="segment-tag-cell">${escapeHTML(item.segment)}</span></td>
                     <td><strong>${item.shares.toLocaleString('pt-BR')}</strong></td>
@@ -913,6 +916,7 @@ function abrirModalFII(id = null) {
             document.getElementById('inputFiiAvgPrice').value = item.avgPrice;
             document.getElementById('inputFiiLastDividend').value = item.lastDividend;
             document.getElementById('inputFiiNotes').value = item.notes || '';
+            document.getElementById('inputFiiAlertPrice').value = item.alertPrice != null ? item.alertPrice : '';
         }
     } else {
         document.getElementById('modalFiiTitle').textContent = 'Adicionar FII à Carteira';
@@ -939,13 +943,15 @@ async function salvarFII(e) {
     const avgPrice = parseFloat(document.getElementById('inputFiiAvgPrice').value) || 0;
     const lastDividend = parseFloat(document.getElementById('inputFiiLastDividend').value) || 0;
     const notes = document.getElementById('inputFiiNotes').value.trim();
+    const alertPriceRaw = document.getElementById('inputFiiAlertPrice').value;
+    const alertPrice = alertPriceRaw !== '' ? parseFloat(alertPriceRaw) : null;
 
     if (!ticker || shares <= 0 || avgPrice <= 0) {
         alert('Preencha os campos obrigatórios corretamente.');
         return;
     }
 
-    const payload = mapFiiToApi({ ticker, segment, shares, avgPrice, lastDividend, notes });
+    const payload = mapFiiToApi({ ticker, segment, shares, avgPrice, lastDividend, notes, alertPrice });
 
     try {
         const url = id ? `${API_BASE}/fii/${id}` : `${API_BASE}/fii`;

@@ -8,6 +8,8 @@ const cors = require('cors');
 const path = require('path');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
+const nodemailer = require('nodemailer');
+const cron = require('node-cron');
 const { PrismaClient } = require('@prisma/client');
 
 const prisma = new PrismaClient();
@@ -97,16 +99,16 @@ app.get('/api/auth/me', async (req, res) => {
         return res.status(401).json({ error: 'Não autenticado' });
     }
 
-    res.json({ id: usuario.id, username: usuario.username, nome: usuario.nome, fotoUrl: usuario.fotoUrl });
+    res.json({ id: usuario.id, username: usuario.username, nome: usuario.nome, fotoUrl: usuario.fotoUrl, email: usuario.email });
 });
 
 /**
- * ROTA: Atualizar Perfil do Usuário Logado (Nome e Foto)
+ * ROTA: Atualizar Perfil do Usuário Logado (Nome, Foto e E-mail)
  * PUT /api/auth/perfil
  */
 app.put('/api/auth/perfil', requireAuth, async (req, res) => {
     try {
-        const { nome, fotoUrl } = req.body;
+        const { nome, fotoUrl, email } = req.body;
 
         const data = {};
         if (nome !== undefined) {
@@ -118,13 +120,20 @@ app.put('/api/auth/perfil', requireAuth, async (req, res) => {
         if (fotoUrl !== undefined) {
             data.fotoUrl = fotoUrl ? String(fotoUrl) : null;
         }
+        if (email !== undefined) {
+            const emailLimpo = email ? String(email).trim() : '';
+            if (emailLimpo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailLimpo)) {
+                return res.status(400).json({ error: 'Informe um e-mail válido.' });
+            }
+            data.email = emailLimpo || null;
+        }
 
         const usuario = await prisma.usuario.update({
             where: { id: req.session.userId },
             data
         });
 
-        res.json({ id: usuario.id, username: usuario.username, nome: usuario.nome, fotoUrl: usuario.fotoUrl });
+        res.json({ id: usuario.id, username: usuario.username, nome: usuario.nome, fotoUrl: usuario.fotoUrl, email: usuario.email });
     } catch (err) {
         console.error('Erro ao atualizar perfil:', err);
         res.status(500).json({ error: 'Erro ao atualizar perfil' });
@@ -1202,6 +1211,60 @@ async function buscarCotacaoTicker(ticker) {
 }
 
 /**
+ * Transportador de e-mail (Gmail SMTP) usado para os alertas de queda de preço de FII.
+ * Requer as variáveis de ambiente SMTP_USER (endereço Gmail) e SMTP_PASS (senha de app do Gmail).
+ */
+const mailTransporter = (process.env.SMTP_USER && process.env.SMTP_PASS)
+    ? nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+    })
+    : null;
+
+async function enviarEmailAlertaPrecoFII(destinatario, ticker, precoAtual, limite) {
+    if (!mailTransporter) {
+        console.warn('[Alerta FII] SMTP_USER/SMTP_PASS não configurados — e-mail de alerta não enviado.');
+        return;
+    }
+
+    await mailTransporter.sendMail({
+        from: `"FinanceHub" <${process.env.SMTP_USER}>`,
+        to: destinatario,
+        subject: `🔻 ${ticker} caiu abaixo de R$ ${limite.toFixed(2)}`,
+        text: `O fundo imobiliário ${ticker} está cotado a R$ ${precoAtual.toFixed(2)}, abaixo do limite de R$ ${limite.toFixed(2)} configurado no FinanceHub.`,
+        html: `<p>O fundo imobiliário <strong>${ticker}</strong> caiu abaixo do limite que você configurou no FinanceHub.</p>
+               <p><strong>Preço atual:</strong> R$ ${precoAtual.toFixed(2)}<br>
+               <strong>Limite configurado:</strong> R$ ${limite.toFixed(2)}</p>`
+    });
+}
+
+/**
+ * Atualiza a cotação de um InvestimentoFII e, se ele tiver um alertaPrecoAbaixoDe configurado,
+ * dispara um e-mail quando o preço cruza abaixo do limite. Usa a flag alertaDisparado para não
+ * reenviar o alerta repetidamente: só envia de novo depois que o preço se recupera acima do
+ * limite e cai outra vez.
+ */
+async function atualizarPrecoFiiEChecarAlerta(inv, emailUsuario) {
+    const { precoAtual } = await buscarCotacaoTicker(inv.ticker);
+    const data = { precoAtual, precoAtualizadoEm: new Date() };
+
+    if (inv.alertaPrecoAbaixoDe != null) {
+        if (precoAtual < inv.alertaPrecoAbaixoDe && !inv.alertaDisparado) {
+            data.alertaDisparado = true;
+            if (emailUsuario) {
+                enviarEmailAlertaPrecoFII(emailUsuario, inv.ticker, precoAtual, inv.alertaPrecoAbaixoDe)
+                    .catch(e => console.error(`[Alerta FII] Falha ao enviar e-mail (${inv.ticker}):`, e.message));
+            }
+        } else if (precoAtual >= inv.alertaPrecoAbaixoDe && inv.alertaDisparado) {
+            data.alertaDisparado = false;
+        }
+    }
+
+    await prisma.investimentoFII.update({ where: { id: inv.id }, data });
+    return precoAtual;
+}
+
+/**
  * ROTA: Listar Carteira de FIIs do Usuário Logado
  * GET /api/fii
  */
@@ -1224,7 +1287,7 @@ app.get('/api/fii', async (req, res) => {
  */
 app.post('/api/fii', async (req, res) => {
     try {
-        const { ticker, segmento, cotas, precoMedio, ultimoDividendo, observacoes } = req.body;
+        const { ticker, segmento, cotas, precoMedio, ultimoDividendo, observacoes, alertaPrecoAbaixoDe } = req.body;
 
         if (!ticker || !cotas || !precoMedio) {
             return res.status(400).json({ error: 'Ticker, cotas e preço médio são obrigatórios.' });
@@ -1238,7 +1301,10 @@ app.post('/api/fii', async (req, res) => {
                 cotas: parseInt(cotas, 10) || 0,
                 precoMedio: Number(precoMedio) || 0,
                 ultimoDividendo: Number(ultimoDividendo) || 0,
-                observacoes: observacoes ? String(observacoes).trim() : null
+                observacoes: observacoes ? String(observacoes).trim() : null,
+                alertaPrecoAbaixoDe: alertaPrecoAbaixoDe !== undefined && alertaPrecoAbaixoDe !== null && alertaPrecoAbaixoDe !== ''
+                    ? Number(alertaPrecoAbaixoDe)
+                    : null
             }
         });
 
@@ -1256,7 +1322,7 @@ app.post('/api/fii', async (req, res) => {
 app.put('/api/fii/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
-        const { ticker, segmento, cotas, precoMedio, ultimoDividendo, observacoes } = req.body;
+        const { ticker, segmento, cotas, precoMedio, ultimoDividendo, observacoes, alertaPrecoAbaixoDe } = req.body;
 
         const existente = await prisma.investimentoFII.findFirst({
             where: { id, usuarioId: req.session.userId }
@@ -1264,6 +1330,10 @@ app.put('/api/fii/:id', async (req, res) => {
         if (!existente) {
             return res.status(404).json({ error: 'FII não encontrado na carteira' });
         }
+
+        const novoAlerta = alertaPrecoAbaixoDe !== undefined
+            ? (alertaPrecoAbaixoDe !== null && alertaPrecoAbaixoDe !== '' ? Number(alertaPrecoAbaixoDe) : null)
+            : existente.alertaPrecoAbaixoDe;
 
         const atualizado = await prisma.investimentoFII.update({
             where: { id },
@@ -1273,7 +1343,10 @@ app.put('/api/fii/:id', async (req, res) => {
                 cotas: cotas !== undefined ? parseInt(cotas, 10) || 0 : existente.cotas,
                 precoMedio: precoMedio !== undefined ? Number(precoMedio) || 0 : existente.precoMedio,
                 ultimoDividendo: ultimoDividendo !== undefined ? Number(ultimoDividendo) || 0 : existente.ultimoDividendo,
-                observacoes: observacoes !== undefined ? (observacoes ? String(observacoes).trim() : null) : existente.observacoes
+                observacoes: observacoes !== undefined ? (observacoes ? String(observacoes).trim() : null) : existente.observacoes,
+                alertaPrecoAbaixoDe: novoAlerta,
+                // Muda de limite reabre a possibilidade de alerta (evita ficar "travado" em true com o limite antigo)
+                alertaDisparado: novoAlerta !== existente.alertaPrecoAbaixoDe ? false : existente.alertaDisparado
             }
         });
 
@@ -1312,17 +1385,14 @@ app.delete('/api/fii/:id', async (req, res) => {
  */
 app.post('/api/fii/atualizar-precos', async (req, res) => {
     try {
-        const investimentos = await prisma.investimentoFII.findMany({
-            where: { usuarioId: req.session.userId }
-        });
+        const [investimentos, usuario] = await Promise.all([
+            prisma.investimentoFII.findMany({ where: { usuarioId: req.session.userId } }),
+            prisma.usuario.findUnique({ where: { id: req.session.userId } })
+        ]);
 
         const resultados = await Promise.all(investimentos.map(async (inv) => {
             try {
-                const { precoAtual } = await buscarCotacaoTicker(inv.ticker);
-                await prisma.investimentoFII.update({
-                    where: { id: inv.id },
-                    data: { precoAtual, precoAtualizadoEm: new Date() }
-                });
+                const precoAtual = await atualizarPrecoFiiEChecarAlerta(inv, usuario?.email);
                 return { ticker: inv.ticker, sucesso: true, precoAtual };
             } catch (e) {
                 return { ticker: inv.ticker, sucesso: false, erro: e.message };
@@ -2924,11 +2994,39 @@ async function seedUsuarios() {
     }
 }
 
+/**
+ * Job agendado: a cada 5 minutos, atualiza a cotação de todo FII que tenha um alerta de preço
+ * configurado (alertaPrecoAbaixoDe) e dispara e-mail para o dono da carteira quando o preço
+ * cruzar abaixo do limite. Roda no servidor, independente de alguém estar com o site aberto.
+ */
+async function verificarAlertasPrecoFII() {
+    try {
+        const investimentos = await prisma.investimentoFII.findMany({
+            where: { alertaPrecoAbaixoDe: { not: null } },
+            include: { usuario: { select: { email: true } } }
+        });
+
+        await Promise.all(investimentos.map(async (inv) => {
+            try {
+                await atualizarPrecoFiiEChecarAlerta(inv, inv.usuario?.email);
+            } catch (e) {
+                console.error(`[Alerta FII] Falha ao checar ${inv.ticker}:`, e.message);
+            }
+        }));
+    } catch (err) {
+        console.error('[Alerta FII] Falha no job agendado:', err.message);
+    }
+}
+
+cron.schedule('*/5 * * * *', verificarAlertasPrecoFII);
+
 // Iniciar servidor
 app.listen(PORT, async () => {
     console.log(`====================================================`);
     console.log(` AutoLeilão Hub (FinanceHub) rodando na porta ${PORT}`);
     console.log(` Acesso web: http://localhost:${PORT}/HTML/Index/index.html`);
+    console.log(`====================================================`);
+    console.log(mailTransporter ? ' Alertas de preço por e-mail: ativos (SMTP configurado)' : ' Alertas de preço por e-mail: DESATIVADOS (defina SMTP_USER e SMTP_PASS no .env)');
     console.log(`====================================================`);
     await seedUsuarios();
 });
