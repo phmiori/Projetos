@@ -8,12 +8,12 @@ document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initMobileNavigation();
     initDateDisplay();
-    carregarMetricasConsolidadas();
+    carregarModuloLeilaoCarros();
     carregarBadgeCofrinho();
     carregarBadgeFii();
     carregarModuloCasas();
     carregarModuloCripto();
-    carregarGraficosHub();
+    carregarDadosConsolidadosHub();
 });
 
 /**
@@ -32,9 +32,7 @@ let chartAlocacaoModulos = null;
 let chartResultadoModulos = null;
 let ultimosDadosGraficosHub = null;
 
-async function carregarGraficosHub() {
-    if (typeof Chart === 'undefined') return;
-
+async function carregarDadosConsolidadosHub() {
     const [fiiRes, criptoRes, cofrinhoRes, imoveisRes, dashboardRes] = await Promise.allSettled([
         fetch('/api/fii', { cache: 'no-store' }),
         fetch('/api/cripto'),
@@ -56,12 +54,13 @@ async function carregarGraficosHub() {
         ? await dashboardRes.value.json().catch(() => ({}))
         : {};
 
-    // FII: patrimônio de mercado e renda mensal estimada
-    let fiiPatrimonio = 0, fiiRendaMensal = 0;
+    // FII: patrimônio de mercado, custo de aquisição e renda mensal estimada
+    let fiiPatrimonio = 0, fiiInvestido = 0, fiiRendaMensal = 0;
     (Array.isArray(fundos) ? fundos : []).forEach(item => {
         const cotas = item.cotas || 0;
         const precoRef = item.precoAtual != null ? item.precoAtual : item.precoMedio;
         fiiPatrimonio += cotas * (precoRef || 0);
+        fiiInvestido += cotas * (item.precoMedio || 0);
         fiiRendaMensal += cotas * (item.ultimoDividendo || 0);
     });
 
@@ -88,26 +87,63 @@ async function carregarGraficosHub() {
         cofrinhoRendimento += saldoBruto - valorInvestido;
     });
 
-    // Casas de Leilão: capital alocado em estoque e lucro apurado em vendas
-    let casasCapital = 0, casasLucro = 0;
+    // Casas de Leilão: capital alocado em estoque, lucro apurado em vendas e custo total investido (vendidos + estoque)
+    let casasCapital = 0, casasLucro = 0, casasCustoTotal = 0, casasEmEstoque = 0, casasVendidos = 0;
     (Array.isArray(imoveis) ? imoveis : []).forEach(im => {
+        casasCustoTotal += Number(im.custoTotal || 0);
         if (im.status === 'Vendido') {
+            casasVendidos++;
             if (im.lucroBruto !== null && im.lucroBruto !== undefined) casasLucro += Number(im.lucroBruto);
         } else {
+            casasEmEstoque++;
             casasCapital += Number(im.custoTotal || 0);
         }
     });
 
-    // Carros de Leilão: capital alocado e lucro acumulado (via /api/dashboard)
+    // Carros de Leilão: capital alocado, lucro acumulado e contagens (via /api/dashboard)
     const kpis = dashboard.kpis || {};
     const leilaoCapital = Number(kpis.capitalInvestidoParado || 0);
     const leilaoLucro = Number(kpis.lucroTotalAcumulado || 0);
+    const leilaoEmEstoque = Number(kpis.totalEstoque || 0);
+    const leilaoVendidos = Number(kpis.totalVendidos || 0);
 
     ultimosDadosGraficosHub = {
         alocacao: [fiiPatrimonio, criptoPatrimonio, cofrinhoInvestido, casasCapital, leilaoCapital],
         resultado: [fiiRendaMensal, criptoValorizacaoRS, cofrinhoRendimento, casasLucro, leilaoLucro]
     };
-    renderizarGraficosHub(ultimosDadosGraficosHub);
+    if (typeof Chart !== 'undefined') renderizarGraficosHub(ultimosDadosGraficosHub);
+
+    atualizarKpisGlobaisHub({
+        capitalAlocado: fiiPatrimonio + criptoPatrimonio + cofrinhoInvestido + casasCapital + leilaoCapital,
+        ativosEmAndamento: (Array.isArray(fundos) ? fundos.length : 0)
+            + (Array.isArray(moedas) ? moedas.length : 0)
+            + (Array.isArray(cofrinhos) ? cofrinhos.length : 0)
+            + casasEmEstoque + leilaoEmEstoque,
+        lucroLiquido: casasLucro + leilaoLucro + cofrinhoRendimento,
+        operacoesFinalizadas: casasVendidos + leilaoVendidos,
+        ganhoParaRoi: (fiiPatrimonio - fiiInvestido) + criptoValorizacaoRS + cofrinhoRendimento + casasLucro + leilaoLucro,
+        capitalBaseRoi: fiiInvestido + criptoInvestido + cofrinhoInvestido + casasCustoTotal + leilaoCapital
+    });
+}
+
+/**
+ * Preenche os 3 KPIs "Globais" do painel com totais que somam todos os módulos
+ * (FII, Cripto, Cofrinho, Casas e Carros de Leilão), não apenas Carros de Leilão.
+ */
+function atualizarKpisGlobaisHub({ capitalAlocado, ativosEmAndamento, lucroLiquido, operacoesFinalizadas, ganhoParaRoi, capitalBaseRoi }) {
+    const roiGlobal = capitalBaseRoi > 0 ? (ganhoParaRoi / capitalBaseRoi) * 100 : 0;
+
+    const hubLucroTotal = document.getElementById('hubLucroTotal');
+    const hubQtdOperacoes = document.getElementById('hubQtdOperacoes');
+    const hubCapitalAlocado = document.getElementById('hubCapitalAlocado');
+    const hubQtdAtivos = document.getElementById('hubQtdAtivos');
+    const hubRoiMedio = document.getElementById('hubRoiMedio');
+
+    if (hubLucroTotal) hubLucroTotal.textContent = formatarMoeda(lucroLiquido);
+    if (hubQtdOperacoes) hubQtdOperacoes.textContent = `${operacoesFinalizadas} operação(ões) finalizada(s)`;
+    if (hubCapitalAlocado) hubCapitalAlocado.textContent = formatarMoeda(capitalAlocado);
+    if (hubQtdAtivos) hubQtdAtivos.textContent = `${ativosEmAndamento} ativo(s) em andamento`;
+    if (hubRoiMedio) hubRoiMedio.textContent = `${roiGlobal.toFixed(1)}%`;
 }
 
 function renderizarGraficosHub({ alocacao, resultado }) {
@@ -461,7 +497,7 @@ function initTheme() {
             const nextTheme = currentTheme === 'dark' ? 'light' : 'dark';
             applyTheme(nextTheme);
             localStorage.setItem(STORAGE_KEY, nextTheme);
-            if (ultimosDadosGraficosHub) renderizarGraficosHub(ultimosDadosGraficosHub);
+            if (ultimosDadosGraficosHub && typeof Chart !== 'undefined') renderizarGraficosHub(ultimosDadosGraficosHub);
         });
     }
 
@@ -513,22 +549,13 @@ function initDateDisplay() {
     }
 }
 
-async function carregarMetricasConsolidadas() {
+async function carregarModuloLeilaoCarros() {
     try {
         const response = await fetch('/api/dashboard');
         if (!response.ok) throw new Error('API indisponível');
 
         const data = await response.json();
         const kpis = data.kpis || {};
-
-        // KPIs Globais
-        document.getElementById('hubLucroTotal').textContent = formatarMoeda(kpis.lucroTotalAcumulado || 0);
-        document.getElementById('hubQtdOperacoes').textContent = `${kpis.totalVendidos || 0} operação(ões) finalizada(s)`;
-
-        document.getElementById('hubCapitalAlocado').textContent = formatarMoeda(kpis.capitalInvestidoParado || 0);
-        document.getElementById('hubQtdAtivos').textContent = `${kpis.totalEstoque || 0} ativo(s) em andamento`;
-
-        document.getElementById('hubRoiMedio').textContent = `${(kpis.roiMedio || 0).toFixed(1)}%`;
 
         // Card do Módulo Leilão
         document.getElementById('moduleLeilaoEstoque').textContent = `${kpis.totalEstoque || 0} carros`;
@@ -569,12 +596,6 @@ async function carregarMetricasConsolidadas() {
         });
 
         const roiMedio = totalVendidos > 0 ? (somaRoi / totalVendidos) : 0;
-
-        document.getElementById('hubLucroTotal').textContent = formatarMoeda(lucroTotal);
-        document.getElementById('hubQtdOperacoes').textContent = `${totalVendidos} operação(ões) finalizada(s)`;
-        document.getElementById('hubCapitalAlocado').textContent = formatarMoeda(capitalAlocado);
-        document.getElementById('hubQtdAtivos').textContent = `${totalEstoque} ativo(s) em andamento`;
-        document.getElementById('hubRoiMedio').textContent = `${roiMedio.toFixed(1)}%`;
 
         document.getElementById('moduleLeilaoEstoque').textContent = `${totalEstoque} carros`;
         document.getElementById('moduleLeilaoLucro').textContent = formatarMoeda(lucroTotal);
