@@ -6,8 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Veiculo {
@@ -72,6 +72,7 @@ model Usuario {
   nome        String
   senhaHash   String
   fotoUrl     String?  // Foto de perfil em Data URL (Base64), definida em Configurações
+  email       String?  // Usado para envio de alertas (ex.: queda de preço de FII)
 
   veiculos    Veiculo[]
   imoveis     ImovelLeilao[]
@@ -390,6 +391,10 @@ model InvestimentoFII {
   // Cotação de mercado obtida automaticamente (Yahoo Finance)
   precoAtual        Float?
   precoAtualizadoEm DateTime?
+
+  // Alerta por e-mail de queda de preço
+  alertaPrecoAbaixoDe Float?   // se definido, envia e-mail quando precoAtual cruzar abaixo deste valor
+  alertaDisparado     Boolean  @default(false) // evita reenviar o alerta enquanto o preço não se recuperar acima do limite
 
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt

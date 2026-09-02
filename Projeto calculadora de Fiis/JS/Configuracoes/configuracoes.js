@@ -55,6 +55,7 @@ async function carregarPerfil() {
 function preencherPerfil(usuario) {
     document.getElementById('inputNomePerfil').value = usuario.nome || '';
     document.getElementById('inputUsernamePerfil').value = usuario.username || '';
+    document.getElementById('inputEmailPerfil').value = usuario.email || '';
     atualizarAvatar(usuario.fotoUrl, usuario.nome);
 
     const formPerfil = document.getElementById('formPerfil');
@@ -138,12 +139,13 @@ async function salvarPerfil(e) {
     e.preventDefault();
     const feedback = document.getElementById('perfilFeedback');
     const nome = document.getElementById('inputNomePerfil').value.trim();
+    const email = document.getElementById('inputEmailPerfil').value.trim();
 
     try {
         const response = await fetch('/api/auth/perfil', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ nome })
+            body: JSON.stringify({ nome, email })
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Não foi possível salvar o perfil.');

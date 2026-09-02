@@ -110,6 +110,12 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarCarteira();
     renderizarRadar();
 
+    setInterval(() => {
+        if (document.visibilityState === 'visible') {
+            atualizarCotacoes({ silencioso: true });
+        }
+    }, FII_COTACOES_AUTO_MS);
+
     // Iniciar simulação padrão da calculadora
     executarSimulacao();
 });
@@ -128,7 +134,8 @@ function mapFiiFromApi(r) {
         lastDividend: r.ultimoDividendo,
         notes: r.observacoes || '',
         currentPrice: r.precoAtual,
-        priceUpdatedAt: r.precoAtualizadoEm
+        priceUpdatedAt: r.precoAtualizadoEm,
+        alertPrice: r.alertaPrecoAbaixoDe
     };
 }
 
@@ -139,7 +146,8 @@ function mapFiiToApi(item) {
         cotas: item.shares,
         precoMedio: item.avgPrice,
         ultimoDividendo: item.lastDividend,
-        observacoes: item.notes
+        observacoes: item.notes,
+        alertaPrecoAbaixoDe: item.alertPrice
     };
 }
 
@@ -162,15 +170,20 @@ async function carregarCarteira() {
     atualizarLabelUltimaAtualizacao();
 }
 
+const FII_COTACOES_AUTO_MS = 5 * 60 * 1000;
+
 /**
- * Busca as cotações de mercado atuais de todos os FIIs da carteira (Yahoo Finance via backend)
+ * Busca as cotações de mercado atuais de todos os FIIs da carteira (Yahoo Finance via backend).
+ * Com { silencioso: true } (usado pelo polling automático) não mexe no botão nem exibe alertas de erro.
  */
-async function atualizarCotacoes() {
+async function atualizarCotacoes({ silencioso = false } = {}) {
     const btn = document.getElementById('btnAtualizarCotacoes');
     const btnLabel = btn ? btn.querySelector('span') : null;
 
-    if (btn) btn.disabled = true;
-    if (btnLabel) btnLabel.textContent = 'Atualizando...';
+    if (!silencioso) {
+        if (btn) btn.disabled = true;
+        if (btnLabel) btnLabel.textContent = 'Atualizando...';
+    }
 
     try {
         const response = await fetch(`${API_BASE}/fii/atualizar-precos`, { method: 'POST' });
@@ -182,15 +195,19 @@ async function atualizarCotacoes() {
         atualizarLabelUltimaAtualizacao();
 
         const falhas = (data.resultados || []).filter(r => !r.sucesso);
-        if (falhas.length > 0) {
+        if (falhas.length > 0 && !silencioso) {
             alert(`Não foi possível atualizar a cotação de: ${falhas.map(f => f.ticker).join(', ')}`);
         }
     } catch (err) {
         console.error('Erro ao atualizar cotações:', err);
-        alert('Erro ao buscar cotações atualizadas. Tente novamente em instantes.');
+        if (!silencioso) {
+            alert('Erro ao buscar cotações atualizadas. Tente novamente em instantes.');
+        }
     } finally {
-        if (btn) btn.disabled = false;
-        if (btnLabel) btnLabel.textContent = 'Atualizar Cotações';
+        if (!silencioso) {
+            if (btn) btn.disabled = false;
+            if (btnLabel) btnLabel.textContent = 'Atualizar Cotações';
+        }
     }
 }
 
@@ -353,7 +370,7 @@ function initEventListeners() {
 
     // Atualização de Cotações de Mercado
     const btnAtualizarCotacoes = document.getElementById('btnAtualizarCotacoes');
-    if (btnAtualizarCotacoes) btnAtualizarCotacoes.addEventListener('click', atualizarCotacoes);
+    if (btnAtualizarCotacoes) btnAtualizarCotacoes.addEventListener('click', () => atualizarCotacoes());
 
     // Exportação CSV
     const btnExportPortfolioCsv = document.getElementById('btnExportPortfolioCsv');
@@ -493,6 +510,7 @@ function renderizarCarteira() {
                     <td>
                         <span class="ticker-badge-cell">${escapeHTML(item.ticker)}</span>
                         ${item.notes ? `<div style="font-size: 0.75rem; color: var(--text-sub); margin-top: 2px;">${escapeHTML(item.notes)}</div>` : ''}
+                        ${item.alertPrice != null ? `<div style="font-size: 0.75rem; color: var(--accent-color); margin-top: 2px;" title="Alerta por e-mail se cair abaixo deste valor">🔔 abaixo de ${formatarMoeda(item.alertPrice)}</div>` : ''}
                     </td>
                     <td><span class="segment-tag-cell">${escapeHTML(item.segment)}</span></td>
                     <td><strong>${item.shares.toLocaleString('pt-BR')}</strong></td>
@@ -898,6 +916,7 @@ function abrirModalFII(id = null) {
             document.getElementById('inputFiiAvgPrice').value = item.avgPrice;
             document.getElementById('inputFiiLastDividend').value = item.lastDividend;
             document.getElementById('inputFiiNotes').value = item.notes || '';
+            document.getElementById('inputFiiAlertPrice').value = item.alertPrice != null ? item.alertPrice : '';
         }
     } else {
         document.getElementById('modalFiiTitle').textContent = 'Adicionar FII à Carteira';
@@ -924,13 +943,15 @@ async function salvarFII(e) {
     const avgPrice = parseFloat(document.getElementById('inputFiiAvgPrice').value) || 0;
     const lastDividend = parseFloat(document.getElementById('inputFiiLastDividend').value) || 0;
     const notes = document.getElementById('inputFiiNotes').value.trim();
+    const alertPriceRaw = document.getElementById('inputFiiAlertPrice').value;
+    const alertPrice = alertPriceRaw !== '' ? parseFloat(alertPriceRaw) : null;
 
     if (!ticker || shares <= 0 || avgPrice <= 0) {
         alert('Preencha os campos obrigatórios corretamente.');
         return;
     }
 
-    const payload = mapFiiToApi({ ticker, segment, shares, avgPrice, lastDividend, notes });
+    const payload = mapFiiToApi({ ticker, segment, shares, avgPrice, lastDividend, notes, alertPrice });
 
     try {
         const url = id ? `${API_BASE}/fii/${id}` : `${API_BASE}/fii`;
