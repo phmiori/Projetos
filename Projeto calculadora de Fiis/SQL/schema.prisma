@@ -74,6 +74,10 @@ model Usuario {
   fotoUrl     String?  // Foto de perfil em Data URL (Base64), definida em Configurações
   email       String?  // Usado para envio de alertas (ex.: queda de preço de FII)
 
+  // Chave de grupo: usuários com o mesmo valor (não nulo) compartilham entre si os
+  // cadastros do módulo Carros de Leilão (veem e editam os veículos uns dos outros)
+  grupoLeilaoCarros String?
+
   veiculos    Veiculo[]
   imoveis     ImovelLeilao[]
   investimentosFII InvestimentoFII[]

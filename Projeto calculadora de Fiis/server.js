@@ -40,6 +40,27 @@ function requireAuth(req, res, next) {
     next();
 }
 
+/**
+ * Retorna os IDs de usuário que compartilham o módulo Carros de Leilão com userId
+ * (ele mesmo, mais qualquer outro usuário com o mesmo grupoLeilaoCarros definido).
+ * Sem grupo configurado, o acesso continua restrito ao próprio usuário.
+ */
+async function obterUsuarioIdsCompartilhadosLeilao(userId) {
+    const usuario = await prisma.usuario.findUnique({
+        where: { id: userId },
+        select: { grupoLeilaoCarros: true }
+    });
+
+    if (!usuario || !usuario.grupoLeilaoCarros) return [userId];
+
+    const membros = await prisma.usuario.findMany({
+        where: { grupoLeilaoCarros: usuario.grupoLeilaoCarros },
+        select: { id: true }
+    });
+
+    return membros.map(m => m.id);
+}
+
 // Servir arquivos estáticos do frontend
 app.use(express.static(__dirname));
 
@@ -405,8 +426,9 @@ async function recalcularGastosVeiculo(veiculoId) {
  */
 app.get('/api/dashboard', async (req, res) => {
     try {
+        const usuarioIds = await obterUsuarioIdsCompartilhadosLeilao(req.session.userId);
         const veiculos = await prisma.veiculo.findMany({
-            where: { usuarioId: req.session.userId }
+            where: { usuarioId: { in: usuarioIds } }
         });
 
         let lucroTotalAcumulado = 0;
@@ -469,7 +491,8 @@ app.get('/api/dashboard', async (req, res) => {
 app.get('/api/veiculos', async (req, res) => {
     try {
         const { status, search } = req.query;
-        const where = { usuarioId: req.session.userId };
+        const usuarioIds = await obterUsuarioIdsCompartilhadosLeilao(req.session.userId);
+        const where = { usuarioId: { in: usuarioIds } };
 
         if (status && status !== 'Todos') {
             where.status = status;
@@ -505,8 +528,9 @@ app.get('/api/veiculos', async (req, res) => {
 app.get('/api/veiculos/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
+        const usuarioIds = await obterUsuarioIdsCompartilhadosLeilao(req.session.userId);
         const veiculo = await prisma.veiculo.findFirst({
-            where: { id, usuarioId: req.session.userId },
+            where: { id, usuarioId: { in: usuarioIds } },
             include: { gastos: { orderBy: { data: 'asc' } } }
         });
 
@@ -554,8 +578,9 @@ app.put('/api/veiculos/:id', async (req, res) => {
         const id = parseInt(req.params.id, 10);
         const dadosCalculados = calcularMetricas(req.body);
 
+        const usuarioIds = await obterUsuarioIdsCompartilhadosLeilao(req.session.userId);
         const veiculoExistente = await prisma.veiculo.findFirst({
-            where: { id, usuarioId: req.session.userId }
+            where: { id, usuarioId: { in: usuarioIds } }
         });
         if (!veiculoExistente) {
             return res.status(404).json({ error: 'Veículo não encontrado' });
@@ -582,8 +607,9 @@ app.get('/api/veiculos/:id/gastos', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
 
+        const usuarioIds = await obterUsuarioIdsCompartilhadosLeilao(req.session.userId);
         const veiculo = await prisma.veiculo.findFirst({
-            where: { id, usuarioId: req.session.userId }
+            where: { id, usuarioId: { in: usuarioIds } }
         });
         if (!veiculo) {
             return res.status(404).json({ error: 'Veículo não encontrado' });
@@ -610,8 +636,9 @@ app.post('/api/veiculos/:id/gastos', async (req, res) => {
         const veiculoId = parseInt(req.params.id, 10);
         const { data, categoria, descricao, oficina, valor } = req.body;
 
+        const usuarioIds = await obterUsuarioIdsCompartilhadosLeilao(req.session.userId);
         const veiculo = await prisma.veiculo.findFirst({
-            where: { id: veiculoId, usuarioId: req.session.userId }
+            where: { id: veiculoId, usuarioId: { in: usuarioIds } }
         });
         if (!veiculo) {
             return res.status(404).json({ error: 'Veículo não encontrado' });
@@ -657,8 +684,9 @@ app.delete('/api/veiculos/:id/gastos/:gastoId', async (req, res) => {
         const veiculoId = parseInt(req.params.id, 10);
         const gastoId = parseInt(req.params.gastoId, 10);
 
+        const usuarioIds = await obterUsuarioIdsCompartilhadosLeilao(req.session.userId);
         const veiculo = await prisma.veiculo.findFirst({
-            where: { id: veiculoId, usuarioId: req.session.userId }
+            where: { id: veiculoId, usuarioId: { in: usuarioIds } }
         });
         if (!veiculo) {
             return res.status(404).json({ error: 'Veículo não encontrado' });
@@ -691,7 +719,8 @@ app.post('/api/veiculos/:id/vender', async (req, res) => {
         const id = parseInt(req.params.id, 10);
         const { valorVenda, dataVenda, precoAnuncio, status } = req.body;
 
-        const veiculo = await prisma.veiculo.findFirst({ where: { id, usuarioId: req.session.userId } });
+        const usuarioIds = await obterUsuarioIdsCompartilhadosLeilao(req.session.userId);
+        const veiculo = await prisma.veiculo.findFirst({ where: { id, usuarioId: { in: usuarioIds } } });
         if (!veiculo) return res.status(404).json({ error: 'Veículo não encontrado' });
 
         const novoStatus = status || 'Vendido';
@@ -733,8 +762,9 @@ app.delete('/api/veiculos/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
 
+        const usuarioIds = await obterUsuarioIdsCompartilhadosLeilao(req.session.userId);
         const resultado = await prisma.veiculo.deleteMany({
-            where: { id, usuarioId: req.session.userId }
+            where: { id, usuarioId: { in: usuarioIds } }
         });
         if (resultado.count === 0) {
             return res.status(404).json({ error: 'Veículo não encontrado' });
