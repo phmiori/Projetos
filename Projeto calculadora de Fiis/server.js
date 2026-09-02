@@ -2967,6 +2967,22 @@ app.get('/', (req, res) => {
 });
 
 /**
+ * Garante que as colunas novas do alerta de preço de FII existam no banco, mesmo que o
+ * `prisma db push` não tenha sido rodado manualmente ainda. Idempotente (IF NOT EXISTS),
+ * seguro de rodar toda vez que o servidor sobe.
+ */
+async function garantirColunasAlertaFII() {
+    try {
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Usuario" ADD COLUMN IF NOT EXISTS "email" TEXT`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "InvestimentoFII" ADD COLUMN IF NOT EXISTS "alertaPrecoAbaixoDe" DOUBLE PRECISION`);
+        await prisma.$executeRawUnsafe(`ALTER TABLE "InvestimentoFII" ADD COLUMN IF NOT EXISTS "alertaDisparado" BOOLEAN NOT NULL DEFAULT false`);
+        console.log('[Prisma] Colunas de alerta de preço de FII verificadas/criadas com sucesso.');
+    } catch (e) {
+        console.error('[Prisma] Falha ao garantir colunas de alerta de FII:', e.message);
+    }
+}
+
+/**
  * Função de Seed dos Usuários Administradores (fixos, cadastrados apenas uma vez)
  */
 async function seedUsuarios() {
@@ -3028,5 +3044,6 @@ app.listen(PORT, async () => {
     console.log(`====================================================`);
     console.log(mailTransporter ? ' Alertas de preço por e-mail: ativos (SMTP configurado)' : ' Alertas de preço por e-mail: DESATIVADOS (defina SMTP_USER e SMTP_PASS no .env)');
     console.log(`====================================================`);
+    await garantirColunasAlertaFII();
     await seedUsuarios();
 });
