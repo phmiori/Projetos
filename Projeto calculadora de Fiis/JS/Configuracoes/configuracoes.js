@@ -47,6 +47,7 @@ async function carregarPerfil() {
         if (!response.ok) return;
         const usuario = await response.json();
         preencherPerfil(usuario);
+        if (usuario.role === 'admin') inicializarAdminUsuarios(usuario.id);
     } catch (err) {
         console.error('Erro ao carregar perfil:', err);
     }
@@ -223,5 +224,160 @@ async function alternarModulo(input) {
         exibirFeedback(feedback, err.message, 'erro');
     } finally {
         input.disabled = false;
+    }
+}
+
+/* --- Administração de Usuários (visível apenas para contas com role "admin") --- */
+
+function inicializarAdminUsuarios(idUsuarioLogado) {
+    const card = document.getElementById('cardAdminUsuarios');
+    card.style.display = 'flex';
+
+    carregarUsuarios(idUsuarioLogado);
+
+    const btnNovo = document.getElementById('btnNovoUsuario');
+    const formNovo = document.getElementById('formNovoUsuario');
+    btnNovo.addEventListener('click', () => {
+        formNovo.style.display = formNovo.style.display === 'none' ? 'flex' : 'none';
+    });
+    document.getElementById('btnCancelarNovoUsuario').addEventListener('click', () => {
+        formNovo.reset();
+        formNovo.style.display = 'none';
+    });
+    formNovo.addEventListener('submit', (e) => criarUsuario(e, idUsuarioLogado));
+}
+
+async function carregarUsuarios(idUsuarioLogado) {
+    const lista = document.getElementById('adminUsuariosLista');
+    try {
+        const response = await fetch('/api/auth/usuarios');
+        if (!response.ok) throw new Error('Não foi possível carregar os usuários.');
+        const usuarios = await response.json();
+
+        lista.innerHTML = '';
+        usuarios.forEach(u => lista.appendChild(criarLinhaUsuario(u, idUsuarioLogado)));
+    } catch (err) {
+        console.error('Erro ao carregar usuários:', err);
+    }
+}
+
+function criarLinhaUsuario(usuario, idUsuarioLogado) {
+    const item = document.createElement('li');
+    item.className = 'admin-usuario-item';
+    item.innerHTML = `
+        <div class="admin-usuario-info">
+            <span class="admin-usuario-nome">${usuario.nome}</span>
+            <span class="admin-usuario-login">@${usuario.username}</span>
+        </div>
+        <span class="admin-role-badge ${usuario.role === 'admin' ? 'role-admin' : ''}">${usuario.role === 'admin' ? 'Administrador' : 'Usuário Comum'}</span>
+        <div class="admin-usuario-acoes">
+            <button type="button" class="btn-admin-acao" data-acao="editar">Editar</button>
+        </div>
+    `;
+
+    item.querySelector('[data-acao="editar"]').addEventListener('click', () => {
+        const formExistente = item.nextElementSibling;
+        if (formExistente && formExistente.classList.contains('admin-usuario-form-linha-editar')) {
+            formExistente.remove();
+            return;
+        }
+        item.after(criarFormularioEdicao(usuario, idUsuarioLogado));
+    });
+
+    return item;
+}
+
+function criarFormularioEdicao(usuario, idUsuarioLogado) {
+    const wrapper = document.createElement('li');
+    wrapper.className = 'admin-usuario-form-linha-editar';
+
+    const form = document.createElement('form');
+    form.className = 'admin-usuario-form';
+    const ehEuMesmo = usuario.id === idUsuarioLogado;
+    form.innerHTML = `
+        <div class="admin-form-linha">
+            <input type="text" class="input-missao" data-campo="nome" value="${usuario.nome}" placeholder="Nome de exibição" required maxlength="80">
+            <input type="text" class="input-missao" data-campo="username" value="${usuario.username}" placeholder="Usuário (login)" required maxlength="40" autocomplete="off">
+        </div>
+        <div class="admin-form-linha">
+            <input type="password" class="input-missao" data-campo="senha" placeholder="Nova senha (deixe em branco para manter)" autocomplete="new-password">
+        </div>
+        <div class="admin-form-cargo">
+            <label><input type="radio" name="cargo-${usuario.id}" value="usuario" ${usuario.role !== 'admin' ? 'checked' : ''} ${ehEuMesmo ? 'disabled' : ''}> Usuário Comum</label>
+            <label><input type="radio" name="cargo-${usuario.id}" value="admin" ${usuario.role === 'admin' ? 'checked' : ''} ${ehEuMesmo ? 'disabled' : ''}> Administrador</label>
+        </div>
+        <p class="account-feedback" style="display:none;"></p>
+        <div class="admin-form-acoes">
+            <button type="submit" class="btn-missao-primary">Salvar Alterações</button>
+            <button type="button" class="btn-admin-cancelar">Cancelar</button>
+        </div>
+    `;
+
+    form.querySelector('.btn-admin-cancelar').addEventListener('click', () => wrapper.remove());
+    form.addEventListener('submit', (e) => salvarEdicaoUsuario(e, usuario, idUsuarioLogado, wrapper));
+
+    wrapper.appendChild(form);
+    return wrapper;
+}
+
+async function salvarEdicaoUsuario(e, usuario, idUsuarioLogado, wrapper) {
+    e.preventDefault();
+    const form = e.target;
+    const feedback = form.querySelector('.account-feedback');
+    const nome = form.querySelector('[data-campo="nome"]').value.trim();
+    const username = form.querySelector('[data-campo="username"]').value.trim();
+    const senha = form.querySelector('[data-campo="senha"]').value;
+    const cargoInput = form.querySelector(`input[name="cargo-${usuario.id}"]:checked`);
+    const role = cargoInput ? cargoInput.value : usuario.role;
+
+    try {
+        const respDados = await fetch(`/api/auth/usuarios/${usuario.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nome, username, role })
+        });
+        const dados = await respDados.json();
+        if (!respDados.ok) throw new Error(dados.error || 'Não foi possível salvar as alterações.');
+
+        if (senha) {
+            const respSenha = await fetch(`/api/auth/usuarios/${usuario.id}/senha`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ novaSenha: senha })
+            });
+            const dadosSenha = await respSenha.json();
+            if (!respSenha.ok) throw new Error(dadosSenha.error || 'Não foi possível redefinir a senha.');
+        }
+
+        wrapper.remove();
+        carregarUsuarios(idUsuarioLogado);
+    } catch (err) {
+        exibirFeedback(feedback, err.message, 'erro');
+    }
+}
+
+async function criarUsuario(e, idUsuarioLogado) {
+    e.preventDefault();
+    const feedback = document.getElementById('novoUsuarioFeedback');
+    const nome = document.getElementById('inputNovoNome').value.trim();
+    const username = document.getElementById('inputNovoUsername').value.trim();
+    const senha = document.getElementById('inputNovaSenhaUsuario').value;
+    const role = document.querySelector('input[name="novoCargo"]:checked').value;
+
+    try {
+        const response = await fetch('/api/auth/usuarios', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nome, username, senha, role })
+        });
+        const dados = await response.json();
+        if (!response.ok) throw new Error(dados.error || 'Não foi possível criar o usuário.');
+
+        const form = document.getElementById('formNovoUsuario');
+        form.reset();
+        form.style.display = 'none';
+        carregarUsuarios(idUsuarioLogado);
+    } catch (err) {
+        exibirFeedback(feedback, err.message, 'erro');
     }
 }

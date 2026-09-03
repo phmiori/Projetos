@@ -218,6 +218,141 @@
     transform: translateX(20px);
 }
 
+/* --- Administração de Usuários (apenas Administradores) --- */
+.admin-usuarios-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    list-style: none;
+}
+
+.admin-usuario-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 8px;
+    border-bottom: 1px solid var(--border-color);
+    flex-wrap: wrap;
+}
+
+.admin-usuario-item:last-child {
+    border-bottom: none;
+}
+
+.admin-usuario-info {
+    flex: 1;
+    min-width: 160px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.admin-usuario-nome {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.admin-usuario-login {
+    font-size: 0.8rem;
+    color: var(--text-sub);
+}
+
+.admin-role-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background-color: var(--bg-main);
+    color: var(--text-sub);
+    border: 1px solid var(--border-color);
+}
+
+.admin-role-badge.role-admin {
+    background-color: rgba(238, 187, 0, 0.14);
+    color: var(--accent-color);
+    border-color: var(--accent-color);
+}
+
+.admin-usuario-acoes {
+    display: flex;
+    gap: 8px;
+}
+
+.btn-admin-acao {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: var(--radius-button);
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.btn-admin-acao:hover {
+    background-color: var(--bg-main);
+}
+
+.admin-usuario-form {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    padding: 16px;
+    margin-top: 4px;
+}
+
+.admin-form-linha {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.admin-form-linha .input-missao,
+.admin-form-linha select.input-missao {
+    flex: 1;
+    min-width: 160px;
+}
+
+.admin-form-cargo {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    font-size: 0.85rem;
+    color: var(--text-main);
+}
+
+.admin-form-cargo label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.admin-form-acoes {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-admin-cancelar {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-sub);
+    font-weight: 600;
+    border-radius: var(--radius-button);
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.btn-admin-cancelar:hover {
+    background-color: var(--bg-surface);
+}
+
 /* --- Responsividade Mobile --- */
 @media (max-width: 480px) {
     .perfil-body {
@@ -232,5 +367,19 @@
 
     .perfil-form .btn-missao-primary {
         align-self: stretch;
+    }
+
+    .admin-usuario-item {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+
+    .admin-usuario-acoes {
+        justify-content: center;
+    }
+
+    .admin-form-acoes {
+        flex-direction: column;
     }
 }

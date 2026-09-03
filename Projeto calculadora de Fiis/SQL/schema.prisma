@@ -71,6 +71,7 @@ model Usuario {
   username    String   @unique
   nome        String
   senhaHash   String
+  role        String   @default("usuario") // "admin" (Davi_olp e PhMiori) ou "usuario" (contas criadas pelos admins)
   fotoUrl     String?  // Foto de perfil em Data URL (Base64), definida em Configurações
   email       String?  // Usado para envio de alertas (ex.: queda de preço de FII)
 

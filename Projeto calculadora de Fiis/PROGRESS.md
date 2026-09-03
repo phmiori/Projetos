@@ -102,3 +102,10 @@
 
 > ⚠️ Pendência manual: rodar `npm run prisma:push` (com o servidor Node parado, para evitar o erro EPERM de arquivo em uso no Windows) para criar a tabela `ModuloOculto` e a coluna `fotoUrl` em `Usuario` antes de usar o módulo Configurações.
 
+## 🛡️ Administração de Usuários (Cartão dentro de Configurações, apenas Davi_olp/PhMiori)
+- [x] Novo campo `role` no modelo `Usuario` do Prisma (`"admin"` ou `"usuario"`, padrão `"usuario"`) — coluna criada automaticamente no banco Neon ao subir o servidor (`garantirColunaRole()` em `server.js`, que também promove `Davi_olp` e `PhMiori` a `role: "admin"`)
+- [x] Novo Cartão **"Administração de Usuários"** em `HTML/Configuracoes/configuracoes.html`, visível apenas quando o usuário logado tem `role: "admin"`: lista todos os usuários do sistema, botão **"+ Novo Usuário"** (cria conta Administrador ou Usuário Comum com login/nome/senha) e **"Editar"** por usuário (altera nome, login, cargo e redefine a senha)
+- [x] Botão **"Gerenciar Usuários"** no menu de conta do cabeçalho (`JS/Global/auth.js`), visível apenas para administradores, levando direto ao cartão em Configurações
+- [x] Novas rotas protegidas por `requireAdmin` em `server.js`: `GET/POST /api/auth/usuarios`, `PUT /api/auth/usuarios/:id` e `PUT /api/auth/usuarios/:id/senha`
+- [x] Proteções: um administrador não pode remover o próprio cargo de admin, e o sistema impede que o último administrador restante seja rebaixado
+

@@ -41,6 +41,18 @@ function requireAuth(req, res, next) {
 }
 
 /**
+ * Middleware de proteção: exige que o usuário logado seja Administrador (role "admin"),
+ * usado nas rotas de gerenciamento de outros usuários
+ */
+async function requireAdmin(req, res, next) {
+    const usuario = await prisma.usuario.findUnique({ where: { id: req.session.userId } });
+    if (!usuario || usuario.role !== 'admin') {
+        return res.status(403).json({ error: 'Apenas administradores podem acessar este recurso.' });
+    }
+    next();
+}
+
+/**
  * Retorna os IDs de usuário que compartilham o módulo Carros de Leilão com userId
  * (ele mesmo, mais qualquer outro usuário com o mesmo grupoLeilaoCarros definido).
  * Sem grupo configurado, o acesso continua restrito ao próprio usuário.
@@ -120,7 +132,7 @@ app.get('/api/auth/me', async (req, res) => {
         return res.status(401).json({ error: 'Não autenticado' });
     }
 
-    res.json({ id: usuario.id, username: usuario.username, nome: usuario.nome, fotoUrl: usuario.fotoUrl, email: usuario.email });
+    res.json({ id: usuario.id, username: usuario.username, nome: usuario.nome, fotoUrl: usuario.fotoUrl, email: usuario.email, role: usuario.role });
 });
 
 /**
@@ -253,6 +265,122 @@ app.put('/api/auth/senha', requireAuth, async (req, res) => {
     } catch (err) {
         console.error('Erro ao alterar senha:', err);
         res.status(500).json({ error: 'Erro ao alterar senha' });
+    }
+});
+
+/**
+ * ROTA: Listar Todos os Usuários do Sistema (apenas Administradores)
+ * GET /api/auth/usuarios
+ */
+app.get('/api/auth/usuarios', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const usuarios = await prisma.usuario.findMany({
+            select: { id: true, username: true, nome: true, role: true, createdAt: true },
+            orderBy: { nome: 'asc' }
+        });
+        res.json(usuarios);
+    } catch (err) {
+        console.error('Erro ao listar usuários:', err);
+        res.status(500).json({ error: 'Erro ao listar usuários' });
+    }
+});
+
+/**
+ * ROTA: Criar Novo Usuário (Administrador ou Comum) — apenas Administradores
+ * POST /api/auth/usuarios
+ */
+app.post('/api/auth/usuarios', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const { username, nome, senha, role } = req.body;
+
+        if (!username || !String(username).trim() || !nome || !String(nome).trim() || !senha) {
+            return res.status(400).json({ error: 'Usuário, nome e senha são obrigatórios.' });
+        }
+        if (String(senha).length < 4) {
+            return res.status(400).json({ error: 'A senha deve ter pelo menos 4 caracteres.' });
+        }
+        const roleFinal = role === 'admin' ? 'admin' : 'usuario';
+
+        const senhaHash = await bcrypt.hash(senha, 10);
+        const usuario = await prisma.usuario.create({
+            data: { username: String(username).trim(), nome: String(nome).trim(), senhaHash, role: roleFinal }
+        });
+
+        res.status(201).json({ id: usuario.id, username: usuario.username, nome: usuario.nome, role: usuario.role, createdAt: usuario.createdAt });
+    } catch (err) {
+        if (err.code === 'P2002') {
+            return res.status(409).json({ error: 'Já existe um usuário com esse nome de login.' });
+        }
+        console.error('Erro ao criar usuário:', err);
+        res.status(500).json({ error: 'Erro ao criar usuário' });
+    }
+});
+
+/**
+ * ROTA: Atualizar Dados de um Usuário (Nome, Login e Cargo) — apenas Administradores
+ * PUT /api/auth/usuarios/:id
+ */
+app.put('/api/auth/usuarios/:id', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        const { username, nome, role } = req.body;
+
+        const data = {};
+        if (nome !== undefined) {
+            if (!String(nome).trim()) return res.status(400).json({ error: 'O nome não pode ficar em branco.' });
+            data.nome = String(nome).trim();
+        }
+        if (username !== undefined) {
+            if (!String(username).trim()) return res.status(400).json({ error: 'O login não pode ficar em branco.' });
+            data.username = String(username).trim();
+        }
+        if (role !== undefined) {
+            if (!['admin', 'usuario'].includes(role)) return res.status(400).json({ error: 'Cargo inválido.' });
+
+            if (role !== 'admin' && id === req.session.userId) {
+                return res.status(400).json({ error: 'Você não pode remover seu próprio acesso de administrador.' });
+            }
+            if (role !== 'admin') {
+                const totalAdmins = await prisma.usuario.count({ where: { role: 'admin' } });
+                const alvo = await prisma.usuario.findUnique({ where: { id }, select: { role: true } });
+                if (alvo?.role === 'admin' && totalAdmins <= 1) {
+                    return res.status(400).json({ error: 'Deve existir ao menos um administrador no sistema.' });
+                }
+            }
+            data.role = role;
+        }
+
+        const usuario = await prisma.usuario.update({ where: { id }, data });
+        res.json({ id: usuario.id, username: usuario.username, nome: usuario.nome, role: usuario.role });
+    } catch (err) {
+        if (err.code === 'P2002') {
+            return res.status(409).json({ error: 'Já existe um usuário com esse nome de login.' });
+        }
+        console.error('Erro ao atualizar usuário:', err);
+        res.status(500).json({ error: 'Erro ao atualizar usuário' });
+    }
+});
+
+/**
+ * ROTA: Redefinir a Senha de um Usuário Gerenciado — apenas Administradores
+ * PUT /api/auth/usuarios/:id/senha
+ */
+app.put('/api/auth/usuarios/:id/senha', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const id = Number(req.params.id);
+        const { novaSenha } = req.body;
+
+        if (!novaSenha || String(novaSenha).length < 4) {
+            return res.status(400).json({ error: 'A nova senha deve ter pelo menos 4 caracteres.' });
+        }
+
+        const senhaHash = await bcrypt.hash(novaSenha, 10);
+        await prisma.usuario.update({ where: { id }, data: { senhaHash } });
+
+        res.json({ success: true, message: 'Senha redefinida com sucesso.' });
+    } catch (err) {
+        console.error('Erro ao redefinir senha:', err);
+        res.status(500).json({ error: 'Erro ao redefinir senha' });
     }
 });
 
@@ -3013,6 +3141,20 @@ async function garantirColunasAlertaFII() {
 }
 
 /**
+ * Garante que a coluna "role" exista em Usuario e promove Davi_olp/PhMiori a administradores,
+ * mesmo que o `prisma db push` não tenha sido rodado manualmente ainda. Idempotente.
+ */
+async function garantirColunaRole() {
+    try {
+        await prisma.$executeRawUnsafe(`ALTER TABLE "Usuario" ADD COLUMN IF NOT EXISTS "role" TEXT NOT NULL DEFAULT 'usuario'`);
+        await prisma.$executeRawUnsafe(`UPDATE "Usuario" SET "role" = 'admin' WHERE username IN ('Davi_olp', 'PhMiori') AND "role" <> 'admin'`);
+        console.log('[Prisma] Coluna role verificada/criada e administradores promovidos com sucesso.');
+    } catch (e) {
+        console.error('[Prisma] Falha ao garantir coluna role:', e.message);
+    }
+}
+
+/**
  * Função de Seed dos Usuários Administradores (fixos, cadastrados apenas uma vez)
  */
 async function seedUsuarios() {
@@ -3029,7 +3171,7 @@ async function seedUsuarios() {
             for (const admin of admins) {
                 const senhaHash = await bcrypt.hash(admin.senha, 10);
                 await prisma.usuario.create({
-                    data: { username: admin.username, nome: admin.nome, senhaHash }
+                    data: { username: admin.username, nome: admin.nome, senhaHash, role: 'admin' }
                 });
             }
 
@@ -3075,5 +3217,6 @@ app.listen(PORT, async () => {
     console.log(mailTransporter ? ' Alertas de preço por e-mail: ativos (SMTP configurado)' : ' Alertas de preço por e-mail: DESATIVADOS (defina SMTP_USER e SMTP_PASS no .env)');
     console.log(`====================================================`);
     await garantirColunasAlertaFII();
+    await garantirColunaRole();
     await seedUsuarios();
 });

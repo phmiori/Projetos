@@ -115,6 +115,7 @@
                     </div>
 
                     <a href="configuracoes.html" class="account-dropdown-item" id="linkConfiguracoes">Configurações</a>
+                    <a href="configuracoes.html#cardAdminUsuarios" class="account-dropdown-item" id="linkGerenciarUsuarios" style="display:none;">Gerenciar Usuários</a>
 
                     <button type="button" class="account-dropdown-item" id="btnTogglePasswordForm">Alterar Senha</button>
 
@@ -368,6 +369,40 @@
                     </ul>
 
                     <p class="account-feedback" id="modulosFeedback" style="display:none;"></p>
+                </section>
+
+                <!-- Cartão: Administração de Usuários (visível apenas para Davi_olp e PhMiori) -->
+                <section class="config-card" id="cardAdminUsuarios" aria-labelledby="adminUsuariosTitle" style="display:none;">
+                    <div class="config-card-header">
+                        <h2 class="config-card-title" id="adminUsuariosTitle">Administração de Usuários</h2>
+                        <p class="config-card-subtitle">Crie contas de Administrador ou de Usuário Comum e gerencie o login, nome e senha de cada uma.</p>
+                    </div>
+
+                    <ul class="admin-usuarios-lista" id="adminUsuariosLista">
+                        <!-- Itens preenchidos dinamicamente pelo configuracoes.js -->
+                    </ul>
+
+                    <button type="button" class="btn-missao-primary" id="btnNovoUsuario" style="align-self:flex-start;">+ Novo Usuário</button>
+
+                    <form id="formNovoUsuario" class="admin-usuario-form" style="display:none;">
+                        <div class="admin-form-linha">
+                            <input type="text" id="inputNovoNome" class="input-missao" placeholder="Nome de exibição" required maxlength="80">
+                            <input type="text" id="inputNovoUsername" class="input-missao" placeholder="Usuário (login)" required maxlength="40" autocomplete="off">
+                        </div>
+                        <div class="admin-form-linha">
+                            <input type="password" id="inputNovaSenhaUsuario" class="input-missao" placeholder="Senha inicial" required autocomplete="new-password">
+                        </div>
+                        <div class="admin-form-cargo">
+                            <label><input type="radio" name="novoCargo" value="usuario" checked> Usuário Comum</label>
+                            <label><input type="radio" name="novoCargo" value="admin"> Administrador</label>
+                        </div>
+                        <p class="account-feedback" id="novoUsuarioFeedback" style="display:none;"></p>
+                        <div class="admin-form-acoes">
+                            <button type="submit" class="btn-missao-primary">Criar Usuário</button>
+                            <button type="button" class="btn-admin-cancelar" id="btnCancelarNovoUsuario">Cancelar</button>
+                        </div>
+                    </form>
+
                 </section>
 
             </div>

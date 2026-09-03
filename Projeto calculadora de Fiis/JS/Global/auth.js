@@ -31,6 +31,11 @@ function inicializarMenuConta(usuario) {
     if (dropdownUsername) dropdownUsername.textContent = '@' + usuario.username;
     atualizarAvatarHeader(usuario.fotoUrl);
 
+    const linkGerenciarUsuarios = document.getElementById('linkGerenciarUsuarios');
+    if (linkGerenciarUsuarios && usuario.role === 'admin') {
+        linkGerenciarUsuarios.style.display = 'block';
+    }
+
     btnAccount.addEventListener('click', (e) => {
         e.stopPropagation();
         const aberto = accountDropdown.classList.toggle('open');
