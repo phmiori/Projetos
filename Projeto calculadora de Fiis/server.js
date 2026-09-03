@@ -384,6 +384,38 @@ app.put('/api/auth/usuarios/:id/senha', requireAuth, requireAdmin, async (req, r
     }
 });
 
+/**
+ * ROTA: Excluir um Usuário — apenas Administradores
+ * DELETE /api/auth/usuarios/:id
+ * Atenção: exclui em cascata todos os dados do usuário (veículos, imóveis, FIIs, etc.)
+ */
+app.delete('/api/auth/usuarios/:id', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const id = Number(req.params.id);
+
+        if (id === req.session.userId) {
+            return res.status(400).json({ error: 'Você não pode excluir sua própria conta.' });
+        }
+
+        const alvo = await prisma.usuario.findUnique({ where: { id }, select: { role: true } });
+        if (!alvo) {
+            return res.status(404).json({ error: 'Usuário não encontrado.' });
+        }
+        if (alvo.role === 'admin') {
+            const totalAdmins = await prisma.usuario.count({ where: { role: 'admin' } });
+            if (totalAdmins <= 1) {
+                return res.status(400).json({ error: 'Deve existir ao menos um administrador no sistema.' });
+            }
+        }
+
+        await prisma.usuario.delete({ where: { id } });
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Erro ao excluir usuário:', err);
+        res.status(500).json({ error: 'Erro ao excluir usuário' });
+    }
+});
+
 // Protege as rotas de dados dos módulos de Leilão, Imóveis, FII, Cripto, Cofrinho, Calendário, Notificações, Clima, Finanças & Casa, Treinos & Saúde e Garagem: exige login
 app.use(['/api/dashboard', '/api/veiculos', '/api/imoveis', '/api/fii', '/api/cripto', '/api/cofrinhos', '/api/eventos', '/api/notificacoes', '/api/clima', '/api/casa', '/api/treinos', '/api/saude', '/api/garagem'], requireAuth);
 

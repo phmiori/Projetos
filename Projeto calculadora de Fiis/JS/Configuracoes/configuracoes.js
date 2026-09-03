@@ -272,6 +272,7 @@ function criarLinhaUsuario(usuario, idUsuarioLogado) {
         <span class="admin-role-badge ${usuario.role === 'admin' ? 'role-admin' : ''}">${usuario.role === 'admin' ? 'Administrador' : 'Usuário Comum'}</span>
         <div class="admin-usuario-acoes">
             <button type="button" class="btn-admin-acao" data-acao="editar">Editar</button>
+            ${usuario.id !== idUsuarioLogado ? '<button type="button" class="btn-admin-acao btn-admin-excluir" data-acao="excluir">Excluir</button>' : ''}
         </div>
     `;
 
@@ -284,7 +285,26 @@ function criarLinhaUsuario(usuario, idUsuarioLogado) {
         item.after(criarFormularioEdicao(usuario, idUsuarioLogado));
     });
 
+    const btnExcluir = item.querySelector('[data-acao="excluir"]');
+    if (btnExcluir) {
+        btnExcluir.addEventListener('click', () => excluirUsuario(usuario, idUsuarioLogado));
+    }
+
     return item;
+}
+
+async function excluirUsuario(usuario, idUsuarioLogado) {
+    const confirmado = confirm(`Excluir o usuário "${usuario.nome}" (@${usuario.username})?\n\nTodos os dados cadastrados por ele (veículos, imóveis, investimentos, etc.) serão apagados permanentemente.`);
+    if (!confirmado) return;
+
+    try {
+        const response = await fetch(`/api/auth/usuarios/${usuario.id}`, { method: 'DELETE' });
+        const dados = await response.json();
+        if (!response.ok) throw new Error(dados.error || 'Não foi possível excluir o usuário.');
+        carregarUsuarios(idUsuarioLogado);
+    } catch (err) {
+        alert(err.message);
+    }
 }
 
 function criarFormularioEdicao(usuario, idUsuarioLogado) {

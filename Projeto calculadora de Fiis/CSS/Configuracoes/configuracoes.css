@@ -295,6 +295,15 @@
     background-color: var(--bg-main);
 }
 
+.btn-admin-excluir {
+    color: var(--color-expense);
+    border-color: var(--color-expense);
+}
+
+.btn-admin-excluir:hover {
+    background-color: rgba(211, 47, 47, 0.12);
+}
+
 .admin-usuario-form {
     display: flex;
     flex-direction: column;
