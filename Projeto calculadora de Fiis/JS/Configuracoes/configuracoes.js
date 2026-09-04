@@ -274,7 +274,7 @@ function criarLinhaUsuario(usuario, idUsuarioLogado) {
             <button type="button" class="btn-admin-acao" data-acao="editar">Editar</button>
             ${usuario.id !== idUsuarioLogado
                 ? '<button type="button" class="btn-admin-acao btn-admin-excluir" data-acao="excluir">Excluir</button>'
-                : '<span class="admin-usuario-atual-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>Conta atual</span>'}
+                : '<span class="admin-usuario-atual-badge">Ativo</span>'}
         </div>
     `;
 
