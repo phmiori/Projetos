@@ -135,36 +135,59 @@
     transform: translateY(-1px);
 }
 
-.theme-toggle-btn {
+.theme-toggle-switch {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    background-color: var(--bg-main);
-    color: var(--text-main);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius-button);
-    font-size: 0.9rem;
-    font-weight: 500;
+    padding: 0;
+    background: none;
+    border: none;
     cursor: pointer;
+}
+
+.theme-toggle-track {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 48px;
+    height: 26px;
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
     transition: var(--transition-fast);
 }
 
-.theme-toggle-btn:hover {
+.theme-toggle-switch:hover .theme-toggle-track {
     border-color: var(--accent-color);
-    color: var(--accent-color);
 }
 
-.theme-icon-container {
+.theme-toggle-thumb {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
+    background-color: var(--accent-color);
+    color: var(--accent-text);
+    border-radius: 50%;
+    transition: transform 0.25s ease-in-out;
 }
 
-[data-theme="dark"] .icon-sun { display: block; }
-[data-theme="dark"] .icon-moon { display: none; }
-[data-theme="light"] .icon-sun { display: none; }
-[data-theme="light"] .icon-moon { display: block; }
+[data-theme="dark"] .theme-toggle-thumb {
+    transform: translateX(22px);
+}
+
+.theme-toggle-thumb .icon-sun,
+.theme-toggle-thumb .icon-moon {
+    position: absolute;
+}
+
+[data-theme="dark"] .icon-sun { display: none; }
+[data-theme="dark"] .icon-moon { display: block; }
+[data-theme="light"] .icon-sun { display: block; }
+[data-theme="light"] .icon-moon { display: none; }
 
 .btn-login {
     display: inline-flex;
@@ -1391,7 +1414,6 @@
     .app-header { padding: 0 16px; }
     .mobile-toggle-btn { display: flex; }
     .header-center { display: none; }
-    .theme-label { display: none; }
 
     .app-sidebar {
         position: fixed;

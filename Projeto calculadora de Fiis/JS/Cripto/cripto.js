@@ -214,7 +214,6 @@ function atualizarLabelUltimaAtualizacao() {
 function initTheme() {
     const root = document.documentElement;
     const themeToggleBtn = document.getElementById('themeToggleBtn');
-    const themeLabel = document.getElementById('themeLabel');
 
     applyTheme(stateCripto.tema);
 
@@ -231,8 +230,8 @@ function initTheme() {
 
     function applyTheme(theme) {
         root.setAttribute('data-theme', theme);
-        if (themeLabel) {
-            themeLabel.textContent = theme === 'dark' ? 'Modo Claro' : 'Modo Escuro';
+        if (themeToggleBtn) {
+            themeToggleBtn.setAttribute('aria-checked', theme === 'light' ? 'true' : 'false');
         }
     }
 }

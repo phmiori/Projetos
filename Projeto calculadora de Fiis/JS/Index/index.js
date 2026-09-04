@@ -485,7 +485,6 @@ async function carregarModuloCripto() {
 function initTheme() {
     const STORAGE_KEY = 'financehub_theme';
     const themeToggleBtn = document.getElementById('themeToggleBtn');
-    const themeLabel = document.getElementById('themeLabel');
     const rootElement = document.documentElement;
 
     const savedTheme = localStorage.getItem(STORAGE_KEY) || 'dark';
@@ -503,8 +502,8 @@ function initTheme() {
 
     function applyTheme(theme) {
         rootElement.setAttribute('data-theme', theme);
-        if (themeLabel) {
-            themeLabel.textContent = theme === 'dark' ? 'Modo Claro' : 'Modo Escuro';
+        if (themeToggleBtn) {
+            themeToggleBtn.setAttribute('aria-checked', theme === 'light' ? 'true' : 'false');
         }
     }
 }
