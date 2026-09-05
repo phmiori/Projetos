@@ -385,8 +385,13 @@ function renderizarCofrinhos() {
     if (list.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="9" style="text-align: center; padding: 32px; color: var(--text-sub);">
-                    Nenhum Cofrinho cadastrado ainda. Clique em "<strong>Novo Cofrinho</strong>" acima para começar!
+                <td colspan="9" style="padding: 0;">
+                    <div class="empty-state">
+                        <span class="empty-state-icon">🐷</span>
+                        <p class="empty-state-title">Nenhum cofrinho cadastrado</p>
+                        <p class="empty-state-text">Cadastre seu primeiro cofrinho para acompanhar o rendimento diário líquido de IOF e IR.</p>
+                        <button type="button" class="btn-missao-primary" onclick="abrirModalCofrinho(null)">+ Novo Cofrinho</button>
+                    </div>
                 </td>
             </tr>
         `;

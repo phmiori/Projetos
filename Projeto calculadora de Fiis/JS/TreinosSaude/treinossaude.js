@@ -74,7 +74,13 @@ function renderBlocos() {
     container.innerHTML = '';
 
     if (!stateTS.blocos.length) {
-        container.innerHTML = '<div class="ts-blocos-empty">Nenhum bloco de treino cadastrado. Crie o primeiro para organizar seus treinos.</div>';
+        container.innerHTML = `
+            <div class="ts-blocos-empty empty-state">
+                <span class="empty-state-icon">💪</span>
+                <p class="empty-state-title">Nenhum bloco de treino cadastrado</p>
+                <p class="empty-state-text">Crie o primeiro bloco (ex.: "Treino A - Peito e Tríceps") para organizar seus exercícios por dia da semana.</p>
+                <button type="button" class="btn-missao-primary" onclick="abrirModalBloco(null)">+ Novo Bloco</button>
+            </div>`;
         return;
     }
 

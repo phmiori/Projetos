@@ -128,3 +128,11 @@
 
 > ⚠️ Pendência manual: rodar `npm run prisma:push` (com o servidor Node parado) para criar as tabelas `NotificacaoDispensada` e `FiiWatchlist` no banco — até lá, as notificações de Despensa/Tarefas e a Lista de Observação de FIIs ficam inativas (sem erro para o resto do sistema, só essas duas funcionalidades não funcionam ainda).
 
+## 🎨 Rodada de Melhorias de UX (Visão Geral)
+- [x] **Skeleton loaders**: classe global `.is-loading` (`CSS/Global/global_tokens.css`) com efeito shimmer, aplicada aos valores dos KPIs e mini-stats da Visão Geral (`HTML/Index/index.html` + `JS/Index/index.js`) enquanto os dados dos módulos ainda não chegaram da API
+- [x] **Página offline do PWA**: `offline.html` na raiz, pré-cacheada e servida pelo `service-worker.js` (agora `financehub-v3`) como fallback quando uma navegação falha por falta de conexão
+- [x] **Painel "Resumo do Dia"**: novo card no topo da Visão Geral combinando o próximo evento do Calendário (`/api/eventos`), o clima do local favorito (`/api/clima/favorito`) e a fatura de cartão mais próxima do vencimento (`/api/financas/resumo`) — cada bloco só aparece quando há dado disponível
+
+> ⚠️ Nota: `GET /api/financas/resumo` retornou 404 no servidor local durante o teste desta rodada — a rota existe em `routes/financas.js`, então provavelmente é só o processo Node local (rodando via `npm run dev`) estar com uma versão antiga em memória. Reinicie o servidor local para o card de "Fatura Mais Próxima" funcionar.
+- [x] **Empty states ilustrados**: telas de "nenhum registro ainda" da Garagem (`JS/Garagem/garagem.js`), Cofrinho (`JS/Cofrinho/cofrinho.js`) e Treinos & Saúde (`JS/TreinosSaude/treinossaude.js`) agora usam o componente global `.empty-state` (ícone + título + texto + botão de ação que já abre o modal de cadastro correspondente), em vez de só uma frase
+

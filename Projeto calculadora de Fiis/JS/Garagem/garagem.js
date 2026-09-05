@@ -102,7 +102,14 @@ function renderAtivos() {
     }
 
     if (!ativos.length) {
-        grid.innerHTML = '<div class="garagem-empty">Nenhum veículo ativo encontrado.</div>';
+        grid.innerHTML = stateGaragem.buscaAtivos
+            ? '<div class="garagem-empty">Nenhum veículo encontrado para essa busca.</div>'
+            : `<div class="garagem-empty empty-state">
+                <span class="empty-state-icon">🚗</span>
+                <p class="empty-state-title">Nenhum veículo na garagem</p>
+                <p class="empty-state-text">Cadastre seu primeiro veículo para acompanhar quilometragem, manutenções e custos.</p>
+                <button type="button" class="btn-missao-primary" onclick="abrirModalVeiculo(null)">+ Adicionar Veículo</button>
+               </div>`;
     } else {
         ativos.forEach(v => grid.appendChild(criarCardVeiculo(v)));
     }
