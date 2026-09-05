@@ -22,7 +22,10 @@ app.use(helmet({
         directives: {
             ...helmet.contentSecurityPolicy.getDefaultDirectives(),
             // Chart.js é carregado via CDN nos módulos Index, FII e Cripto
-            'script-src': ["'self'", 'https://cdn.jsdelivr.net']
+            'script-src': ["'self'", 'https://cdn.jsdelivr.net'],
+            // Todos os módulos renderizam botões com onclick="..." via innerHTML (padrão já
+            // existente em todo o app). O default do Helmet ('none') bloqueia esses handlers.
+            'script-src-attr': ["'unsafe-inline'"]
         }
     }
 }));
