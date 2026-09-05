@@ -12,6 +12,7 @@ const API_BASE = '/api';
 
 const stateFII = {
     investimentos: [],
+    watchlist: [],
     tema: localStorage.getItem('financehub_theme') || 'dark',
     subAbaAtiva: 'fiiSubPortfolio',
     radarFiltro: 'all',
@@ -108,6 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initSubNavigation();
     initEventListeners();
     carregarCarteira();
+    carregarWatchlist();
     renderizarRadar();
 
     setInterval(() => {
@@ -227,6 +229,159 @@ function atualizarLabelUltimaAtualizacao() {
 }
 
 // =========================================================
+// 2.1 LISTA DE OBSERVAÇÃO (ALERTAS DE FIIS FORA DA CARTEIRA)
+// =========================================================
+
+function mapWatchlistFromApi(r) {
+    return {
+        id: r.id,
+        ticker: r.ticker,
+        alertPrice: r.alertaPrecoAbaixoDe,
+        alertDisparado: r.alertaDisparado,
+        currentPrice: r.precoAtual,
+        priceUpdatedAt: r.precoAtualizadoEm
+    };
+}
+
+function mapWatchlistToApi(item) {
+    return {
+        ticker: item.ticker,
+        alertaPrecoAbaixoDe: item.alertPrice
+    };
+}
+
+/**
+ * Carrega a Lista de Observação de FIIs fora da carteira. Se a tabela FiiWatchlist ainda
+ * não existir no banco (pendente de `prisma db push` manual), falha silenciosamente com
+ * lista vazia, sem afetar o resto do módulo.
+ */
+async function carregarWatchlist() {
+    try {
+        const response = await fetch(`${API_BASE}/fii/watchlist`, { cache: 'no-store' });
+        if (!response.ok) throw new Error('API indisponível');
+
+        const dados = await response.json();
+        stateFII.watchlist = dados.map(mapWatchlistFromApi);
+    } catch (err) {
+        console.warn('[FII Hub] Lista de observação indisponível:', err.message);
+        stateFII.watchlist = [];
+    }
+
+    renderizarWatchlist();
+}
+
+function renderizarWatchlist() {
+    const tbody = document.getElementById('watchlistTableBody');
+    if (!tbody) return;
+
+    const list = stateFII.watchlist;
+
+    if (list.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 32px; color: var(--text-sub);">
+                    Nenhum alerta configurado ainda. Clique em "<strong>Adicionar Alerta</strong>" acima para acompanhar um FII fora da sua carteira.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = list.map(item => `
+        <tr>
+            <td><strong>${escapeHTML(item.ticker)}</strong></td>
+            <td>${item.currentPrice != null ? formatarMoeda(item.currentPrice) : '—'}</td>
+            <td>${formatarMoeda(item.alertPrice)}</td>
+            <td>${item.alertDisparado
+                ? '<span class="status-pill" style="color: var(--color-expense); border-color: var(--color-expense);">🔻 Disparado</span>'
+                : '<span class="status-pill">Monitorando</span>'}</td>
+            <td>${item.priceUpdatedAt ? new Date(item.priceUpdatedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+            <td>
+                <div class="table-action-btns">
+                    <button class="btn-cofre-action" onclick="abrirModalWatchlist('${item.id}')" title="Editar Alerta">✏️</button>
+                    <button class="btn-cofre-action delete" onclick="excluirWatchlistItem('${item.id}')" title="Remover da Lista de Observação">🗑️</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function abrirModalWatchlist(id = null) {
+    const form = document.getElementById('watchlistForm');
+    form.reset();
+
+    if (id) {
+        const item = stateFII.watchlist.find(i => String(i.id) === String(id));
+        if (item) {
+            document.getElementById('modalWatchlistTitle').textContent = `Editar Alerta: ${item.ticker}`;
+            document.getElementById('formWatchlistId').value = item.id;
+            document.getElementById('inputWatchlistTicker').value = item.ticker;
+            document.getElementById('inputWatchlistAlertPrice').value = item.alertPrice;
+        }
+    } else {
+        document.getElementById('modalWatchlistTitle').textContent = 'Adicionar Alerta';
+        document.getElementById('formWatchlistId').value = '';
+    }
+
+    document.getElementById('modalWatchlistOverlay').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function fecharModalWatchlist() {
+    document.getElementById('modalWatchlistOverlay').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+async function salvarWatchlistItem(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('formWatchlistId').value;
+    const ticker = document.getElementById('inputWatchlistTicker').value.trim().toUpperCase();
+    const alertPriceRaw = document.getElementById('inputWatchlistAlertPrice').value;
+    const alertPrice = alertPriceRaw !== '' ? parseFloat(alertPriceRaw) : null;
+
+    if (!ticker || !alertPrice || alertPrice <= 0) {
+        alert('Preencha o ticker e um preço de alerta válido.');
+        return;
+    }
+
+    const payload = mapWatchlistToApi({ ticker, alertPrice });
+
+    try {
+        const url = id ? `${API_BASE}/fii/watchlist/${id}` : `${API_BASE}/fii/watchlist`;
+        const response = await fetch(url, {
+            method: id ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error('Falha ao salvar alerta');
+
+        fecharModalWatchlist();
+        await carregarWatchlist();
+    } catch (err) {
+        console.error('Erro ao salvar item da lista de observação:', err);
+        alert('Erro ao salvar o alerta. Se o problema persistir, pode ser que a tabela ainda não tenha sido criada no banco.');
+    }
+}
+
+async function excluirWatchlistItem(id) {
+    const item = stateFII.watchlist.find(i => String(i.id) === String(id));
+    if (!item) return;
+
+    if (!confirm(`Remover o alerta de ${item.ticker} da lista de observação?`)) return;
+
+    try {
+        const response = await fetch(`${API_BASE}/fii/watchlist/${id}`, { method: 'DELETE' });
+        if (!response.ok) throw new Error('Falha ao excluir item');
+
+        await carregarWatchlist();
+    } catch (err) {
+        console.error('Erro ao excluir item da lista de observação:', err);
+        alert('Erro ao remover o alerta.');
+    }
+}
+
+// =========================================================
 // 3. TEMA E NAVEGAÇÃO
 // =========================================================
 
@@ -298,6 +453,8 @@ function initSubNavigation() {
                 executarSimulacao();
             } else if (targetId === 'fiiSubRadar') {
                 renderizarRadar();
+            } else if (targetId === 'fiiSubWatchlist') {
+                renderizarWatchlist();
             }
         });
     });
@@ -336,12 +493,31 @@ function initEventListeners() {
         });
     }
 
+    // Modal de Lista de Observação
+    const btnAdicionarWatchlist = document.getElementById('btnAdicionarWatchlist');
+    if (btnAdicionarWatchlist) btnAdicionarWatchlist.addEventListener('click', () => abrirModalWatchlist());
+
+    const modalWatchlistClose = document.getElementById('modalWatchlistClose');
+    const btnWatchlistCancel = document.getElementById('btnWatchlistCancel');
+    const modalWatchlistOverlay = document.getElementById('modalWatchlistOverlay');
+
+    if (modalWatchlistClose) modalWatchlistClose.addEventListener('click', fecharModalWatchlist);
+    if (btnWatchlistCancel) btnWatchlistCancel.addEventListener('click', fecharModalWatchlist);
+    if (modalWatchlistOverlay) {
+        modalWatchlistOverlay.addEventListener('click', (e) => {
+            if (e.target === modalWatchlistOverlay) fecharModalWatchlist();
+        });
+    }
+
     // Formulários
     const fiiForm = document.getElementById('fiiForm');
     if (fiiForm) fiiForm.addEventListener('submit', salvarFII);
 
     const aporteForm = document.getElementById('aporteForm');
     if (aporteForm) aporteForm.addEventListener('submit', salvarAporte);
+
+    const watchlistForm = document.getElementById('watchlistForm');
+    if (watchlistForm) watchlistForm.addEventListener('submit', salvarWatchlistItem);
 
     // Formulário da Calculadora
     const calcForm = document.getElementById('calcForm');

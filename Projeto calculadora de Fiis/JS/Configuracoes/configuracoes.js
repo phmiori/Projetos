@@ -39,6 +39,13 @@ let pendingFotoUrl; // undefined = sem alteração pendente; string = nova foto;
 document.addEventListener('DOMContentLoaded', () => {
     carregarPerfil();
     renderizarModulos();
+
+    const btnBaixarMeusDados = document.getElementById('btnBaixarMeusDados');
+    if (btnBaixarMeusDados) {
+        btnBaixarMeusDados.addEventListener('click', () => {
+            window.location.href = '/api/backup/export';
+        });
+    }
 });
 
 async function carregarPerfil() {

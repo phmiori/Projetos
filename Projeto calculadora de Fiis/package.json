@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --env-file=.env --watch server.js",
+    "test": "node --test",
     "prisma:generate": "prisma generate --schema=./SQL/schema.prisma",
     "prisma:push": "prisma db push --schema=./SQL/schema.prisma",
     "prisma:studio": "prisma studio --schema=./SQL/schema.prisma"
@@ -24,7 +25,9 @@
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.7.0",
     "express-session": "^1.19.0",
+    "helmet": "^8.3.0",
     "node-cron": "^3.0.3",
     "nodemailer": "^6.10.1"
   },

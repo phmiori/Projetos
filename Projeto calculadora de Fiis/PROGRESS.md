@@ -109,3 +109,16 @@
 - [x] Novas rotas protegidas por `requireAdmin` em `server.js`: `GET/POST /api/auth/usuarios`, `PUT /api/auth/usuarios/:id` e `PUT /api/auth/usuarios/:id/senha`
 - [x] Proteções: um administrador não pode remover o próprio cargo de admin, e o sistema impede que o último administrador restante seja rebaixado
 
+## 🔧 Segurança, Refatoração, Testes e Melhorias Transversais
+- [x] **Segurança**: `helmet` (com CSP customizada para liberar o Chart.js via CDN), `express-rate-limit` no login (10 tentativas / 15 min), cookie de sessão `secure` condicionado a `NODE_ENV=production`, aviso no console se `SESSION_SECRET` não estiver configurado em produção
+- [x] **Correção de doc**: `README.md` e `ARCHITECTURE.md` atualizados para refletir a stack real (Node/Express + Prisma/PostgreSQL), que havia divergido do texto original (SQLite/PHP)
+- [x] **Refatoração do `server.js`** (antes um único arquivo com ~3100 linhas): dividido em `lib/` (módulos compartilhados: `prisma`, `auth-middleware`, `leilao-shared`, `calc`, `fii-alerts`, `cripto-alerts`, `cripto-shared`, `notificacoes-shared`, `bootstrap`) e `routes/` (um router Express por módulo). `server.js` agora é só o entrypoint (setup, montagem dos routers, cron, bootstrap)
+- [x] **Testes automatizados** (`node --test`, sem dependência nova): `tests/calc-veiculo.test.js`, `tests/calc-imovel.test.js` e `tests/calc-cofrinho.test.js` (cobrindo o ROI de Veículo/Imóvel e a ordem correta IOF-antes-do-IR do Cofrinho, usando `node:test`'s `mock.timers` para fixar a data)
+- [x] **Alerta de preço por e-mail estendido para Cripto**: novos campos `alertaPrecoAbaixoDe`/`alertaDisparado` em `InvestimentoCripto`, cron próprio a cada 5 min (`verificarAlertasPrecoCripto`), função de e-mail generalizada (`enviarEmailAlertaPrecoAtivo`, reaproveitada por FII/Cripto/Watchlist)
+- [x] **Sino de notificações estendido**: além dos lembretes de Calendário, agora também mostra itens da Despensa com estoque abaixo do mínimo e Tarefas & Manutenção da Casa vencidas — usando uma tabela genérica `NotificacaoDispensada` (tipo + entidadeId) para "apagar" essas notificações sem mexer no registro original
+- [x] **Alerta de FII fora da carteira (Lista de Observação)**: novo modelo `FiiWatchlist`, 4ª aba "Lista de Observação" no módulo FII com modal de cadastro (ticker + preço de alerta), rotas `GET/POST/PUT/DELETE /api/fii/watchlist`, reaproveitando o mesmo cron/e-mail do FII da carteira
+- [x] **Exportar/backup de dados**: `GET /api/backup/export` reúne todos os dados do usuário logado (veículos, imóveis, FIIs, watchlist, cripto, cofrinhos, eventos, casa, treinos, saúde, garagem, clima) em um único JSON para download; botão "Baixar meus dados" no Cartão "Meus Dados" em Configurações
+- [x] **PWA**: `manifest.json`, `service-worker.js` (cache-first para estáticos, bypass total para `/api/*`) e `JS/Global/pwa-register.js`, incluídos nas 14 páginas HTML; ícones placeholder gerados em `icons/icon-192.png` e `icons/icon-512.png` (trocar por uma marca real quando quiser)
+
+> ⚠️ Pendência manual: rodar `npm run prisma:push` (com o servidor Node parado) para criar as tabelas `NotificacaoDispensada` e `FiiWatchlist` no banco — até lá, as notificações de Despensa/Tarefas e a Lista de Observação de FIIs ficam inativas (sem erro para o resto do sistema, só essas duas funcionalidades não funcionam ainda).
+

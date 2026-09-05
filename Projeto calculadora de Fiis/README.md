@@ -8,7 +8,7 @@ Sistema Full-Stack completo e funcional para controle de **compra (arremate)**, 
 
 - **Frontend:** HTML5 Semântico, CSS3 Modular (com variáveis semânticas para Dark/Light Mode) e JavaScript Puro (Vanilla JS).
 - **Backend:** Node.js com Express e REST API.
-- **Banco de Dados & ORM:** Prisma ORM com SQLite (localizado na pasta `SQL/dev.db`).
+- **Banco de Dados & ORM:** Prisma ORM com PostgreSQL (hospedado no Neon), via a variável de ambiente `DATABASE_URL`.
 
 ---
 
@@ -28,8 +28,7 @@ Projeto calculadora de Fiis/
 │   └── Index/
 │       └── index.js              # Lógica de interface, cálculos em tempo real e API
 ├── SQL/
-│   ├── schema.prisma             # Schema do Prisma com o modelo de Veículo
-│   └── dev.db                    # Banco de dados SQLite local
+│   └── schema.prisma             # Schema do Prisma (PostgreSQL/Neon) com todos os modelos
 ├── server.js                     # Servidor Express com rotas de CRUD e métricas
 ├── package.json                  # Dependências e scripts do projeto
 ├── ARCHITECTURE.md               # Diretrizes de arquitetura
@@ -51,7 +50,7 @@ npm install
 ```
 
 ### 3. Inicializar o Banco de Dados (Prisma)
-Para criar as tabelas no banco SQLite dentro da pasta `SQL/` e gerar o cliente Prisma, execute:
+Configure a variável `DATABASE_URL` no `.env` (veja `.env.example`) apontando para uma instância PostgreSQL (ex.: Neon). Depois, para sincronizar as tabelas e gerar o cliente Prisma, execute:
 ```bash
 npm run prisma:push
 ```

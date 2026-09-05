@@ -12,7 +12,7 @@ const API_BASE = '/api';
 
 const stateCofrinho = {
     cofrinhos: [],
-    tema: localStorage.getItem('financehub_theme') || 'dark',
+    tema: (typeof localStorage !== 'undefined' ? localStorage.getItem('financehub_theme') : null) || 'dark',
     cofrinhoEmProjecao: null
 };
 
@@ -125,12 +125,16 @@ function ehDiaUtil(data) {
 // 2. INICIALIZAÇÃO
 // =========================================================
 
-document.addEventListener('DOMContentLoaded', () => {
-    initTheme();
-    initMobileNav();
-    initEventListeners();
-    carregarCofrinhos();
-});
+// Guarda de ambiente: este arquivo também é `require`ado pelos testes (node:test), onde
+// `document` não existe. No navegador, `typeof document` é sempre 'object'.
+if (typeof document !== 'undefined') {
+    document.addEventListener('DOMContentLoaded', () => {
+        initTheme();
+        initMobileNav();
+        initEventListeners();
+        carregarCofrinhos();
+    });
+}
 
 function initTheme() {
     const root = document.documentElement;
@@ -568,4 +572,17 @@ function escapeHTML(str) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+}
+
+// Exportação para node:test (no-op no navegador, onde `module` não existe)
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        obterPercentualIOF,
+        obterPercentualIR,
+        calcularDiasCorridos,
+        contarDiasUteis,
+        taxaDiariaDoItem,
+        calcularMetricasCofrinho,
+        TABELA_IOF_REGRESSIVO
+    };
 }

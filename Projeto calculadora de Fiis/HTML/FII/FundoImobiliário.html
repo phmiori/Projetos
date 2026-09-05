@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#EEBB00">
+    <script defer src="/JS/Global/pwa-register.js"></script>
     <meta name="description" content="FinanceHub - Gestão Inteligente de Fundos Imobiliários (FIIs), Renda Passiva, Calculadora Bola de Neve e Radar Funds Explorer">
     <title>FII Hub - Fundos Imobiliários & Renda Passiva</title>
     
@@ -368,6 +371,13 @@
                             <path d="m9.17 14.83-4.24 4.24"></path>
                         </svg>
                         <span>Radar Funds Explorer</span>
+                    </button>
+                    <button type="button" class="sub-nav-btn" data-subtarget="fiiSubWatchlist">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                        </svg>
+                        <span>Lista de Observação</span>
                     </button>
                 </div>
 
@@ -737,6 +747,52 @@
                     </div>
                 </div>
 
+                <!-- ========================================================= -->
+                <!-- ABA 4: LISTA DE OBSERVAÇÃO (ALERTAS DE FIIS FORA DA CARTEIRA) -->
+                <!-- ========================================================= -->
+                <div id="fiiSubWatchlist" class="fii-subview">
+                    <section class="table-panel-card">
+                        <div class="table-header-flex">
+                            <h3 class="panel-card-title">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                                    <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                                </svg>
+                                <span>Alertas de FIIs Fora da Carteira</span>
+                            </h3>
+                            <div class="table-actions-group">
+                                <button type="button" class="btn-primary-action" id="btnAdicionarWatchlist">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                                    </svg>
+                                    <span>Adicionar Alerta</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <p class="modal-subtitle" style="padding: 0 20px 12px;">Acompanhe o preço de um FII que você não possui e receba um e-mail quando ele cair abaixo do valor configurado — sem precisar adicioná-lo à sua carteira.</p>
+
+                        <div class="table-scroll-wrap">
+                            <table class="fii-data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Ticker</th>
+                                        <th>Preço Atual</th>
+                                        <th>Alerta Configurado</th>
+                                        <th>Status</th>
+                                        <th>Última Atualização</th>
+                                        <th style="text-align: right;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="watchlistTableBody">
+                                    <!-- Preenchido via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
             </div>
         </main>
     </div>
@@ -897,6 +953,43 @@
                 <footer class="modal-footer">
                     <button type="button" class="btn-cancel" id="btnAporteCancel">Cancelar</button>
                     <button type="submit" class="btn-missao-primary">Confirmar Aporte</button>
+                </footer>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL: ADICIONAR/EDITAR ALERTA NA LISTA DE OBSERVAÇÃO -->
+    <!-- ========================================================= -->
+    <div class="modal-overlay" id="modalWatchlistOverlay">
+        <div class="modal-dialog" style="max-width: 480px;">
+            <header class="modal-header">
+                <div>
+                    <h2 class="modal-title" id="modalWatchlistTitle">Adicionar Alerta</h2>
+                    <p class="modal-subtitle">Receba um e-mail quando o preço deste FII cair abaixo do valor configurado</p>
+                </div>
+                <button class="modal-close-btn" id="modalWatchlistClose" aria-label="Fechar">&times;</button>
+            </header>
+
+            <form id="watchlistForm">
+                <input type="hidden" id="formWatchlistId">
+                <div class="form-sections-wrapper">
+                    <div class="form-fields-grid">
+                        <div class="input-field">
+                            <label for="inputWatchlistTicker">Ticker do FII *</label>
+                            <input type="text" id="inputWatchlistTicker" class="input-missao" placeholder="Ex: HGLG11" style="text-transform: uppercase;" required>
+                        </div>
+
+                        <div class="input-field">
+                            <label for="inputWatchlistAlertPrice">🔔 Avisar por e-mail se cair abaixo de (R$) *</label>
+                            <input type="number" id="inputWatchlistAlertPrice" class="input-missao" min="0.01" step="0.01" placeholder="Ex: 9.50" required>
+                        </div>
+                    </div>
+                </div>
+
+                <footer class="modal-footer">
+                    <button type="button" class="btn-cancel" id="btnWatchlistCancel">Cancelar</button>
+                    <button type="submit" class="btn-missao-primary">Salvar Alerta</button>
                 </footer>
             </form>
         </div>

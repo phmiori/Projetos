@@ -93,6 +93,8 @@ model Usuario {
   registrosSaude RegistroSaude[]
   veiculosGaragem VeiculoGaragem[]
   modulosOcultos  ModuloOculto[]
+  notificacoesDispensadas NotificacaoDispensada[]
+  fiiWatchlist    FiiWatchlist[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -109,6 +111,46 @@ model ModuloOculto {
   createdAt DateTime @default(now())
 
   @@unique([usuarioId, modulo])
+}
+
+/**
+ * Registro genérico de "notificação dispensada" para tipos de notificação do sino que não têm
+ * um campo próprio (como Evento.notificacaoDispensada) — hoje usado por Despensa (estoque baixo)
+ * e Tarefas (vencidas), extensível a novos tipos sem precisar de uma migração por tipo.
+ */
+model NotificacaoDispensada {
+  id         Int      @id @default(autoincrement())
+
+  usuarioId  Int
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  tipo       String   // 'estoque' (ItemDespensa) | 'tarefa' (TarefaCasa)
+  entidadeId Int
+
+  createdAt  DateTime @default(now())
+
+  @@unique([usuarioId, tipo, entidadeId])
+}
+
+/**
+ * Alerta de preço de FII que o usuário NÃO possui na carteira (lista de observação) —
+ * separado de InvestimentoFII porque não representa uma posição (sem cotas/preço médio).
+ */
+model FiiWatchlist {
+  id                  Int       @id @default(autoincrement())
+
+  usuarioId           Int
+  usuario             Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  ticker              String
+  alertaPrecoAbaixoDe Float
+  alertaDisparado     Boolean   @default(false)
+
+  precoAtual          Float?
+  precoAtualizadoEm   DateTime?
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 }
 
 model VeiculoGaragem {
@@ -422,6 +464,10 @@ model InvestimentoCripto {
   // Cotação de mercado obtida automaticamente (CoinGecko)
   precoAtual        Float?
   precoAtualizadoEm DateTime?
+
+  // Alerta por e-mail de queda de preço (mesmo mecanismo do módulo FII)
+  alertaPrecoAbaixoDe Float?   // se definido, envia e-mail quando precoAtual cruzar abaixo deste valor
+  alertaDisparado     Boolean  @default(false) // evita reenviar o alerta enquanto o preço não se recuperar acima do limite
 
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt

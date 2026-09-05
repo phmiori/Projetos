@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#EEBB00">
+    <script defer src="/JS/Global/pwa-register.js"></script>
     <meta name="description" content="FinanceHub - Configurações da Conta do Usuário">
     <title>Configurações - Perfil e Hub Financeiro</title>
 
@@ -370,6 +373,16 @@
                     </ul>
 
                     <p class="account-feedback" id="modulosFeedback" style="display:none;"></p>
+                </section>
+
+                <!-- Cartão: Meus Dados (exportação/backup pessoal) -->
+                <section class="config-card" aria-labelledby="meusDadosTitle">
+                    <div class="config-card-header">
+                        <h2 class="config-card-title" id="meusDadosTitle">Meus Dados</h2>
+                        <p class="config-card-subtitle">Baixe uma cópia de todos os seus dados (veículos, imóveis, FIIs, cripto, cofrinhos, eventos, casa, treinos, saúde e garagem) em um único arquivo JSON.</p>
+                    </div>
+
+                    <button type="button" class="btn-missao-primary" id="btnBaixarMeusDados">Baixar meus dados (JSON)</button>
                 </section>
 
                 <!-- Cartão: Administração de Usuários (visível apenas para Davi_olp e PhMiori) -->

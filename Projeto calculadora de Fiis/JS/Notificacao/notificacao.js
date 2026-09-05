@@ -218,7 +218,7 @@ function renderizarNotificacoes(notificacoes, container, isPagina) {
         const vazio = document.createElement('p');
         vazio.className = 'notification-empty';
         vazio.textContent = isPagina
-            ? 'Nenhum lembrete ativo no momento. Configure um lembrete ao criar um evento no Calendário.'
+            ? 'Nenhuma notificação ativa no momento (lembretes do Calendário, estoque baixo na Despensa ou tarefas vencidas).'
             : 'Nenhuma notificação no momento.';
         container.appendChild(vazio);
         return;
@@ -248,14 +248,14 @@ function criarItemNotificacao(n) {
     meta.textContent = formatarMetaNotificacao(n);
     body.appendChild(meta);
 
-    if (n.local) {
+    if (n.tipo === 'evento' && n.local) {
         const local = document.createElement('span');
         local.className = 'notification-item-meta';
         local.textContent = `📍 ${n.local}`;
         body.appendChild(local);
     }
 
-    if (n.emAndamento) {
+    if (n.tipo === 'evento' && n.emAndamento) {
         const tag = document.createElement('span');
         tag.className = 'notification-item-tag';
         tag.textContent = 'Em andamento';
@@ -286,17 +286,22 @@ function criarItemNotificacao(n) {
     item.appendChild(btnExcluir);
 
     item.addEventListener('click', () => {
-        window.location.href = resolverLinkCalendario();
+        window.location.href = resolverLink(n);
     });
 
     return item;
 }
 
-function resolverLinkCalendario() {
-    return window.location.pathname.includes('/HTML/Calendario/') ? 'calendario.html' : '../Calendario/calendario.html';
+function resolverLink(n) {
+    if (n.tipo === 'evento') {
+        return window.location.pathname.includes('/HTML/Calendario/') ? 'calendario.html' : '../Calendario/calendario.html';
+    }
+    return n.link || '../Index/index.html';
 }
 
 function formatarMetaNotificacao(n) {
+    if (n.tipo !== 'evento') return n.subtitulo || '';
+
     const inicio = new Date(n.inicio);
     const dataFormatada = inicio.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 

@@ -1,11 +1,12 @@
 # Arquitetura e Diretrizes do Sistema Pessoal
 
 ## 1. Stack Tecnológica Oficial
-- **Backend:** PHP 8.x (Estruturado/Modular, sem frameworks pesados).
-- **Conexão com Banco:** PDO (PHP Data Objects) para segurança contra SQL Injection.
+> ⚠️ Nota de divergência: este documento originalmente previa um backend PHP, mas o projeto evoluiu para Node.js/Express (`server.js`) com Prisma ORM sobre PostgreSQL. As seções abaixo que mencionam `PHP/`, PDO ou MySQL/MariaDB são aspiracionais e não refletem a implementação atual — mantidas apenas como referência histórica da intenção original.
+- **Backend:** Node.js com Express (rotas REST em `server.js`).
+- **Conexão com Banco:** Prisma ORM (`SQL/schema.prisma`) para segurança contra SQL Injection.
 - **Frontend:** HTML5, CSS3 e JavaScript puro (Vanilla JS).
 - **Comunicação:** Requisições assíncronas via `fetch()` trafegando dados estritamente em formato JSON.
-- **Banco de Dados:** MySQL / MariaDB (SQL).
+- **Banco de Dados:** PostgreSQL (hospedado no Neon).
 
 ## 2. Identidade Visual e Layout (Partido Missão + Finanças)
 O sistema adota uma estética minimalista, moderna (estilo Apple) e de alto contraste, suportando **Modo Escuro (Padrão)** e **Modo Claro**.
@@ -32,24 +33,24 @@ Todo o layout deve adaptar-se automaticamente a qualquer tamanho de tela (Smartp
   - Desktop: `>= 1025px`.
 
 ## 4. Padrão Estrito de Organização de Pastas
-O sistema é 100% modular (Feature-Driven). Cada funcionalidade tem sua pasta própria espelhada:
+O sistema é 100% modular (Feature-Driven). Cada funcionalidade tem sua pasta própria espelhada no frontend:
 - `HTML/NomeDoModulo/nomedomodulo.html`
 - `CSS/NomeDoModulo/nomedomodulo.css`
 - `JS/NomeDoModulo/nomedomodulo.js`
-- `PHP/NomeDoModulo/arquivos_especializados.php`
-- `SQL/NomeDoModulo/001_migracao.sql`
+
+> ⚠️ As linhas `PHP/NomeDoModulo/arquivos_especializados.php` e `SQL/NomeDoModulo/001_migracao.sql` originalmente previstas aqui não se aplicam: o backend real é um único `server.js` (Express) com rotas REST por módulo, e o schema do banco vive todo em `SQL/schema.prisma` (Prisma), sem pasta `PHP/` nem migrações SQL numeradas por módulo.
 
 ### Regra de Caminhos Relativos:
-Os arquivos HTML devem importar CSS e JS usando caminhos de saída (`../../CSS/` ou `../../JS/`). O JavaScript deve apontar requisições para a pasta `../../PHP/`.
+Os arquivos HTML devem importar CSS e JS usando caminhos de saída (`../../CSS/` ou `../../JS/`). O JavaScript deve apontar requisições para a pasta `/api/` (rotas REST do `server.js`), não `PHP/`.
 
-## 5. Gestão do Banco de Dados (SQL)
-As mudanças no MySQL local são feitas **manualmente** pelo desenvolvedor humano.
-- O assistente deve apenas **gerar** os arquivos SQL numerados de forma incremental (Ex: `001_criacao.sql`, `002_add_campo.sql`) dentro da pasta `SQL/Modulo/`.
-- Após o humano aplicar o script no banco local, ele avisará para continuar.
+## 5. Gestão do Banco de Dados (Prisma)
+As mudanças no PostgreSQL (Neon) são feitas **manualmente** pelo desenvolvedor humano.
+- O assistente deve apenas **editar** o `SQL/schema.prisma` com o novo modelo/campo.
+- Após o humano rodar `npm run prisma:push` (com o servidor Node parado), ele avisará para continuar.
 
 ## 6. Instruções Críticas de Lembrete
 - **Economia Severa de Tokens:** Gere apenas o código estritamente necessário. Não faça refatorações não solicitadas.
-- **Apenas Um Módulo por Vez:** Não mexa em múltiplos módulos simultaneamente.
-- **Arquivos Focados no PHP:** Divida o PHP por funções (`buscar.php`, `salvar.php`). Evite um único arquivo gigante.
-- **Sem Códigos Embutidos:** Não insira CSS ou JS dentro do arquivo HTML, nem HTML dentro do PHP. Mantenha a separação absoluta.
+- **Apenas Um Módulo por Vez:** Não mexa em múltiplos módulos simultaneamente (exceto quando o usuário pedir explicitamente uma mudança que atravessa vários módulos de propósito).
+- **Arquivos Focados no Backend:** Divida as rotas do `server.js` por módulo (ex.: `routes/fii.js`, `routes/cripto.js`). Evite um único arquivo gigante.
+- **Sem Códigos Embutidos:** Não insira CSS ou JS dentro do arquivo HTML. Mantenha a separação absoluta.
 - **Checklist Atualizado:** Sempre consulte e atualize o `PROGRESS.md` ao finalizar qualquer tarefa.
