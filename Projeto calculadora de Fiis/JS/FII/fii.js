@@ -298,8 +298,8 @@ function renderizarWatchlist() {
             <td>${item.priceUpdatedAt ? new Date(item.priceUpdatedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'}</td>
             <td>
                 <div class="table-action-btns">
-                    <button class="btn-cofre-action" onclick="abrirModalWatchlist('${item.id}')" title="Editar Alerta">✏️</button>
-                    <button class="btn-cofre-action delete" onclick="excluirWatchlistItem('${item.id}')" title="Remover da Lista de Observação">🗑️</button>
+                    <button class="btn-fii-action" onclick="abrirModalWatchlist('${item.id}')" title="Editar Alerta">✏️</button>
+                    <button class="btn-fii-action delete" onclick="excluirWatchlistItem('${item.id}')" title="Remover da Lista de Observação">🗑️</button>
                 </div>
             </td>
         </tr>
