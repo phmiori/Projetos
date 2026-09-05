@@ -218,7 +218,7 @@ function renderizarNotificacoes(notificacoes, container, isPagina) {
         const vazio = document.createElement('p');
         vazio.className = 'notification-empty';
         vazio.textContent = isPagina
-            ? 'Nenhuma notificação ativa no momento (lembretes do Calendário, estoque baixo na Despensa ou tarefas vencidas).'
+            ? 'Nenhuma notificação ativa no momento (lembretes do Calendário ou faturas de cartão vencendo).'
             : 'Nenhuma notificação no momento.';
         container.appendChild(vazio);
         return;

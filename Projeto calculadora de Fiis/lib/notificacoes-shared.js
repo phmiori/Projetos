@@ -26,47 +26,34 @@ async function buscarEventosComNotificacaoAtiva(usuarioId) {
 }
 
 /**
- * Busca os itens da Despensa com estoque abaixo do mínimo configurado, excluindo os que
- * o usuário já dispensou no sino (NotificacaoDispensada com tipo 'estoque').
+ * Busca faturas de cartão do usuário que vencem nos próximos 5 dias (ou já venceram) e ainda
+ * não foram pagas, excluindo as que o usuário já dispensou no sino (NotificacaoDispensada com
+ * tipo 'fatura').
  */
-async function buscarItensEstoqueBaixoAtivos(usuarioId) {
-    const itens = await prisma.itemDespensa.findMany({
-        where: { usuarioId, quantidadeMinima: { gt: 0 } }
-    });
-
-    const baixos = itens.filter(item => item.quantidade < item.quantidadeMinima);
-    if (baixos.length === 0) return [];
-
-    const dispensadas = await prisma.notificacaoDispensada.findMany({
-        where: { usuarioId, tipo: 'estoque', entidadeId: { in: baixos.map(i => i.id) } }
-    });
-    const idsDispensados = new Set(dispensadas.map(d => d.entidadeId));
-
-    return baixos.filter(item => !idsDispensados.has(item.id));
-}
-
-/**
- * Busca as Tarefas & Manutenção da Casa com data prevista já vencida e ainda não concluídas,
- * excluindo as que o usuário já dispensou no sino (NotificacaoDispensada com tipo 'tarefa').
- */
-async function buscarTarefasVencidasAtivas(usuarioId) {
+async function buscarFaturasVencendoAtivas(usuarioId) {
     const agora = new Date();
-    const tarefas = await prisma.tarefaCasa.findMany({
-        where: { usuarioId, dataPrevista: { lt: agora }, status: { not: 'Concluída' } }
+    const limiteFuturo = new Date(agora.getTime() + 5 * 24 * 60 * 60 * 1000);
+
+    const faturas = await prisma.faturaCartao.findMany({
+        where: {
+            status: { not: 'Paga' },
+            dataVencimento: { lte: limiteFuturo },
+            cartao: { usuarioId }
+        },
+        include: { cartao: true }
     });
 
-    if (tarefas.length === 0) return [];
+    if (faturas.length === 0) return [];
 
     const dispensadas = await prisma.notificacaoDispensada.findMany({
-        where: { usuarioId, tipo: 'tarefa', entidadeId: { in: tarefas.map(t => t.id) } }
+        where: { usuarioId, tipo: 'fatura', entidadeId: { in: faturas.map(f => f.id) } }
     });
     const idsDispensados = new Set(dispensadas.map(d => d.entidadeId));
 
-    return tarefas.filter(t => !idsDispensados.has(t.id));
+    return faturas.filter(f => !idsDispensados.has(f.id));
 }
 
 module.exports = {
     buscarEventosComNotificacaoAtiva,
-    buscarItensEstoqueBaixoAtivos,
-    buscarTarefasVencidasAtivas
+    buscarFaturasVencendoAtivas
 };

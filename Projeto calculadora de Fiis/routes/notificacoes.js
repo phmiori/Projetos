@@ -2,8 +2,7 @@ const express = require('express');
 const prisma = require('../lib/prisma');
 const {
     buscarEventosComNotificacaoAtiva,
-    buscarItensEstoqueBaixoAtivos,
-    buscarTarefasVencidasAtivas
+    buscarFaturasVencendoAtivas
 } = require('../lib/notificacoes-shared');
 
 const router = express.Router();
@@ -14,8 +13,8 @@ const COR_ALERTA = '#D32F2F';
 
 /**
  * ROTA: Notificações Pendentes (sino do cabeçalho)
- * Une 3 fontes: lembretes de eventos do Calendário, itens da Despensa com estoque baixo
- * e Tarefas & Manutenção da Casa vencidas — cada uma mapeada para um envelope comum.
+ * Une 2 fontes: lembretes de eventos do Calendário e faturas de cartão vencendo em breve —
+ * cada uma mapeada para um envelope comum.
  * GET /api/notificacoes
  */
 router.get('/', async (req, res) => {
@@ -25,10 +24,9 @@ router.get('/', async (req, res) => {
 
         // Cada fonte é isolada: se a tabela NotificacaoDispensada ainda não existir no banco
         // (pendente de `prisma db push` manual), os lembretes de Calendário continuam funcionando.
-        const [eventos, itensBaixos, tarefasVencidas] = await Promise.all([
+        const [eventos, faturasVencendo] = await Promise.all([
             buscarEventosComNotificacaoAtiva(usuarioId),
-            buscarItensEstoqueBaixoAtivos(usuarioId).catch(e => { console.warn('[Notificações] estoque indisponível:', e.message); return []; }),
-            buscarTarefasVencidasAtivas(usuarioId).catch(e => { console.warn('[Notificações] tarefas indisponível:', e.message); return []; })
+            buscarFaturasVencendoAtivas(usuarioId).catch(e => { console.warn('[Notificações] faturas indisponível:', e.message); return []; })
         ]);
 
         const notificacoesEventos = eventos.map(ev => ({
@@ -45,27 +43,17 @@ router.get('/', async (req, res) => {
             link: '../Calendario/calendario.html'
         }));
 
-        const notificacoesEstoque = itensBaixos.map(item => ({
-            id: `estoque-${item.id}`,
-            tipo: 'estoque',
-            titulo: `Estoque baixo: ${item.nome}`,
-            subtitulo: `${item.quantidade} ${item.unidade} restante(s) (mín. ${item.quantidadeMinima})`,
+        const notificacoesFaturas = faturasVencendo.map(f => ({
+            id: `fatura-${f.id}`,
+            tipo: 'fatura',
+            titulo: `Fatura do ${f.cartao.nome} vencendo`,
+            subtitulo: `Vence em ${new Date(f.dataVencimento).toLocaleDateString('pt-BR')}`,
             cor: COR_ALERTA,
-            atualizadoEm: item.updatedAt,
-            link: '../FinancasCasa/financascasa.html'
+            atualizadoEm: f.updatedAt,
+            link: '../Financas/financas.html'
         }));
 
-        const notificacoesTarefas = tarefasVencidas.map(t => ({
-            id: `tarefa-${t.id}`,
-            tipo: 'tarefa',
-            titulo: `Tarefa vencida: ${t.titulo}`,
-            subtitulo: t.dataPrevista ? `Venceu em ${new Date(t.dataPrevista).toLocaleDateString('pt-BR')}` : 'Sem data prevista',
-            cor: COR_ALERTA,
-            atualizadoEm: t.updatedAt,
-            link: '../FinancasCasa/financascasa.html'
-        }));
-
-        res.json([...notificacoesEventos, ...notificacoesEstoque, ...notificacoesTarefas]);
+        res.json([...notificacoesEventos, ...notificacoesFaturas]);
     } catch (err) {
         console.error('Erro ao buscar notificações:', err);
         res.status(500).json({ error: 'Erro ao buscar notificações' });
@@ -74,7 +62,7 @@ router.get('/', async (req, res) => {
 
 /**
  * ROTA: Dispensar Todas as Notificações Ativas do Usuário
- * (marca eventos como notificacaoDispensada e grava NotificacaoDispensada para estoque/tarefa,
+ * (marca eventos como notificacaoDispensada e grava NotificacaoDispensada para fatura,
  * sem apagar os registros originais)
  * DELETE /api/notificacoes
  */
@@ -82,10 +70,9 @@ router.delete('/', async (req, res) => {
     try {
         const usuarioId = req.session.userId;
 
-        const [eventos, itensBaixos, tarefasVencidas] = await Promise.all([
+        const [eventos, faturasVencendo] = await Promise.all([
             buscarEventosComNotificacaoAtiva(usuarioId),
-            buscarItensEstoqueBaixoAtivos(usuarioId).catch(() => []),
-            buscarTarefasVencidasAtivas(usuarioId).catch(() => [])
+            buscarFaturasVencendoAtivas(usuarioId).catch(() => [])
         ]);
 
         const eventoIds = eventos.map(ev => ev.id);
@@ -96,10 +83,7 @@ router.delete('/', async (req, res) => {
             });
         }
 
-        const dispensasGenericas = [
-            ...itensBaixos.map(item => ({ tipo: 'estoque', entidadeId: item.id })),
-            ...tarefasVencidas.map(t => ({ tipo: 'tarefa', entidadeId: t.id }))
-        ];
+        const dispensasGenericas = faturasVencendo.map(f => ({ tipo: 'fatura', entidadeId: f.id }));
         if (dispensasGenericas.length > 0) {
             try {
                 await prisma.notificacaoDispensada.createMany({
@@ -120,7 +104,7 @@ router.delete('/', async (req, res) => {
 
 /**
  * ROTA: Dispensar uma Notificação Específica
- * O :id vem prefixado pelo tipo (ex.: "evento-12", "estoque-3", "tarefa-7"), conforme
+ * O :id vem prefixado pelo tipo (ex.: "evento-12", "fatura-3"), conforme
  * devolvido por GET /api/notificacoes.
  * DELETE /api/notificacoes/:id
  */

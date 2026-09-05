@@ -6,14 +6,14 @@
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#EEBB00">
     <script defer src="/JS/Global/pwa-register.js"></script>
-    <meta name="description" content="FinanceHub - Controle Financeiro da Casa, Despensa e Tarefas de Manutenção">
-    <title>Finanças & Casa - Hub Pessoal</title>
+    <meta name="description" content="FinanceHub - Controle Bancário: Contas, Cartões de Crédito, Faturas e Transações">
+    <title>Finanças - Hub Pessoal</title>
 
-    <!-- Tokens Globais, CSS do Index (Sidebar/Header), Notificações e CSS Específico de Finanças & Casa -->
+    <!-- Tokens Globais, CSS do Index (Sidebar/Header), Notificações e CSS Específico de Finanças -->
     <link rel="stylesheet" href="../../CSS/Global/global_tokens.css">
     <link rel="stylesheet" href="../../CSS/Index/index.css">
     <link rel="stylesheet" href="../../CSS/Notificacao/notificacao.css">
-    <link rel="stylesheet" href="../../CSS/FinancasCasa/financascasa.css">
+    <link rel="stylesheet" href="../../CSS/Financas/financas.css">
     <link rel="stylesheet" href="../../CSS/Clima/clima-header-widget.css">
 
     <!-- Guarda de Autenticação (deve carregar antes do script do módulo) -->
@@ -26,8 +26,11 @@
     <script src="../../JS/Clima/clima-codigos.js" defer></script>
     <script src="../../JS/Clima/clima-header-widget.js" defer></script>
 
-    <!-- Script do Módulo Finanças & Casa -->
-    <script src="../../JS/FinancasCasa/financascasa.js" defer></script>
+    <!-- Chart.js para os Gráficos do Dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Script do Módulo Finanças -->
+    <script src="../../JS/Financas/financas.js" defer></script>
 </head>
 <body class="auth-pending">
 
@@ -44,12 +47,11 @@
             <a href="../Index/index.html" class="logo-link" aria-label="FinanceHub Início">
                 <div class="logo-icon-box">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path>
-                        <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path>
-                        <path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path>
+                        <rect width="20" height="14" x="2" y="5" rx="2"></rect>
+                        <line x1="2" y1="10" x2="22" y2="10"></line>
                     </svg>
                 </div>
-                <span class="logo-title">Casa <span class="logo-highlight">Hub</span></span>
+                <span class="logo-title">Finanças <span class="logo-highlight">Hub</span></span>
             </a>
         </div>
 
@@ -276,15 +278,14 @@
                         </a>
                     </li>
                     <li>
-                        <a href="financascasa.html" class="nav-item-btn active">
+                        <a href="financas.html" class="nav-item-btn active">
                             <span class="nav-icon">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path>
-                                    <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path>
-                                    <path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path>
+                                    <rect width="20" height="14" x="2" y="5" rx="2"></rect>
+                                    <line x1="2" y1="10" x2="22" y2="10"></line>
                                 </svg>
                             </span>
-                            <span class="nav-text">Finanças & Casa</span>
+                            <span class="nav-text">Finanças</span>
                         </a>
                     </li>
                     <li>
@@ -318,7 +319,7 @@
             <div class="sidebar-footer">
                 <div class="system-status-indicator">
                     <span class="status-dot"></span>
-                    <span class="status-text">Módulo Finanças & Casa Ativo</span>
+                    <span class="status-text">Módulo Finanças Ativo</span>
                 </div>
             </div>
         </aside>
@@ -328,63 +329,114 @@
             <div class="main-container">
 
                 <!-- Painel de Boas-Vindas -->
-                <section class="welcome-panel" aria-labelledby="welcomeCasaTitle">
+                <section class="welcome-panel" aria-labelledby="welcomeFinancasTitle">
                     <div class="welcome-content">
                         <span class="welcome-badge">Hub Pessoal</span>
-                        <h1 class="welcome-title" id="welcomeCasaTitle">Finanças & Casa</h1>
-                        <p class="welcome-subtitle">Controle os gastos da casa, o estoque da despensa e as tarefas de manutenção pendentes.</p>
+                        <h1 class="welcome-title" id="welcomeFinancasTitle">Finanças</h1>
+                        <p class="welcome-subtitle">Controle bancário completo: contas, cartões de crédito, faturas e todos os seus lançamentos.</p>
                     </div>
                 </section>
 
                 <!-- Sub-Navegação em Abas -->
                 <div class="sub-nav-container">
-                    <button type="button" class="sub-nav-btn active" data-subtarget="casaSubGastos">
+                    <button type="button" class="sub-nav-btn active" data-subtarget="financasSubVisaoGeral">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+                            <rect width="7" height="9" x="3" y="3" rx="1"></rect>
+                            <rect width="7" height="5" x="14" y="3" rx="1"></rect>
+                            <rect width="7" height="9" x="14" y="12" rx="1"></rect>
+                            <rect width="7" height="5" x="3" y="16" rx="1"></rect>
+                        </svg>
+                        <span>Visão Geral</span>
+                    </button>
+                    <button type="button" class="sub-nav-btn" data-subtarget="financasSubTransacoes">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="1" x2="12" y2="23"></line>
+                            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                        <span>Transações</span>
+                    </button>
+                    <button type="button" class="sub-nav-btn" data-subtarget="financasSubCartoes">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect width="20" height="14" x="2" y="5" rx="2"></rect>
                             <line x1="2" y1="10" x2="22" y2="10"></line>
                         </svg>
-                        <span>Gastos da Casa</span>
+                        <span>Cartões & Faturas</span>
                     </button>
-                    <button type="button" class="sub-nav-btn" data-subtarget="casaSubDespensa">
+                    <button type="button" class="sub-nav-btn" data-subtarget="financasSubContas">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M20.9 19.8 17 8H7l-3.9 11.8a1 1 0 0 0 .95 1.2h15.9a1 1 0 0 0 .95-1.2Z"></path>
-                            <path d="M8 8V6a4 4 0 0 1 8 0v2"></path>
+                            <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path>
+                            <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path>
+                            <path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path>
                         </svg>
-                        <span>Despensa</span>
+                        <span>Contas</span>
                     </button>
-                    <button type="button" class="sub-nav-btn" data-subtarget="casaSubTarefas">
+                    <button type="button" class="sub-nav-btn" data-subtarget="financasSubCategorias">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"></path>
+                            <path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2.59 12.5A2 2 0 0 1 2 11.09V4a2 2 0 0 1 2-2h7.09a2 2 0 0 1 1.41.59l8.09 8.09a2 2 0 0 1 0 2.83Z"></path>
+                            <circle cx="7.5" cy="7.5" r="1.5"></circle>
                         </svg>
-                        <span>Tarefas & Manutenção</span>
+                        <span>Categorias</span>
                     </button>
                 </div>
 
                 <!-- ========================================================= -->
-                <!-- ABA 1: GASTOS DA CASA -->
+                <!-- ABA 1: VISÃO GERAL -->
                 <!-- ========================================================= -->
-                <div id="casaSubGastos" class="casa-subview active">
+                <div id="financasSubVisaoGeral" class="financas-subview active">
 
                     <div class="kpi-grid">
                         <article class="kpi-card kpi-total">
                             <div class="kpi-header">
-                                <span class="kpi-title">Gasto no Mês Atual</span>
+                                <span class="kpi-title">Saldo Total (Contas)</span>
                                 <div class="kpi-icon-wrapper icon-accent">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <line x1="12" y1="1" x2="12" y2="23"></line>
-                                        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                                        <path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"></path>
+                                        <path d="M3 5v14a2 2 0 0 0 2 2h16v-5"></path>
+                                        <path d="M18 12a2 2 0 0 0 0 4h4v-4Z"></path>
                                     </svg>
                                 </div>
                             </div>
                             <div class="kpi-body">
-                                <div class="kpi-value" id="kpiCasaGastoMes">R$ 0,00</div>
-                                <div class="kpi-status-tag tag-accent" id="kpiCasaLancamentosMes">0 lançamentos</div>
+                                <div class="kpi-value" id="kpiSaldoTotal">R$ 0,00</div>
+                                <div class="kpi-status-tag tag-accent">Todas as contas</div>
+                            </div>
+                        </article>
+
+                        <article class="kpi-card kpi-income">
+                            <div class="kpi-header">
+                                <span class="kpi-title">Receita do Mês</span>
+                                <div class="kpi-icon-wrapper icon-income">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="12" y1="19" x2="12" y2="5"></line>
+                                        <polyline points="5 12 12 5 19 12"></polyline>
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="kpi-body">
+                                <div class="kpi-value text-income" id="kpiReceitaMes">R$ 0,00</div>
+                                <div class="kpi-status-tag tag-income">Entradas do mês</div>
+                            </div>
+                        </article>
+
+                        <article class="kpi-card kpi-expense">
+                            <div class="kpi-header">
+                                <span class="kpi-title">Despesa do Mês</span>
+                                <div class="kpi-icon-wrapper icon-expense">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                                        <polyline points="19 12 12 19 5 12"></polyline>
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="kpi-body">
+                                <div class="kpi-value text-expense" id="kpiDespesaMes">R$ 0,00</div>
+                                <div class="kpi-status-tag tag-expense">Saídas do mês</div>
                             </div>
                         </article>
 
                         <article class="kpi-card kpi-roi">
                             <div class="kpi-header">
-                                <span class="kpi-title">Maior Categoria (Mês)</span>
+                                <span class="kpi-title">Resultado do Mês</span>
                                 <div class="kpi-icon-wrapper icon-accent">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
@@ -393,62 +445,86 @@
                                 </div>
                             </div>
                             <div class="kpi-body">
-                                <div class="kpi-value text-accent" id="kpiCasaMaiorCategoria">—</div>
-                                <div class="kpi-status-tag tag-accent" id="kpiCasaMaiorCategoriaValor">R$ 0,00</div>
-                            </div>
-                        </article>
-
-                        <article class="kpi-card kpi-total">
-                            <div class="kpi-header">
-                                <span class="kpi-title">Total Acumulado</span>
-                                <div class="kpi-icon-wrapper icon-accent">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <rect width="20" height="14" x="2" y="5" rx="2"></rect>
-                                        <line x1="2" y1="10" x2="22" y2="10"></line>
-                                    </svg>
-                                </div>
-                            </div>
-                            <div class="kpi-body">
-                                <div class="kpi-value" id="kpiCasaTotalAcumulado">R$ 0,00</div>
-                                <div class="kpi-status-tag tag-accent">Desde o início</div>
+                                <div class="kpi-value" id="kpiResultadoMes">R$ 0,00</div>
+                                <div class="kpi-status-tag tag-accent">Receita − Despesa</div>
                             </div>
                         </article>
                     </div>
 
-                    <section class="casa-table-panel">
-                        <div class="casa-table-header-flex">
-                            <h3 class="casa-section-title">Lançamentos</h3>
-                            <div class="casa-filter-row" id="casaFiltroCategorias">
-                                <button type="button" class="casa-filter-btn active" data-categoria="Todas">Todas</button>
-                                <button type="button" class="casa-filter-btn" data-categoria="Manutenção">Manutenção</button>
-                                <button type="button" class="casa-filter-btn" data-categoria="Energia Elétrica">Energia</button>
-                                <button type="button" class="casa-filter-btn" data-categoria="Água">Água</button>
-                                <button type="button" class="casa-filter-btn" data-categoria="Internet">Internet</button>
-                                <button type="button" class="casa-filter-btn" data-categoria="Compra do Mês">Compra do Mês</button>
-                                <button type="button" class="casa-filter-btn" data-categoria="Outros">Outros</button>
+                    <div class="charts-grid">
+                        <div class="chart-card">
+                            <div class="chart-card-header">
+                                <h3 class="chart-card-title">Gastos por Categoria (Mês)</h3>
+                                <span class="chart-card-subtitle">Distribuição das despesas do mês atual</span>
                             </div>
-                            <button type="button" class="btn-primary-action" id="btnNovoGasto">
+                            <div class="chart-canvas-wrap">
+                                <canvas id="chartGastoCategoria"></canvas>
+                            </div>
+                        </div>
+                        <div class="chart-card">
+                            <div class="chart-card-header">
+                                <h3 class="chart-card-title">Evolução Mensal</h3>
+                                <span class="chart-card-subtitle">Receitas x Despesas nos últimos 6 meses</span>
+                            </div>
+                            <div class="chart-canvas-wrap">
+                                <canvas id="chartEvolucaoMensal"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <section class="financas-panel">
+                        <h3 class="financas-section-title">Faturas em Aberto</h3>
+                        <div class="financas-cartoes-resumo-grid" id="resumoFaturasGrid">
+                            <!-- Preenchido via JS -->
+                        </div>
+                    </section>
+
+                    <section class="financas-panel" id="painelOrcamentos" style="display:none;">
+                        <h3 class="financas-section-title">Orçamento por Categoria (Mês)</h3>
+                        <div class="financas-orcamentos-list" id="orcamentosList">
+                            <!-- Preenchido via JS -->
+                        </div>
+                    </section>
+                </div>
+
+                <!-- ========================================================= -->
+                <!-- ABA 2: TRANSAÇÕES -->
+                <!-- ========================================================= -->
+                <div id="financasSubTransacoes" class="financas-subview">
+
+                    <section class="financas-panel">
+                        <div class="financas-table-header-flex">
+                            <h3 class="financas-section-title">Lançamentos</h3>
+                            <div class="financas-filter-row" id="filtroTipoTransacao">
+                                <button type="button" class="financas-filter-btn active" data-tipo="Todas">Todas</button>
+                                <button type="button" class="financas-filter-btn" data-tipo="Receita">Receitas</button>
+                                <button type="button" class="financas-filter-btn" data-tipo="Despesa">Despesas</button>
+                                <button type="button" class="financas-filter-btn" data-tipo="Transferencia">Transferências</button>
+                            </div>
+                            <button type="button" class="btn-primary-action" id="btnNovaTransacao">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <line x1="12" y1="5" x2="12" y2="19"></line>
                                     <line x1="5" y1="12" x2="19" y2="12"></line>
                                 </svg>
-                                <span>Novo Gasto</span>
+                                <span>Novo Lançamento</span>
                             </button>
                         </div>
 
-                        <div class="casa-table-scroll-wrap">
-                            <table class="casa-table">
+                        <div class="financas-table-scroll-wrap">
+                            <table class="financas-table">
                                 <thead>
                                     <tr>
                                         <th>Data</th>
-                                        <th>Categoria</th>
                                         <th>Descrição</th>
+                                        <th>Categoria</th>
+                                        <th>Forma</th>
+                                        <th>Parcela</th>
                                         <th>Valor</th>
-                                        <th>Recorrente</th>
+                                        <th>Status</th>
                                         <th style="text-align:right;">Ações</th>
                                     </tr>
                                 </thead>
-                                <tbody id="gastosTableBody">
+                                <tbody id="transacoesTableBody">
                                     <!-- Preenchido via JS -->
                                 </tbody>
                             </table>
@@ -457,157 +533,107 @@
                 </div>
 
                 <!-- ========================================================= -->
-                <!-- ABA 2: DESPENSA -->
+                <!-- ABA 3: CARTÕES & FATURAS -->
                 <!-- ========================================================= -->
-                <div id="casaSubDespensa" class="casa-subview">
+                <div id="financasSubCartoes" class="financas-subview">
 
-                    <div class="kpi-grid">
-                        <article class="kpi-card kpi-total">
-                            <div class="kpi-header">
-                                <span class="kpi-title">Itens Cadastrados</span>
-                                <div class="kpi-icon-wrapper icon-accent">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M20.9 19.8 17 8H7l-3.9 11.8a1 1 0 0 0 .95 1.2h15.9a1 1 0 0 0 .95-1.2Z"></path>
-                                        <path d="M8 8V6a4 4 0 0 1 8 0v2"></path>
-                                    </svg>
-                                </div>
-                            </div>
-                            <div class="kpi-body">
-                                <div class="kpi-value" id="kpiDespensaTotalItens">0</div>
-                                <div class="kpi-status-tag tag-accent">Itens na despensa</div>
-                            </div>
-                        </article>
-
-                        <article class="kpi-card kpi-roi">
-                            <div class="kpi-header">
-                                <span class="kpi-title">Estoque Baixo</span>
-                                <div class="kpi-icon-wrapper icon-accent">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M12 9v4"></path>
-                                        <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L14.71 3.86a2 2 0 0 0-3.42 0Z"></path>
-                                        <path d="M12 17h.01"></path>
-                                    </svg>
-                                </div>
-                            </div>
-                            <div class="kpi-body">
-                                <div class="kpi-value text-expense" id="kpiDespensaEstoqueBaixo">0</div>
-                                <div class="kpi-status-tag tag-expense">Precisam de reposição</div>
-                            </div>
-                        </article>
-                    </div>
-
-                    <section class="casa-table-panel">
-                        <div class="casa-table-header-flex">
-                            <h3 class="casa-section-title">Itens da Despensa</h3>
-                            <button type="button" class="btn-primary-action" id="btnNovoItemDespensa">
+                    <section class="financas-panel">
+                        <div class="financas-table-header-flex">
+                            <h3 class="financas-section-title">Meus Cartões</h3>
+                            <button type="button" class="btn-primary-action" id="btnNovoCartao">
                                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <line x1="12" y1="5" x2="12" y2="19"></line>
                                     <line x1="5" y1="12" x2="19" y2="12"></line>
                                 </svg>
-                                <span>Novo Item</span>
+                                <span>Novo Cartão</span>
                             </button>
                         </div>
 
-                        <div class="casa-table-scroll-wrap">
-                            <table class="casa-table">
+                        <div class="financas-cartoes-grid" id="cartoesGrid">
+                            <!-- Preenchido via JS -->
+                        </div>
+                    </section>
+
+                    <section class="financas-panel">
+                        <div class="financas-table-header-flex">
+                            <h3 class="financas-section-title">Faturas</h3>
+                            <div class="financas-filter-row" id="filtroCartaoFatura">
+                                <button type="button" class="financas-filter-btn active" data-cartao-id="Todos">Todos os cartões</button>
+                            </div>
+                        </div>
+
+                        <div class="financas-table-scroll-wrap">
+                            <table class="financas-table">
+                                <thead>
+                                    <tr>
+                                        <th>Cartão</th>
+                                        <th>Competência</th>
+                                        <th>Fechamento</th>
+                                        <th>Vencimento</th>
+                                        <th>Valor Total</th>
+                                        <th>Status</th>
+                                        <th style="text-align:right;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="faturasTableBody">
+                                    <!-- Preenchido via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- ========================================================= -->
+                <!-- ABA 4: CONTAS -->
+                <!-- ========================================================= -->
+                <div id="financasSubContas" class="financas-subview">
+
+                    <section class="financas-panel">
+                        <div class="financas-table-header-flex">
+                            <h3 class="financas-section-title">Contas Bancárias</h3>
+                            <button type="button" class="btn-primary-action" id="btnNovaConta">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                <span>Nova Conta</span>
+                            </button>
+                        </div>
+
+                        <div class="financas-contas-grid" id="contasGrid">
+                            <!-- Preenchido via JS -->
+                        </div>
+                    </section>
+                </div>
+
+                <!-- ========================================================= -->
+                <!-- ABA 5: CATEGORIAS -->
+                <!-- ========================================================= -->
+                <div id="financasSubCategorias" class="financas-subview">
+
+                    <section class="financas-panel">
+                        <div class="financas-table-header-flex">
+                            <h3 class="financas-section-title">Categorias</h3>
+                            <button type="button" class="btn-primary-action" id="btnNovaCategoria">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                                </svg>
+                                <span>Nova Categoria</span>
+                            </button>
+                        </div>
+
+                        <div class="financas-table-scroll-wrap">
+                            <table class="financas-table">
                                 <thead>
                                     <tr>
                                         <th>Nome</th>
-                                        <th>Categoria</th>
-                                        <th>Quantidade</th>
-                                        <th>Qtd. Mínima</th>
-                                        <th>Última Compra</th>
-                                        <th>Status</th>
+                                        <th>Tipo</th>
+                                        <th>Orçamento Mensal</th>
                                         <th style="text-align:right;">Ações</th>
                                     </tr>
                                 </thead>
-                                <tbody id="despensaTableBody">
-                                    <!-- Preenchido via JS -->
-                                </tbody>
-                            </table>
-                        </div>
-                    </section>
-                </div>
-
-                <!-- ========================================================= -->
-                <!-- ABA 3: TAREFAS & MANUTENÇÃO -->
-                <!-- ========================================================= -->
-                <div id="casaSubTarefas" class="casa-subview">
-
-                    <div class="kpi-grid">
-                        <article class="kpi-card kpi-total">
-                            <div class="kpi-header">
-                                <span class="kpi-title">Pendentes</span>
-                                <div class="kpi-icon-wrapper icon-accent">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <circle cx="12" cy="12" r="10"></circle>
-                                        <polyline points="12 6 12 12 16 14"></polyline>
-                                    </svg>
-                                </div>
-                            </div>
-                            <div class="kpi-body">
-                                <div class="kpi-value" id="kpiTarefasPendentes">0</div>
-                                <div class="kpi-status-tag tag-accent">Aguardando</div>
-                            </div>
-                        </article>
-
-                        <article class="kpi-card kpi-roi">
-                            <div class="kpi-header">
-                                <span class="kpi-title">Em Andamento</span>
-                                <div class="kpi-icon-wrapper icon-accent">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"></path>
-                                    </svg>
-                                </div>
-                            </div>
-                            <div class="kpi-body">
-                                <div class="kpi-value text-accent" id="kpiTarefasAndamento">0</div>
-                                <div class="kpi-status-tag tag-accent">Em execução</div>
-                            </div>
-                        </article>
-
-                        <article class="kpi-card kpi-income">
-                            <div class="kpi-header">
-                                <span class="kpi-title">Concluídas no Mês</span>
-                                <div class="kpi-icon-wrapper icon-income">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M20 6 9 17l-5-5"></path>
-                                    </svg>
-                                </div>
-                            </div>
-                            <div class="kpi-body">
-                                <div class="kpi-value text-income" id="kpiTarefasConcluidas">0</div>
-                                <div class="kpi-status-tag tag-income" id="kpiTarefasCustoMes">R$ 0,00 em manutenção</div>
-                            </div>
-                        </article>
-                    </div>
-
-                    <section class="casa-table-panel">
-                        <div class="casa-table-header-flex">
-                            <h3 class="casa-section-title">Tarefas & Manutenção</h3>
-                            <button type="button" class="btn-primary-action" id="btnNovaTarefa">
-                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                                </svg>
-                                <span>Nova Tarefa</span>
-                            </button>
-                        </div>
-
-                        <div class="casa-table-scroll-wrap">
-                            <table class="casa-table">
-                                <thead>
-                                    <tr>
-                                        <th>Título</th>
-                                        <th>Categoria</th>
-                                        <th>Prioridade</th>
-                                        <th>Status</th>
-                                        <th>Data Prevista</th>
-                                        <th>Custo</th>
-                                        <th style="text-align:right;">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tarefasTableBody">
+                                <tbody id="categoriasTableBody">
                                     <!-- Preenchido via JS -->
                                 </tbody>
                             </table>
@@ -620,54 +646,98 @@
     </div>
 
     <!-- ========================================================= -->
-    <!-- MODAL: NOVO / EDITAR GASTO DA CASA -->
+    <!-- MODAL: NOVO / EDITAR LANÇAMENTO -->
     <!-- ========================================================= -->
-    <div class="modal-overlay" id="modalGastoOverlay">
+    <div class="modal-overlay" id="modalTransacaoOverlay">
         <div class="modal-dialog">
             <header class="modal-header">
                 <div>
-                    <h2 class="modal-title" id="modalGastoTitle">Novo Gasto</h2>
-                    <p class="modal-subtitle">Registre um gasto da casa (manutenção, contas, compras, etc.)</p>
+                    <h2 class="modal-title" id="modalTransacaoTitle">Novo Lançamento</h2>
+                    <p class="modal-subtitle">Registre uma receita, despesa ou transferência entre contas</p>
                 </div>
-                <button class="modal-close-btn" id="modalGastoClose" aria-label="Fechar">&times;</button>
+                <button class="modal-close-btn" id="modalTransacaoClose" aria-label="Fechar">&times;</button>
             </header>
 
-            <form id="gastoForm">
-                <input type="hidden" id="formGastoId">
+            <form id="transacaoForm">
+                <input type="hidden" id="formTransacaoId">
                 <div class="form-sections-wrapper">
                     <div class="form-fields-grid">
 
                         <div class="input-field">
-                            <label for="inputGastoCategoria">Categoria *</label>
-                            <select id="inputGastoCategoria" class="input-missao" required>
-                                <option value="Manutenção">Manutenção</option>
-                                <option value="Energia Elétrica">Energia Elétrica</option>
-                                <option value="Água">Água</option>
-                                <option value="Internet">Internet</option>
-                                <option value="Compra do Mês">Compra do Mês</option>
-                                <option value="Outros">Outros</option>
+                            <label for="inputTransacaoTipo">Tipo *</label>
+                            <select id="inputTransacaoTipo" class="input-missao" required>
+                                <option value="Despesa">Despesa</option>
+                                <option value="Receita">Receita</option>
+                                <option value="Transferencia">Transferência entre contas</option>
                             </select>
                         </div>
 
                         <div class="input-field">
-                            <label for="inputGastoData">Data *</label>
-                            <input type="date" id="inputGastoData" class="input-missao" required>
+                            <label for="inputTransacaoData">Data *</label>
+                            <input type="date" id="inputTransacaoData" class="input-missao" required>
                         </div>
 
                         <div class="input-field" style="grid-column: 1 / -1;">
-                            <label for="inputGastoDescricao">Descrição *</label>
-                            <input type="text" id="inputGastoDescricao" class="input-missao" placeholder="Ex: Conta de luz de agosto" required>
+                            <label for="inputTransacaoDescricao">Descrição *</label>
+                            <input type="text" id="inputTransacaoDescricao" class="input-missao" placeholder="Ex: Supermercado do mês" required>
                         </div>
 
                         <div class="input-field">
-                            <label for="inputGastoValor">Valor (R$) *</label>
-                            <input type="number" id="inputGastoValor" class="input-missao" min="0.01" step="0.01" placeholder="Ex: 180.50" required>
+                            <label for="inputTransacaoValor">Valor (R$) *</label>
+                            <input type="number" id="inputTransacaoValor" class="input-missao" min="0.01" step="0.01" placeholder="Ex: 150.00" required>
+                        </div>
+
+                        <div class="input-field" id="campoCategoria">
+                            <label for="inputTransacaoCategoria">Categoria</label>
+                            <select id="inputTransacaoCategoria" class="input-missao">
+                                <option value="">Sem categoria</option>
+                            </select>
+                        </div>
+
+                        <div class="input-field" id="campoFormaPagamento">
+                            <label for="inputTransacaoForma">Forma de Pagamento</label>
+                            <select id="inputTransacaoForma" class="input-missao">
+                                <option value="Débito">Débito</option>
+                                <option value="Crédito">Crédito</option>
+                                <option value="Pix">Pix</option>
+                                <option value="Dinheiro">Dinheiro</option>
+                                <option value="Boleto">Boleto</option>
+                            </select>
+                        </div>
+
+                        <div class="input-field" id="campoConta">
+                            <label for="inputTransacaoConta" id="labelTransacaoConta">Conta</label>
+                            <select id="inputTransacaoConta" class="input-missao"></select>
+                        </div>
+
+                        <div class="input-field" id="campoContaDestino" style="display:none;">
+                            <label for="inputTransacaoContaDestino">Conta de Destino</label>
+                            <select id="inputTransacaoContaDestino" class="input-missao"></select>
+                        </div>
+
+                        <div class="input-field" id="campoCartao" style="display:none;">
+                            <label for="inputTransacaoCartao">Cartão</label>
+                            <select id="inputTransacaoCartao" class="input-missao"></select>
+                        </div>
+
+                        <div class="input-field" id="campoParcelas" style="display:none;">
+                            <label for="inputTransacaoParcelas">Nº de Parcelas</label>
+                            <input type="number" id="inputTransacaoParcelas" class="input-missao" min="1" max="48" value="1">
+                        </div>
+
+                        <div class="input-field">
+                            <label for="inputTransacaoStatus">Status</label>
+                            <select id="inputTransacaoStatus" class="input-missao">
+                                <option value="Pago">Pago</option>
+                                <option value="Pendente">Pendente</option>
+                                <option value="Agendado">Agendado</option>
+                            </select>
                         </div>
 
                         <div class="input-field">
                             <label class="checkbox-field-label">
-                                <input type="checkbox" id="inputGastoRecorrente">
-                                <span>Gasto recorrente (mensal)</span>
+                                <input type="checkbox" id="inputTransacaoRecorrente">
+                                <span>Lançamento recorrente (mensal)</span>
                             </label>
                         </div>
 
@@ -675,178 +745,245 @@
                 </div>
 
                 <footer class="modal-footer">
-                    <button type="button" class="btn-delete" id="btnGastoExcluir" style="display:none;">Excluir</button>
+                    <button type="button" class="btn-delete" id="btnTransacaoExcluir" style="display:none;">Excluir</button>
                     <div class="modal-footer-spacer"></div>
-                    <button type="button" class="btn-cancel" id="btnGastoCancelar">Cancelar</button>
-                    <button type="submit" class="btn-missao-primary">Salvar Gasto</button>
+                    <button type="button" class="btn-cancel" id="btnTransacaoCancelar">Cancelar</button>
+                    <button type="submit" class="btn-missao-primary">Salvar Lançamento</button>
                 </footer>
             </form>
         </div>
     </div>
 
     <!-- ========================================================= -->
-    <!-- MODAL: NOVO / EDITAR ITEM DA DESPENSA -->
+    <!-- MODAL: NOVA / EDITAR CONTA BANCÁRIA -->
     <!-- ========================================================= -->
-    <div class="modal-overlay" id="modalDespensaOverlay">
+    <div class="modal-overlay" id="modalContaOverlay">
         <div class="modal-dialog">
             <header class="modal-header">
                 <div>
-                    <h2 class="modal-title" id="modalDespensaTitle">Novo Item</h2>
-                    <p class="modal-subtitle">Cadastre um item da despensa e a quantidade mínima para alerta de estoque baixo</p>
+                    <h2 class="modal-title" id="modalContaTitle">Nova Conta</h2>
+                    <p class="modal-subtitle">Cadastre uma conta corrente, poupança ou carteira digital</p>
                 </div>
-                <button class="modal-close-btn" id="modalDespensaClose" aria-label="Fechar">&times;</button>
+                <button class="modal-close-btn" id="modalContaClose" aria-label="Fechar">&times;</button>
             </header>
 
-            <form id="despensaForm">
-                <input type="hidden" id="formDespensaId">
+            <form id="contaForm">
+                <input type="hidden" id="formContaId">
                 <div class="form-sections-wrapper">
                     <div class="form-fields-grid">
 
                         <div class="input-field" style="grid-column: 1 / -1;">
-                            <label for="inputDespensaNome">Nome *</label>
-                            <input type="text" id="inputDespensaNome" class="input-missao" placeholder="Ex: Papel Higiênico" required>
+                            <label for="inputContaNome">Nome da Conta *</label>
+                            <input type="text" id="inputContaNome" class="input-missao" placeholder="Ex: Conta Principal" required>
                         </div>
 
                         <div class="input-field">
-                            <label for="inputDespensaCategoria">Categoria</label>
-                            <select id="inputDespensaCategoria" class="input-missao">
-                                <option value="Alimentos">Alimentos</option>
-                                <option value="Limpeza">Limpeza</option>
-                                <option value="Higiene">Higiene</option>
-                                <option value="Bebidas">Bebidas</option>
-                                <option value="Outros" selected>Outros</option>
+                            <label for="inputContaBanco">Banco *</label>
+                            <input type="text" id="inputContaBanco" class="input-missao" placeholder="Ex: Nubank, Itaú, Bradesco" required>
+                        </div>
+
+                        <div class="input-field">
+                            <label for="inputContaTipo">Tipo</label>
+                            <select id="inputContaTipo" class="input-missao">
+                                <option value="Corrente">Conta Corrente</option>
+                                <option value="Poupança">Poupança</option>
+                                <option value="Carteira Digital">Carteira Digital</option>
                             </select>
                         </div>
 
                         <div class="input-field">
-                            <label for="inputDespensaUnidade">Unidade</label>
-                            <select id="inputDespensaUnidade" class="input-missao">
-                                <option value="un" selected>Unidade (un)</option>
-                                <option value="kg">Quilo (kg)</option>
-                                <option value="g">Grama (g)</option>
-                                <option value="L">Litro (L)</option>
-                                <option value="ml">Mililitro (ml)</option>
-                                <option value="pacote">Pacote</option>
-                                <option value="caixa">Caixa</option>
-                            </select>
+                            <label for="inputContaSaldoInicial">Saldo Inicial (R$)</label>
+                            <input type="number" id="inputContaSaldoInicial" class="input-missao" step="0.01" placeholder="Ex: 1000.00">
                         </div>
 
                         <div class="input-field">
-                            <label for="inputDespensaQuantidade">Quantidade Atual *</label>
-                            <input type="number" id="inputDespensaQuantidade" class="input-missao" min="0" step="0.01" placeholder="Ex: 4" required>
-                        </div>
-
-                        <div class="input-field">
-                            <label for="inputDespensaQtdMinima">Quantidade Mínima</label>
-                            <input type="number" id="inputDespensaQtdMinima" class="input-missao" min="0" step="0.01" placeholder="Ex: 2">
-                        </div>
-
-                        <div class="input-field" style="grid-column: 1 / -1;">
-                            <label for="inputDespensaUltimaCompra">Última Compra</label>
-                            <input type="date" id="inputDespensaUltimaCompra" class="input-missao">
+                            <label for="inputContaCor">Cor de Identificação</label>
+                            <input type="color" id="inputContaCor" class="input-missao" value="#EEBB00">
                         </div>
 
                     </div>
                 </div>
 
                 <footer class="modal-footer">
-                    <button type="button" class="btn-delete" id="btnDespensaExcluir" style="display:none;">Excluir</button>
+                    <button type="button" class="btn-delete" id="btnContaExcluir" style="display:none;">Excluir</button>
                     <div class="modal-footer-spacer"></div>
-                    <button type="button" class="btn-cancel" id="btnDespensaCancelar">Cancelar</button>
-                    <button type="submit" class="btn-missao-primary">Salvar Item</button>
+                    <button type="button" class="btn-cancel" id="btnContaCancelar">Cancelar</button>
+                    <button type="submit" class="btn-missao-primary">Salvar Conta</button>
                 </footer>
             </form>
         </div>
     </div>
 
     <!-- ========================================================= -->
-    <!-- MODAL: NOVA / EDITAR TAREFA DE MANUTENÇÃO -->
+    <!-- MODAL: NOVO / EDITAR CARTÃO DE CRÉDITO -->
     <!-- ========================================================= -->
-    <div class="modal-overlay" id="modalTarefaOverlay">
+    <div class="modal-overlay" id="modalCartaoOverlay">
         <div class="modal-dialog">
             <header class="modal-header">
                 <div>
-                    <h2 class="modal-title" id="modalTarefaTitle">Nova Tarefa</h2>
-                    <p class="modal-subtitle">Cadastre reparos e manutenções pendentes da casa</p>
+                    <h2 class="modal-title" id="modalCartaoTitle">Novo Cartão</h2>
+                    <p class="modal-subtitle">Cadastre um cartão de crédito com dia de fechamento e vencimento</p>
                 </div>
-                <button class="modal-close-btn" id="modalTarefaClose" aria-label="Fechar">&times;</button>
+                <button class="modal-close-btn" id="modalCartaoClose" aria-label="Fechar">&times;</button>
             </header>
 
-            <form id="tarefaForm">
-                <input type="hidden" id="formTarefaId">
+            <form id="cartaoForm">
+                <input type="hidden" id="formCartaoId">
                 <div class="form-sections-wrapper">
                     <div class="form-fields-grid">
 
                         <div class="input-field" style="grid-column: 1 / -1;">
-                            <label for="inputTarefaTitulo">Título *</label>
-                            <input type="text" id="inputTarefaTitulo" class="input-missao" placeholder="Ex: Conserto do ar-condicionado da sala" required>
+                            <label for="inputCartaoNome">Nome do Cartão *</label>
+                            <input type="text" id="inputCartaoNome" class="input-missao" placeholder="Ex: Nubank Ultravioleta" required>
                         </div>
 
                         <div class="input-field">
-                            <label for="inputTarefaCategoria">Categoria</label>
-                            <select id="inputTarefaCategoria" class="input-missao">
-                                <option value="Manutenção">Manutenção</option>
-                                <option value="Reparo">Reparo</option>
-                                <option value="Limpeza">Limpeza</option>
+                            <label for="inputCartaoBanco">Banco *</label>
+                            <input type="text" id="inputCartaoBanco" class="input-missao" placeholder="Ex: Nubank" required>
+                        </div>
+
+                        <div class="input-field">
+                            <label for="inputCartaoBandeira">Bandeira</label>
+                            <select id="inputCartaoBandeira" class="input-missao">
+                                <option value="Visa">Visa</option>
+                                <option value="Mastercard">Mastercard</option>
+                                <option value="Elo">Elo</option>
+                                <option value="Amex">American Express</option>
                                 <option value="Outro">Outro</option>
                             </select>
                         </div>
 
                         <div class="input-field">
-                            <label for="inputTarefaPrioridade">Prioridade</label>
-                            <select id="inputTarefaPrioridade" class="input-missao">
-                                <option value="Baixa">Baixa</option>
-                                <option value="Média" selected>Média</option>
-                                <option value="Alta">Alta</option>
+                            <label for="inputCartaoLimite">Limite Total (R$)</label>
+                            <input type="number" id="inputCartaoLimite" class="input-missao" min="0" step="0.01" placeholder="Ex: 5000.00">
+                        </div>
+
+                        <div class="input-field">
+                            <label for="inputCartaoFechamento">Dia de Fechamento *</label>
+                            <input type="number" id="inputCartaoFechamento" class="input-missao" min="1" max="31" placeholder="Ex: 20" required>
+                        </div>
+
+                        <div class="input-field">
+                            <label for="inputCartaoVencimento">Dia de Vencimento *</label>
+                            <input type="number" id="inputCartaoVencimento" class="input-missao" min="1" max="31" placeholder="Ex: 27" required>
+                        </div>
+
+                        <div class="input-field">
+                            <label for="inputCartaoContaVinculada">Conta para Pagamento da Fatura</label>
+                            <select id="inputCartaoContaVinculada" class="input-missao">
+                                <option value="">Nenhuma</option>
                             </select>
                         </div>
 
                         <div class="input-field">
-                            <label for="inputTarefaStatus">Status</label>
-                            <select id="inputTarefaStatus" class="input-missao">
-                                <option value="Pendente">Pendente</option>
-                                <option value="Em Andamento">Em Andamento</option>
-                                <option value="Concluída">Concluída</option>
-                            </select>
-                        </div>
-
-                        <div class="input-field">
-                            <label for="inputTarefaDataPrevista">Data Prevista</label>
-                            <input type="date" id="inputTarefaDataPrevista" class="input-missao">
-                        </div>
-
-                        <div class="input-field">
-                            <label for="inputTarefaCustoEstimado">Custo Estimado (R$)</label>
-                            <input type="number" id="inputTarefaCustoEstimado" class="input-missao" min="0" step="0.01" placeholder="Ex: 250.00">
-                        </div>
-
-                        <div class="input-field">
-                            <label for="inputTarefaCustoReal">Custo Real (R$)</label>
-                            <input type="number" id="inputTarefaCustoReal" class="input-missao" min="0" step="0.01" placeholder="Preenchido ao concluir">
-                        </div>
-
-                        <div class="input-field" style="grid-column: 1 / -1;">
-                            <label class="checkbox-field-label">
-                                <input type="checkbox" id="inputTarefaLancarGasto">
-                                <span>Ao concluir, lançar o custo real como Gasto da Casa</span>
-                            </label>
-                        </div>
-
-                        <div class="input-field" style="grid-column: 1 / -1;">
-                            <label for="inputTarefaDescricao">Descrição</label>
-                            <textarea id="inputTarefaDescricao" class="input-missao textarea-missao" rows="3" placeholder="Detalhes do reparo ou manutenção"></textarea>
+                            <label for="inputCartaoCor">Cor de Identificação</label>
+                            <input type="color" id="inputCartaoCor" class="input-missao" value="#EEBB00">
                         </div>
 
                     </div>
                 </div>
 
                 <footer class="modal-footer">
-                    <button type="button" class="btn-delete" id="btnTarefaExcluir" style="display:none;">Excluir</button>
+                    <button type="button" class="btn-delete" id="btnCartaoExcluir" style="display:none;">Excluir</button>
                     <div class="modal-footer-spacer"></div>
-                    <button type="button" class="btn-cancel" id="btnTarefaCancelar">Cancelar</button>
-                    <button type="submit" class="btn-missao-primary">Salvar Tarefa</button>
+                    <button type="button" class="btn-cancel" id="btnCartaoCancelar">Cancelar</button>
+                    <button type="submit" class="btn-missao-primary">Salvar Cartão</button>
                 </footer>
             </form>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL: NOVA / EDITAR CATEGORIA -->
+    <!-- ========================================================= -->
+    <div class="modal-overlay" id="modalCategoriaOverlay">
+        <div class="modal-dialog">
+            <header class="modal-header">
+                <div>
+                    <h2 class="modal-title" id="modalCategoriaTitle">Nova Categoria</h2>
+                    <p class="modal-subtitle">Categorize seus lançamentos e defina um orçamento mensal opcional</p>
+                </div>
+                <button class="modal-close-btn" id="modalCategoriaClose" aria-label="Fechar">&times;</button>
+            </header>
+
+            <form id="categoriaForm">
+                <input type="hidden" id="formCategoriaId">
+                <div class="form-sections-wrapper">
+                    <div class="form-fields-grid">
+
+                        <div class="input-field" style="grid-column: 1 / -1;">
+                            <label for="inputCategoriaNome">Nome *</label>
+                            <input type="text" id="inputCategoriaNome" class="input-missao" placeholder="Ex: Alimentação" required>
+                        </div>
+
+                        <div class="input-field">
+                            <label for="inputCategoriaTipo">Tipo</label>
+                            <select id="inputCategoriaTipo" class="input-missao">
+                                <option value="Despesa">Despesa</option>
+                                <option value="Receita">Receita</option>
+                            </select>
+                        </div>
+
+                        <div class="input-field">
+                            <label for="inputCategoriaOrcamento">Orçamento Mensal (R$)</label>
+                            <input type="number" id="inputCategoriaOrcamento" class="input-missao" min="0" step="0.01" placeholder="Opcional">
+                        </div>
+
+                        <div class="input-field">
+                            <label for="inputCategoriaCor">Cor</label>
+                            <input type="color" id="inputCategoriaCor" class="input-missao" value="#A0A0A0">
+                        </div>
+
+                    </div>
+                </div>
+
+                <footer class="modal-footer">
+                    <button type="button" class="btn-delete" id="btnCategoriaExcluir" style="display:none;">Excluir</button>
+                    <div class="modal-footer-spacer"></div>
+                    <button type="button" class="btn-cancel" id="btnCategoriaCancelar">Cancelar</button>
+                    <button type="submit" class="btn-missao-primary">Salvar Categoria</button>
+                </footer>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL: DETALHE DA FATURA -->
+    <!-- ========================================================= -->
+    <div class="modal-overlay" id="modalFaturaOverlay">
+        <div class="modal-dialog">
+            <header class="modal-header">
+                <div>
+                    <h2 class="modal-title" id="modalFaturaTitle">Fatura</h2>
+                    <p class="modal-subtitle" id="modalFaturaSubtitle">Lançamentos desta fatura</p>
+                </div>
+                <button class="modal-close-btn" id="modalFaturaClose" aria-label="Fechar">&times;</button>
+            </header>
+
+            <div class="form-sections-wrapper">
+                <div class="financas-table-scroll-wrap">
+                    <table class="financas-table">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Descrição</th>
+                                <th>Categoria</th>
+                                <th>Valor</th>
+                            </tr>
+                        </thead>
+                        <tbody id="faturaDetalheTableBody">
+                            <!-- Preenchido via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <footer class="modal-footer">
+                <span class="financas-fatura-total" id="faturaDetalheTotal">Total: R$ 0,00</span>
+                <div class="modal-footer-spacer"></div>
+                <button type="button" class="btn-cancel" id="btnFaturaFechar">Fechar</button>
+                <button type="button" class="btn-missao-primary" id="btnFaturaPagar">Marcar como Paga</button>
+            </footer>
         </div>
     </div>
 

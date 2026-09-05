@@ -69,7 +69,7 @@ app.use('/api/cofrinhos', requireAuth, require('./routes/cofrinhos'));
 app.use('/api/eventos', requireAuth, require('./routes/eventos'));
 app.use('/api/notificacoes', requireAuth, require('./routes/notificacoes'));
 app.use('/api/clima', requireAuth, require('./routes/clima'));
-app.use('/api/casa', requireAuth, require('./routes/casa'));
+app.use('/api/financas', requireAuth, require('./routes/financas'));
 app.use('/api/treinos', requireAuth, require('./routes/treinos'));
 app.use('/api/saude', requireAuth, require('./routes/saude'));
 app.use('/api/garagem', requireAuth, require('./routes/garagem'));

@@ -73,13 +73,19 @@
 - [x] Locais Salvos persistentes: modelo `LocalClimaSalvo` no Prisma vinculado ao usuário, com API REST própria (`GET/POST/DELETE /api/clima/salvos`) — botão de estrela no card do clima atual para salvar/remover, e seção "Meus Locais Salvos" (com mini-previsão de cada um) sempre visível ao entrar no módulo
 - [x] **Widget de Clima no Cabeçalho** (ícone + temperatura, presente em todos os módulos): campo `favoritoHeader` no modelo `LocalClimaSalvo`, com botão de "pin" em cada card de Local Salvo para escolher qual local aparece no cabeçalho (`PUT /api/clima/salvos/:id/favorito`, apenas um favorito por vez) e rota combinada `GET /api/clima/favorito` que já retorna o clima atual do local marcado — tabela de códigos/ícones extraída para `JS/Clima/clima-codigos.js` (compartilhada entre o módulo Clima e o widget) e widget em `JS/Clima/clima-header-widget.js` + `CSS/Clima/clima-header-widget.css`, incluído no cabeçalho de todos os módulos do Hub
 
-## 🏠 Módulo Finanças & Casa (Hub Pessoal)
-- [x] Novo módulo dedicado: `HTML/FinancasCasa/financascasa.html`, `CSS/FinancasCasa/financascasa.css` e `JS/FinancasCasa/financascasa.js`, com 3 sub-abas (padrão de sub-navegação já usado no módulo FII)
-- [x] **Aba Gastos da Casa**: modelo `GastoCasa` no Prisma, API REST própria (`GET/POST/PUT/DELETE /api/casa/gastos`), categorias (Manutenção, Energia Elétrica, Água, Internet, Compra do Mês, Outros), filtro por categoria, marcação de gasto recorrente e KPIs (gasto no mês, categoria com maior gasto, total acumulado)
-- [x] **Aba Despensa**: modelo `ItemDespensa` no Prisma, API REST própria (`GET/POST/PUT/DELETE /api/casa/despensa`), controle de quantidade/unidade/quantidade mínima com destaque visual e KPI de itens em **Estoque Baixo**
-- [x] **Aba Tarefas & Manutenção**: modelo `TarefaCasa` no Prisma, API REST própria (`GET/POST/PUT/DELETE /api/casa/tarefas`), com categoria, prioridade, status (Pendente/Em Andamento/Concluída), data prevista, custo estimado/real e descrição — cobre casos como "conserto de ar-condicionado"
-- [x] Integração entre Tarefas e Gastos: ao concluir uma tarefa com a opção "lançar como gasto" marcada, o custo real é automaticamente registrado em Gastos da Casa (rota `PUT /api/casa/tarefas/:id`)
+## 🏦 Módulo Finanças (Hub Pessoal)
+> Substitui integralmente o antigo módulo "Finanças & Casa" (removido, junto com Despensa e Tarefas & Manutenção) por um controle bancário completo.
+- [x] Novo módulo dedicado: `HTML/Financas/financas.html`, `CSS/Financas/financas.css` e `JS/Financas/financas.js`, com 5 sub-abas: Visão Geral, Transações, Cartões & Faturas, Contas e Categorias
+- [x] **Contas Bancárias**: modelo `ContaBancaria` no Prisma (nome, banco, tipo, saldo inicial, cor), API REST própria (`GET/POST/PUT/DELETE /api/financas/contas`), com saldo atual calculado a partir das transações pagas
+- [x] **Cartões de Crédito**: modelo `CartaoCredito` (banco, bandeira, limite, dia de fechamento, dia de vencimento, conta vinculada para pagamento da fatura), API REST própria (`GET/POST/PUT/DELETE /api/financas/cartoes`), com limite usado/disponível calculado a partir das faturas em aberto
+- [x] **Categorias**: modelo `CategoriaFinanceira` (nome, tipo, cor, orçamento mensal opcional), API REST própria (`GET/POST/PUT/DELETE /api/financas/categorias`)
+- [x] **Transações**: modelo `Transacao` unificando Receita/Despesa/Transferência, com forma de pagamento (Débito/Crédito/Pix/Dinheiro/Boleto), status (Pago/Pendente/Agendado) e suporte a **parcelamento** (gera N transações vinculadas por `grupoParcelamentoId`, cada uma já atribuída à fatura correspondente) — API REST própria (`GET/POST/PUT/DELETE /api/financas/transacoes`)
+- [x] **Faturas de Cartão**: modelo `FaturaCartao`, gerada automaticamente por competência (mês/ano) a partir do dia de fechamento do cartão — compras após o fechamento caem na fatura seguinte; rota de pagamento (`POST /api/financas/faturas/:id/pagar`) que marca a fatura como paga e pode lançar automaticamente a despesa em débito na conta vinculada
+- [x] **Dashboard (Visão Geral)**: saldo total, receita/despesa/resultado do mês, gráfico de gastos por categoria e evolução mensal (Chart.js), faturas em aberto por cartão e barra de progresso de orçamento por categoria (`GET /api/financas/resumo`)
+- [x] Alerta de **fatura vencendo** integrado ao sino de notificações (substituindo os alertas de estoque baixo/tarefa vencida do módulo antigo)
 - [x] Integração da navegação (sidebar) no Hub Pessoal de todos os módulos
+
+> ⚠️ Pendência manual: rodar `npm run prisma:push` (com o servidor Node parado) para remover as tabelas `GastoCasa`, `ItemDespensa` e `TarefaCasa` e criar as novas tabelas `ContaBancaria`, `CartaoCredito`, `CategoriaFinanceira`, `Transacao` e `FaturaCartao` antes de usar o módulo Finanças.
 
 ## 💪 Módulo Treinos & Saúde (Hub Pessoal)
 - [x] Novo módulo dedicado: `HTML/TreinosSaude/treinossaude.html`, `CSS/TreinosSaude/treinossaude.css` e `JS/TreinosSaude/treinossaude.js`, com 2 sub-abas

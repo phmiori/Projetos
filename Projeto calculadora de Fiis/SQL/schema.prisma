@@ -86,9 +86,10 @@ model Usuario {
   cofrinhos   Cofrinho[]
   eventos     Evento[]
   locaisClimaSalvos LocalClimaSalvo[]
-  gastosCasa    GastoCasa[]
-  itensDespensa ItemDespensa[]
-  tarefasCasa   TarefaCasa[]
+  contasBancarias      ContaBancaria[]
+  cartoesCredito       CartaoCredito[]
+  categoriasFinanceiras CategoriaFinanceira[]
+  transacoesFinanceiras Transacao[]
   blocosTreino   BlocoTreino[]
   registrosSaude RegistroSaude[]
   veiculosGaragem VeiculoGaragem[]
@@ -124,7 +125,7 @@ model NotificacaoDispensada {
   usuarioId  Int
   usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
-  tipo       String   // 'estoque' (ItemDespensa) | 'tarefa' (TarefaCasa)
+  tipo       String   // 'fatura' (FaturaCartao vencendo)
   entidadeId Int
 
   createdAt  DateTime @default(now())
@@ -249,57 +250,128 @@ model RegistroSaude {
   updatedAt   DateTime  @updatedAt
 }
 
-model GastoCasa {
-  id          Int       @id @default(autoincrement())
+/**
+ * Módulo Finanças (controle bancário pessoal): contas, cartões de crédito, categorias,
+ * transações (receitas/despesas/transferências) e faturas de cartão geradas por ciclo.
+ */
+model ContaBancaria {
+  id            Int       @id @default(autoincrement())
 
-  usuarioId   Int
-  usuario     Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuarioId     Int
+  usuario       Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
-  categoria   String    // Manutenção, Energia Elétrica, Água, Internet, Compra do Mês, Outros
-  descricao   String
-  valor       Float     @default(0)
-  data        DateTime  @default(now())
-  recorrente  Boolean   @default(false)
+  nome          String
+  banco         String
+  tipo          String    @default("Corrente") // Corrente, Poupança, Carteira Digital
+  saldoInicial  Float     @default(0)
+  cor           String    @default("#EEBB00")
+  ativa         Boolean   @default(true)
 
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  cartoes       CartaoCredito[]
+  transacoes    Transacao[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
-model ItemDespensa {
+model CartaoCredito {
   id               Int       @id @default(autoincrement())
 
   usuarioId        Int
   usuario          Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
   nome             String
-  categoria        String    @default("Outros") // Alimentos, Limpeza, Higiene, Bebidas, Outros
-  quantidade       Float     @default(0)
-  unidade          String    @default("un") // un, kg, g, L, ml, pacote, caixa
-  quantidadeMinima Float     @default(0) // abaixo disso, alerta de estoque baixo
-  ultimaCompra     DateTime?
+  banco            String
+  bandeira         String    @default("Visa") // Visa, Mastercard, Elo, Amex, Outro
+  limite           Float     @default(0)
+  diaFechamento    Int       // dia do mês (1-31) em que a fatura fecha
+  diaVencimento    Int       // dia do mês (1-31) em que a fatura vence
+  cor              String    @default("#EEBB00")
+  ativo            Boolean   @default(true)
+
+  contaVinculadaId Int?
+  contaVinculada   ContaBancaria? @relation(fields: [contaVinculadaId], references: [id], onDelete: SetNull)
+
+  transacoes       Transacao[]
+  faturas          FaturaCartao[]
 
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
 
-model TarefaCasa {
-  id            Int       @id @default(autoincrement())
+model CategoriaFinanceira {
+  id              Int       @id @default(autoincrement())
 
-  usuarioId     Int
-  usuario       Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  usuarioId       Int
+  usuario         Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
 
-  titulo        String
-  descricao     String?
-  categoria     String    @default("Manutenção") // Manutenção, Reparo, Limpeza, Outro
-  prioridade    String    @default("Média")      // Baixa, Média, Alta
-  status        String    @default("Pendente")   // Pendente, Em Andamento, Concluída
-  dataPrevista  DateTime?
-  custoEstimado Float?
-  custoReal     Float?
-  concluidaEm   DateTime?
+  nome            String
+  tipo            String    @default("Despesa") // Receita, Despesa
+  cor             String    @default("#A0A0A0")
+  orcamentoMensal Float?    // limite mensal opcional, usado para alerta de orçamento estourado
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  transacoes      Transacao[]
+
+  createdAt       DateTime  @default(now())
+
+  @@unique([usuarioId, nome, tipo])
+}
+
+model FaturaCartao {
+  id             Int           @id @default(autoincrement())
+
+  cartaoId       Int
+  cartao         CartaoCredito @relation(fields: [cartaoId], references: [id], onDelete: Cascade)
+
+  mesReferencia  Int           // 1-12
+  anoReferencia  Int
+  dataFechamento DateTime
+  dataVencimento DateTime
+  status         String        @default("Aberta") // Aberta, Fechada, Paga
+  dataPagamento  DateTime?
+
+  transacoes     Transacao[]
+
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  @@unique([cartaoId, mesReferencia, anoReferencia])
+}
+
+model Transacao {
+  id                  Int       @id @default(autoincrement())
+
+  usuarioId           Int
+  usuario             Usuario   @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  tipo                String    // Receita, Despesa, Transferencia
+  descricao           String
+  valor               Float     @default(0)
+  data                DateTime  @default(now())
+  formaPagamento      String    @default("Débito") // Débito, Crédito, Pix, Dinheiro, Boleto, Transferência
+  status              String    @default("Pago")   // Pago, Pendente, Agendado
+  recorrente          Boolean   @default(false)
+
+  categoriaId         Int?
+  categoria           CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+
+  contaId             Int?      // conta de origem (débito/pix/dinheiro/boleto) ou de saída em transferência
+  conta               ContaBancaria? @relation(fields: [contaId], references: [id], onDelete: SetNull)
+
+  contaDestinoId      Int?      // conta de destino, usado apenas quando tipo = Transferencia
+
+  cartaoId            Int?
+  cartao              CartaoCredito? @relation(fields: [cartaoId], references: [id], onDelete: SetNull)
+
+  faturaId            Int?
+  fatura              FaturaCartao? @relation(fields: [faturaId], references: [id], onDelete: SetNull)
+
+  grupoParcelamentoId String?   // agrupa as parcelas de uma mesma compra parcelada
+  parcelaAtual        Int?
+  parcelaTotal        Int?
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 }
 
 model LocalClimaSalvo {
