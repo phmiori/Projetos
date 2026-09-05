@@ -1,7 +1,11 @@
 const express = require('express');
+const crypto = require('crypto');
 const prisma = require('../lib/prisma');
 
 const router = express.Router();
+
+const REPETICOES_VALIDAS = ['semanal', 'mensal'];
+const MAX_OCORRENCIAS_SERIE = 52;
 
 /**
  * ROTA: Listar Eventos do Calendário do Usuário Logado (opcionalmente filtrado por período)
@@ -35,28 +39,51 @@ router.get('/', async (req, res) => {
  */
 router.post('/', async (req, res) => {
     try {
-        const { titulo, descricao, local, inicio, fim, diaTodo, cor, lembreteMinutos } = req.body;
+        const { titulo, descricao, local, inicio, fim, diaTodo, cor, lembreteMinutos, repetir, repetirQtd } = req.body;
 
         if (!titulo || !inicio || !fim) {
             return res.status(400).json({ error: 'Título, início e fim são obrigatórios.' });
         }
 
-        const novoEvento = await prisma.evento.create({
-            data: {
-                usuarioId: req.session.userId,
-                titulo: String(titulo).trim(),
-                descricao: descricao ? String(descricao).trim() : null,
-                local: local ? String(local).trim() : null,
-                inicio: new Date(inicio),
-                fim: new Date(fim),
-                diaTodo: Boolean(diaTodo),
-                cor: cor ? String(cor).trim() : '#EEBB00',
-                lembreteMinutos: lembreteMinutos !== undefined && lembreteMinutos !== null && lembreteMinutos !== ''
-                    ? parseInt(lembreteMinutos, 10) : null
-            }
-        });
+        const dadosBase = {
+            usuarioId: req.session.userId,
+            titulo: String(titulo).trim(),
+            descricao: descricao ? String(descricao).trim() : null,
+            local: local ? String(local).trim() : null,
+            diaTodo: Boolean(diaTodo),
+            cor: cor ? String(cor).trim() : '#EEBB00',
+            lembreteMinutos: lembreteMinutos !== undefined && lembreteMinutos !== null && lembreteMinutos !== ''
+                ? parseInt(lembreteMinutos, 10) : null
+        };
 
-        res.status(201).json(novoEvento);
+        const repeticao = REPETICOES_VALIDAS.includes(repetir) ? repetir : null;
+        const totalOcorrencias = repeticao
+            ? Math.min(Math.max(parseInt(repetirQtd, 10) || 1, 1), MAX_OCORRENCIAS_SERIE)
+            : 1;
+        const serieRecorrenciaId = totalOcorrencias > 1 ? crypto.randomUUID() : null;
+
+        const inicioBase = new Date(inicio);
+        const fimBase = new Date(fim);
+        const eventosCriados = [];
+
+        for (let i = 0; i < totalOcorrencias; i++) {
+            const inicioOcorrencia = new Date(inicioBase);
+            const fimOcorrencia = new Date(fimBase);
+            if (repeticao === 'semanal') {
+                inicioOcorrencia.setUTCDate(inicioOcorrencia.getUTCDate() + 7 * i);
+                fimOcorrencia.setUTCDate(fimOcorrencia.getUTCDate() + 7 * i);
+            } else if (repeticao === 'mensal') {
+                inicioOcorrencia.setUTCMonth(inicioOcorrencia.getUTCMonth() + i);
+                fimOcorrencia.setUTCMonth(fimOcorrencia.getUTCMonth() + i);
+            }
+
+            const criado = await prisma.evento.create({
+                data: { ...dadosBase, inicio: inicioOcorrencia, fim: fimOcorrencia, serieRecorrenciaId }
+            });
+            eventosCriados.push(criado);
+        }
+
+        res.status(201).json(totalOcorrencias > 1 ? eventosCriados : eventosCriados[0]);
     } catch (err) {
         console.error('Erro ao cadastrar evento:', err);
         res.status(500).json({ error: 'Erro ao cadastrar evento' });
@@ -110,14 +137,25 @@ router.put('/:id', async (req, res) => {
 router.delete('/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
+        const excluirFuturas = req.query.serie === 'futuras';
 
-        const resultado = await prisma.evento.deleteMany({
-            where: { id, usuarioId: req.session.userId }
-        });
-        if (resultado.count === 0) {
+        const evento = await prisma.evento.findFirst({ where: { id, usuarioId: req.session.userId } });
+        if (!evento) {
             return res.status(404).json({ error: 'Evento não encontrado' });
         }
 
+        if (excluirFuturas && evento.serieRecorrenciaId) {
+            const resultado = await prisma.evento.deleteMany({
+                where: {
+                    usuarioId: req.session.userId,
+                    serieRecorrenciaId: evento.serieRecorrenciaId,
+                    inicio: { gte: evento.inicio }
+                }
+            });
+            return res.json({ success: true, message: `${resultado.count} evento(s) da série excluído(s)` });
+        }
+
+        await prisma.evento.delete({ where: { id } });
         res.json({ success: true, message: 'Evento excluído com sucesso' });
     } catch (err) {
         console.error('Erro ao excluir evento:', err);

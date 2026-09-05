@@ -96,6 +96,8 @@ model Usuario {
   modulosOcultos  ModuloOculto[]
   notificacoesDispensadas NotificacaoDispensada[]
   fiiWatchlist    FiiWatchlist[]
+  pushSubscriptions PushSubscription[]
+  pushNotificacoesEnviadas PushNotificacaoEnviada[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -152,6 +154,42 @@ model FiiWatchlist {
 
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
+}
+
+/**
+ * Inscrição de push do navegador (Web Push API) de um dispositivo do usuário — uma pessoa pode
+ * ter várias (celular, notebook, etc.), cada endpoint é único por definição do próprio navegador.
+ */
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+
+  usuarioId Int
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+
+  createdAt DateTime @default(now())
+}
+
+/**
+ * Marca que uma notificação (evento com lembrete, fatura vencendo, etc.) já foi enviada por
+ * push a este usuário, para o cron de push (a cada 5 min) não reenviar a cada execução —
+ * mesmo padrão do NotificacaoDispensada, mas para "já enviada" em vez de "usuário dispensou".
+ */
+model PushNotificacaoEnviada {
+  id         Int      @id @default(autoincrement())
+
+  usuarioId  Int
+  usuario    Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  tipo       String   // 'evento' ou 'fatura'
+  entidadeId Int
+
+  createdAt  DateTime @default(now())
+
+  @@unique([usuarioId, tipo, entidadeId])
 }
 
 model VeiculoGaragem {
@@ -351,6 +389,12 @@ model Transacao {
   formaPagamento      String    @default("Débito") // Débito, Crédito, Pix, Dinheiro, Boleto, Transferência
   status              String    @default("Pago")   // Pago, Pendente, Agendado
   recorrente          Boolean   @default(false)
+  // Corrente de recorrência: aponta para a transação que originou esta (a cada mês vencido,
+  // o cron gera a próxima e marca a origem como "já gerada", ver lib/financas-shared.js).
+  recorrenciaOrigemId Int?
+  recorrenciaOrigem   Transacao?  @relation("RecorrenciaChain", fields: [recorrenciaOrigemId], references: [id], onDelete: SetNull)
+  recorrenciaProxima  Transacao[] @relation("RecorrenciaChain")
+  recorrenciaProximaGerada Boolean @default(false)
 
   categoriaId         Int?
   categoria           CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
@@ -406,6 +450,10 @@ model Evento {
   cor             String    @default("#EEBB00")
   lembreteMinutos Int?      // Minutos de antecedência para o sino de notificação (null = sem lembrete)
   notificacaoDispensada Boolean @default(false) // true quando o usuário exclui a notificação no sino (o evento em si não é apagado)
+
+  // Recorrência: quando o evento é criado com "repetir" semanal/mensal, todas as ocorrências
+  // geradas de uma vez compartilham este UUID (usado para excluir "esta e as futuras" juntas).
+  serieRecorrenciaId String?
 
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
@@ -515,8 +563,29 @@ model InvestimentoFII {
   alertaPrecoAbaixoDe Float?   // se definido, envia e-mail quando precoAtual cruzar abaixo deste valor
   alertaDisparado     Boolean  @default(false) // evita reenviar o alerta enquanto o preço não se recuperar acima do limite
 
+  historicoPrecos   HistoricoPrecoFii[]
+
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+}
+
+/**
+ * Snapshot diário do preço de mercado de um FII da carteira, gravado toda vez que a cotação é
+ * atualizada (botão "Atualizar Cotações", cron de alerta ou cron diário de histórico) — no
+ * máximo um registro por dia por FII (@@unique), usado para o gráfico de evolução da cota.
+ */
+model HistoricoPrecoFii {
+  id             Int             @id @default(autoincrement())
+
+  investimentoId Int
+  investimento   InvestimentoFII @relation(fields: [investimentoId], references: [id], onDelete: Cascade)
+
+  dia            DateTime        // truncado para meia-noite UTC do dia do snapshot
+  preco          Float
+
+  createdAt      DateTime        @default(now())
+
+  @@unique([investimentoId, dia])
 }
 
 model InvestimentoCripto {

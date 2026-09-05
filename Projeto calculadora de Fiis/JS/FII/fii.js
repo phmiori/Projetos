@@ -332,6 +332,74 @@ function fecharModalWatchlist() {
     document.body.style.overflow = '';
 }
 
+let chartHistoricoFii = null;
+
+async function abrirModalHistoricoFii(id, ticker) {
+    document.getElementById('modalHistoricoFiiTitle').textContent = `Histórico de Preço: ${ticker}`;
+    document.getElementById('modalHistoricoFiiOverlay').classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    const vazio = document.getElementById('historicoFiiVazio');
+    const canvas = document.getElementById('chartHistoricoFii');
+    vazio.style.display = 'none';
+    canvas.style.display = '';
+
+    try {
+        const resp = await fetch(`/api/fii/${id}/historico`);
+        if (!resp.ok) throw new Error('Falha ao buscar histórico');
+        const historico = await resp.json();
+
+        if (!Array.isArray(historico) || historico.length < 2) {
+            vazio.style.display = 'flex';
+            canvas.style.display = 'none';
+            if (chartHistoricoFii) { chartHistoricoFii.destroy(); chartHistoricoFii = null; }
+            return;
+        }
+
+        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+        const textColor = isDark ? '#FFFFFF' : '#1C1C1E';
+        const gridColor = isDark ? '#2C2C2E' : '#E5E5EA';
+
+        if (chartHistoricoFii) chartHistoricoFii.destroy();
+        chartHistoricoFii = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: historico.map(h => new Date(h.dia).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })),
+                datasets: [{
+                    label: 'Preço da Cota',
+                    data: historico.map(h => h.preco),
+                    borderColor: '#EEBB00',
+                    backgroundColor: 'rgba(238, 187, 0, 0.12)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: (ctx) => ` ${formatarMoeda(ctx.raw)}` } }
+                },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: textColor } },
+                    y: { grid: { color: gridColor }, ticks: { color: textColor, callback: (v) => formatarMoeda(v) } }
+                }
+            }
+        });
+    } catch (err) {
+        console.warn('[FII] Não foi possível carregar o histórico de preço.', err.message);
+        vazio.style.display = 'flex';
+        canvas.style.display = 'none';
+    }
+}
+
+function fecharModalHistoricoFii() {
+    document.getElementById('modalHistoricoFiiOverlay').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
 async function salvarWatchlistItem(e) {
     e.preventDefault();
 
@@ -506,6 +574,16 @@ function initEventListeners() {
     if (modalWatchlistOverlay) {
         modalWatchlistOverlay.addEventListener('click', (e) => {
             if (e.target === modalWatchlistOverlay) fecharModalWatchlist();
+        });
+    }
+
+    // Modal de Histórico de Preço
+    const modalHistoricoFiiClose = document.getElementById('modalHistoricoFiiClose');
+    const modalHistoricoFiiOverlay = document.getElementById('modalHistoricoFiiOverlay');
+    if (modalHistoricoFiiClose) modalHistoricoFiiClose.addEventListener('click', fecharModalHistoricoFii);
+    if (modalHistoricoFiiOverlay) {
+        modalHistoricoFiiOverlay.addEventListener('click', (e) => {
+            if (e.target === modalHistoricoFiiOverlay) fecharModalHistoricoFii();
         });
     }
 
@@ -705,6 +783,9 @@ function renderizarCarteira() {
                             </button>
                             <button class="btn-fii-action" onclick="simularFiiNaCalculadora('${item.id}')" title="Simular na Calculadora">
                                 ⚡ Simular
+                            </button>
+                            <button class="btn-fii-action" onclick="abrirModalHistoricoFii('${item.id}', '${escapeHTML(item.ticker)}')" title="Ver histórico de preço">
+                                📈
                             </button>
                             <button class="btn-fii-action" onclick="abrirModalFII('${item.id}')" title="Editar FII">
                                 ✏️

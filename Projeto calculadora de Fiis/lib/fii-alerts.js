@@ -84,7 +84,28 @@ async function atualizarPrecoFiiEChecarAlerta(inv, emailUsuario) {
     }
 
     await prisma.investimentoFII.update({ where: { id: inv.id }, data });
+    await registrarHistoricoPrecoFii(inv.id, precoAtual);
     return precoAtual;
+}
+
+/**
+ * Grava (ou atualiza) o snapshot de preço do dia para o gráfico de evolução da cota — no máximo
+ * um registro por FII por dia. Tolerante a falha caso a tabela ainda não exista no banco
+ * (pendente de `npm run prisma:push`): não deve travar a atualização de cotação em si.
+ */
+async function registrarHistoricoPrecoFii(investimentoId, preco) {
+    try {
+        const agora = new Date();
+        const dia = new Date(Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate()));
+
+        await prisma.historicoPrecoFii.upsert({
+            where: { investimentoId_dia: { investimentoId, dia } },
+            update: { preco },
+            create: { investimentoId, dia, preco }
+        });
+    } catch (err) {
+        console.warn(`[Histórico FII] Não foi possível gravar o snapshot do dia (id ${investimentoId}):`, err.message);
+    }
 }
 
 /**
@@ -152,11 +173,35 @@ async function verificarAlertasPrecoFII() {
     }
 }
 
+/**
+ * Job agendado: 1x por dia, atualiza a cotação de TODOS os FIIs de todas as carteiras (não só
+ * os com alerta configurado) para alimentar o gráfico de "Histórico de Preço" mesmo para quem
+ * nunca clicou em "Atualizar Cotações" nem configurou um alerta.
+ */
+async function snapshotHistoricoTodosFiis() {
+    try {
+        const investimentos = await prisma.investimentoFII.findMany({
+            include: { usuario: { select: { email: true } } }
+        });
+
+        await Promise.all(investimentos.map(async (inv) => {
+            try {
+                await atualizarPrecoFiiEChecarAlerta(inv, inv.usuario?.email);
+            } catch (e) {
+                console.error(`[Histórico FII] Falha ao atualizar ${inv.ticker}:`, e.message);
+            }
+        }));
+    } catch (err) {
+        console.error('[Histórico FII] Falha no job diário de snapshot:', err.message);
+    }
+}
+
 module.exports = {
     buscarCotacaoTicker,
     mailTransporter,
     enviarEmailAlertaPrecoAtivo,
     atualizarPrecoFiiEChecarAlerta,
     atualizarPrecoWatchlistEChecarAlerta,
-    verificarAlertasPrecoFII
+    verificarAlertasPrecoFII,
+    snapshotHistoricoTodosFiis
 };

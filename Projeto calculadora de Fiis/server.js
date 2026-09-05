@@ -10,8 +10,10 @@ const helmet = require('helmet');
 const cron = require('node-cron');
 
 const { requireAuth } = require('./lib/auth-middleware');
-const { mailTransporter, verificarAlertasPrecoFII } = require('./lib/fii-alerts');
+const { mailTransporter, verificarAlertasPrecoFII, snapshotHistoricoTodosFiis } = require('./lib/fii-alerts');
 const { verificarAlertasPrecoCripto } = require('./lib/cripto-alerts');
+const { gerarTransacoesRecorrentesPendentes } = require('./lib/financas-shared');
+const { pushConfigurado, enviarPushNotificacoesPendentes } = require('./lib/push-shared');
 const { garantirColunasAlertaFII, garantirColunasAlertaCripto, garantirColunaRole, seedUsuarios } = require('./lib/bootstrap');
 
 const app = express();
@@ -89,6 +91,32 @@ app.get('/', (req, res) => {
 cron.schedule('*/5 * * * *', verificarAlertasPrecoFII);
 cron.schedule('*/5 * * * *', verificarAlertasPrecoCripto);
 
+/**
+ * Gera a próxima ocorrência de cada transação recorrente (Finanças) cujo mês já venceu.
+ * Roda 1x por dia (não precisa de mais frequência: recorrência é sempre mensal) e também
+ * uma vez ao iniciar o servidor, para não depender de o processo ficar de pé à meia-noite.
+ */
+cron.schedule('0 3 * * *', () => {
+    gerarTransacoesRecorrentesPendentes().catch((err) => console.error('Erro no cron de recorrência de transações:', err));
+});
+
+/**
+ * Snapshot diário do preço de todos os FIIs da carteira (independente de alerta configurado),
+ * usado pelo gráfico de "Histórico de Preço" no módulo FII. Roda após o fechamento do mercado.
+ */
+cron.schedule('0 19 * * *', () => {
+    snapshotHistoricoTodosFiis().catch((err) => console.error('Erro no cron de histórico de preço de FII:', err));
+});
+
+/**
+ * Envia notificações Web Push (lembrete de evento, fatura vencendo) aos dispositivos inscritos,
+ * na mesma cadência dos demais alertas. Sem efeito se VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY não
+ * estiverem configuradas no .env.
+ */
+cron.schedule('*/5 * * * *', () => {
+    enviarPushNotificacoesPendentes().catch((err) => console.error('Erro no cron de notificações push:', err));
+});
+
 // Iniciar servidor
 app.listen(PORT, async () => {
     console.log(`====================================================`);
@@ -96,9 +124,11 @@ app.listen(PORT, async () => {
     console.log(` Acesso web: http://localhost:${PORT}/HTML/Index/index.html`);
     console.log(`====================================================`);
     console.log(mailTransporter ? ' Alertas de preço por e-mail: ativos (SMTP configurado)' : ' Alertas de preço por e-mail: DESATIVADOS (defina SMTP_USER e SMTP_PASS no .env)');
+    console.log(pushConfigurado ? ' Notificações push: ativas (VAPID configurado)' : ' Notificações push: DESATIVADAS (defina VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no .env)');
     console.log(`====================================================`);
     await garantirColunasAlertaFII();
     await garantirColunasAlertaCripto();
     await garantirColunaRole();
     await seedUsuarios();
+    gerarTransacoesRecorrentesPendentes().catch((err) => console.error('Erro ao gerar transações recorrentes pendentes na inicialização:', err));
 });

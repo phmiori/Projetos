@@ -4,8 +4,58 @@ const {
     buscarEventosComNotificacaoAtiva,
     buscarFaturasVencendoAtivas
 } = require('../lib/notificacoes-shared');
+const { pushConfigurado, VAPID_PUBLIC_KEY } = require('../lib/push-shared');
 
 const router = express.Router();
+
+/**
+ * ROTA: Chave Pública VAPID (para o navegador gerar a inscrição de push)
+ * GET /api/notificacoes/push/chave-publica
+ */
+router.get('/push/chave-publica', (req, res) => {
+    res.json({ ativado: pushConfigurado, chavePublica: VAPID_PUBLIC_KEY || null });
+});
+
+/**
+ * ROTA: Registrar Inscrição de Push deste Dispositivo
+ * POST /api/notificacoes/push/inscrever
+ */
+router.post('/push/inscrever', async (req, res) => {
+    try {
+        const { endpoint, keys } = req.body;
+        if (!endpoint || !keys?.p256dh || !keys?.auth) {
+            return res.status(400).json({ error: 'Inscrição de push inválida' });
+        }
+
+        await prisma.pushSubscription.upsert({
+            where: { endpoint },
+            update: { usuarioId: req.session.userId, p256dh: keys.p256dh, auth: keys.auth },
+            create: { usuarioId: req.session.userId, endpoint, p256dh: keys.p256dh, auth: keys.auth }
+        });
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Erro ao salvar inscrição de push:', err);
+        res.status(500).json({ error: 'Erro ao salvar inscrição de push' });
+    }
+});
+
+/**
+ * ROTA: Remover Inscrição de Push deste Dispositivo
+ * DELETE /api/notificacoes/push/inscrever
+ */
+router.delete('/push/inscrever', async (req, res) => {
+    try {
+        const { endpoint } = req.body;
+        if (endpoint) {
+            await prisma.pushSubscription.deleteMany({ where: { endpoint, usuarioId: req.session.userId } });
+        }
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Erro ao remover inscrição de push:', err);
+        res.status(500).json({ error: 'Erro ao remover inscrição de push' });
+    }
+});
 
 // Cor de alerta reaproveitada de CSS/Global/global_tokens.css (--color-expense), usada como
 // dado (assim como Evento.cor já é um hex salvo no banco), não como CSS hardcoded.

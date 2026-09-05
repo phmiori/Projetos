@@ -286,3 +286,11 @@ body.auth-pending {
     font-size: 0.85rem;
     max-width: 320px;
 }
+
+/* --- Texto de ajuda pequeno abaixo de um campo/checkbox de formulário --- */
+.input-hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 0.75rem;
+    color: var(--text-sub);
+}

@@ -25,6 +25,35 @@ self.addEventListener('activate', (event) => {
     );
 });
 
+self.addEventListener('push', (event) => {
+    let dados = {};
+    try { dados = event.data ? event.data.json() : {}; } catch { /* payload não é JSON, ignora */ }
+
+    const titulo = dados.title || 'FinanceHub';
+    const opcoes = {
+        body: dados.body || '',
+        icon: '/icons/icon-192.png',
+        badge: '/icons/icon-192.png',
+        data: { url: dados.url || '/' }
+    };
+
+    event.waitUntil(self.registration.showNotification(titulo, opcoes));
+});
+
+self.addEventListener('notificationclick', (event) => {
+    event.notification.close();
+    const url = event.notification.data?.url || '/';
+
+    event.waitUntil(
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then((janelas) => {
+            for (const cliente of janelas) {
+                if (cliente.url.includes(url) && 'focus' in cliente) return cliente.focus();
+            }
+            if (clients.openWindow) return clients.openWindow(url);
+        })
+    );
+});
+
 self.addEventListener('fetch', (event) => {
     const { request } = event;
     if (request.method !== 'GET') return;

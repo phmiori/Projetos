@@ -269,4 +269,27 @@ router.post('/atualizar-precos', async (req, res) => {
     }
 });
 
+/**
+ * ROTA: Histórico de Preço de um FII da Carteira (para o gráfico de evolução da cota)
+ * GET /api/fii/:id/historico
+ */
+router.get('/:id/historico', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const investimento = await prisma.investimentoFII.findFirst({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (!investimento) return res.status(404).json({ error: 'FII não encontrado' });
+
+        const historico = await prisma.historicoPrecoFii.findMany({
+            where: { investimentoId: id },
+            orderBy: { dia: 'asc' }
+        });
+        res.json(historico);
+    } catch (err) {
+        console.error('Erro ao buscar histórico de preço do FII:', err);
+        res.status(500).json({ error: 'Erro ao buscar histórico de preço' });
+    }
+});
+
 module.exports = router;

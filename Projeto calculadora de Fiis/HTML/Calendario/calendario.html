@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg">
     <meta name="theme-color" content="#EEBB00">
     <script defer src="/JS/Global/pwa-register.js"></script>
     <meta name="description" content="FinanceHub - Calendário Pessoal com compromissos, horários e lembretes">
@@ -465,6 +466,20 @@
                         <div class="input-field" style="grid-column: 1 / -1;">
                             <label for="inputEventoDescricao">Descrição</label>
                             <textarea id="inputEventoDescricao" class="input-missao textarea-missao" rows="3" placeholder="Detalhes do compromisso"></textarea>
+                        </div>
+
+                        <div class="input-field" id="campoEventoRepetir">
+                            <label for="inputEventoRepetir">Repetir</label>
+                            <select id="inputEventoRepetir" class="input-missao">
+                                <option value="">Não repete</option>
+                                <option value="semanal">Toda semana</option>
+                                <option value="mensal">Todo mês</option>
+                            </select>
+                        </div>
+
+                        <div class="input-field" id="campoEventoRepetirQtd" style="display:none;">
+                            <label for="inputEventoRepetirQtd">Quantas vezes</label>
+                            <input type="number" id="inputEventoRepetirQtd" class="input-missao" min="2" max="52" value="4">
                         </div>
 
                         <div class="input-field" style="grid-column: 1 / -1;">

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg">
     <meta name="theme-color" content="#EEBB00">
     <script defer src="/JS/Global/pwa-register.js"></script>
     <meta name="description" content="FinanceHub - Gestão Inteligente de Fundos Imobiliários (FIIs), Renda Passiva, Calculadora Bola de Neve e Radar Funds Explorer">
@@ -991,6 +992,29 @@
                     <button type="submit" class="btn-missao-primary">Salvar Alerta</button>
                 </footer>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal de Histórico de Preço (evolução da cota desde que a atualização automática começou a registrar) -->
+    <div class="modal-overlay" id="modalHistoricoFiiOverlay">
+        <div class="modal-dialog" style="max-width: 640px;">
+            <header class="modal-header">
+                <div>
+                    <h2 class="modal-title" id="modalHistoricoFiiTitle">Histórico de Preço</h2>
+                    <p class="modal-subtitle">Evolução da cotação registrada a cada atualização de preço</p>
+                </div>
+                <button class="modal-close-btn" id="modalHistoricoFiiClose" aria-label="Fechar">&times;</button>
+            </header>
+            <div class="form-sections-wrapper">
+                <div id="historicoFiiVazio" class="empty-state" style="display:none;">
+                    <span class="empty-state-icon">📈</span>
+                    <p class="empty-state-title">Ainda sem histórico suficiente</p>
+                    <p class="empty-state-text">O histórico é registrado a cada vez que você clica em "Atualizar Cotações" (ou automaticamente, 1x por dia). Volte em alguns dias para ver o gráfico de evolução.</p>
+                </div>
+                <div style="height: 280px;">
+                    <canvas id="chartHistoricoFii"></canvas>
+                </div>
+            </div>
         </div>
     </div>
 

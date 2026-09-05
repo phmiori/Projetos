@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg">
     <meta name="theme-color" content="#EEBB00">
     <script defer src="/JS/Global/pwa-register.js"></script>
     <meta name="description" content="FinanceHub - Configurações da Conta do Usuário">
@@ -372,6 +373,17 @@
                     </ul>
 
                     <p class="account-feedback" id="modulosFeedback" style="display:none;"></p>
+                </section>
+
+                <!-- Cartão: Notificações Push -->
+                <section class="config-card" aria-labelledby="pushTitle">
+                    <div class="config-card-header">
+                        <h2 class="config-card-title" id="pushTitle">Notificações Push</h2>
+                        <p class="config-card-subtitle">Receba um aviso neste dispositivo mesmo com o FinanceHub fechado, para lembretes de evento e faturas vencendo.</p>
+                    </div>
+
+                    <button type="button" class="btn-missao-primary" id="btnAtivarPush">Ativar notificações push neste dispositivo</button>
+                    <p class="account-feedback" id="pushFeedback" style="display:none;"></p>
                 </section>
 
                 <!-- Cartão: Meus Dados (exportação/backup pessoal) -->

@@ -46,7 +46,124 @@ document.addEventListener('DOMContentLoaded', () => {
             window.location.href = '/api/backup/export';
         });
     }
+
+    initNotificacoesPush();
 });
+
+// =========================================================
+// NOTIFICAÇÕES PUSH
+// =========================================================
+
+function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+    const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(base64);
+    return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
+function aguardarComTimeout(promise, ms) {
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => setTimeout(() => reject(new Error('Tempo esgotado ao registrar o service worker.')), ms))
+    ]);
+}
+
+function mostrarFeedbackPush(mensagem, tipo) {
+    const el = document.getElementById('pushFeedback');
+    if (!el) return;
+    el.textContent = mensagem;
+    el.className = `account-feedback feedback-${tipo}`;
+    el.style.display = 'block';
+}
+
+async function initNotificacoesPush() {
+    const btn = document.getElementById('btnAtivarPush');
+    if (!btn) return;
+
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        btn.disabled = true;
+        mostrarFeedbackPush('Seu navegador não suporta notificações push.', 'erro');
+        return;
+    }
+
+    try {
+        const registration = await aguardarComTimeout(navigator.serviceWorker.ready, 8000);
+        const inscricaoAtual = await registration.pushManager.getSubscription();
+        if (inscricaoAtual) {
+            btn.textContent = 'Desativar notificações push neste dispositivo';
+            btn.dataset.ativo = 'true';
+        }
+    } catch (err) {
+        console.warn('Não foi possível checar a inscrição de push atual:', err.message);
+    }
+
+    btn.addEventListener('click', async () => {
+        if (btn.dataset.ativo === 'true') {
+            await desativarPush(btn);
+        } else {
+            await ativarPush(btn);
+        }
+    });
+}
+
+async function ativarPush(btn) {
+    try {
+        const respChave = await fetch('/api/notificacoes/push/chave-publica');
+        const { ativado, chavePublica } = await respChave.json();
+        if (!ativado || !chavePublica) {
+            mostrarFeedbackPush('O servidor ainda não tem notificações push configuradas.', 'erro');
+            return;
+        }
+
+        const permissao = await Notification.requestPermission();
+        if (permissao !== 'granted') {
+            mostrarFeedbackPush('Permissão de notificação negada pelo navegador.', 'erro');
+            return;
+        }
+
+        const registration = await aguardarComTimeout(navigator.serviceWorker.ready, 8000);
+        const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(chavePublica)
+        });
+
+        const payload = subscription.toJSON();
+        const resp = await fetch('/api/notificacoes/push/inscrever', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint: payload.endpoint, keys: payload.keys })
+        });
+        if (!resp.ok) throw new Error('Falha ao salvar inscrição no servidor');
+
+        btn.textContent = 'Desativar notificações push neste dispositivo';
+        btn.dataset.ativo = 'true';
+        mostrarFeedbackPush('Notificações push ativadas neste dispositivo!', 'sucesso');
+    } catch (err) {
+        console.error('Erro ao ativar push:', err);
+        mostrarFeedbackPush('Não foi possível ativar as notificações push.', 'erro');
+    }
+}
+
+async function desativarPush(btn) {
+    try {
+        const registration = await aguardarComTimeout(navigator.serviceWorker.ready, 8000);
+        const subscription = await registration.pushManager.getSubscription();
+        if (subscription) {
+            await fetch('/api/notificacoes/push/inscrever', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ endpoint: subscription.endpoint })
+            });
+            await subscription.unsubscribe();
+        }
+        btn.textContent = 'Ativar notificações push neste dispositivo';
+        btn.dataset.ativo = 'false';
+        mostrarFeedbackPush('Notificações push desativadas neste dispositivo.', 'sucesso');
+    } catch (err) {
+        console.error('Erro ao desativar push:', err);
+        mostrarFeedbackPush('Não foi possível desativar as notificações push.', 'erro');
+    }
+}
 
 async function carregarPerfil() {
     try {

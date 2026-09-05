@@ -13,7 +13,8 @@ const stateCal = {
     view: 'month',
     currentDate: new Date(),
     eventos: [],
-    editId: null
+    editId: null,
+    editSerieId: null
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -320,6 +321,10 @@ function initModal() {
 
     document.getElementById('inputEventoDiaTodo').addEventListener('change', toggleDiaTodoFields);
 
+    document.getElementById('inputEventoRepetir').addEventListener('change', (e) => {
+        document.getElementById('campoEventoRepetirQtd').style.display = e.target.value ? '' : 'none';
+    });
+
     document.querySelectorAll('.color-swatch').forEach(sw => {
         sw.addEventListener('click', () => {
             document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
@@ -344,12 +349,17 @@ function toggleDiaTodoFields() {
 
 function openCreateModal(dataBase, hora) {
     stateCal.editId = null;
+    stateCal.editSerieId = null;
     document.getElementById('modalEventoTitle').textContent = 'Novo Evento';
     document.getElementById('btnEventoExcluir').style.display = 'none';
     document.getElementById('eventoForm').reset();
     document.getElementById('formEventoId').value = '';
     document.getElementById('inputEventoInicioHora').disabled = false;
     document.getElementById('inputEventoFimHora').disabled = false;
+
+    document.getElementById('campoEventoRepetir').style.display = '';
+    document.getElementById('inputEventoRepetir').value = '';
+    document.getElementById('campoEventoRepetirQtd').style.display = 'none';
 
     const base = dataBase || new Date();
     const horaInicial = (typeof hora === 'number') ? hora : Math.min(new Date().getHours() + 1, 23);
@@ -372,9 +382,14 @@ function openCreateModal(dataBase, hora) {
 
 function openEditModal(ev) {
     stateCal.editId = ev.id;
+    stateCal.editSerieId = ev.serieRecorrenciaId || null;
     document.getElementById('modalEventoTitle').textContent = 'Editar Evento';
     document.getElementById('btnEventoExcluir').style.display = 'inline-flex';
     document.getElementById('formEventoId').value = ev.id;
+
+    // Edição não recria a série (mantém apenas esta ocorrência) — o campo só faz sentido na criação.
+    document.getElementById('campoEventoRepetir').style.display = 'none';
+    document.getElementById('campoEventoRepetirQtd').style.display = 'none';
     document.getElementById('inputEventoTitulo').value = ev.titulo;
     document.getElementById('inputEventoLocal').value = ev.local || '';
     document.getElementById('inputEventoDescricao').value = ev.descricao || '';
@@ -433,6 +448,14 @@ async function handleSalvarEvento(e) {
         lembreteMinutos: lembreteValor === '' ? null : Number(lembreteValor)
     };
 
+    if (!stateCal.editId) {
+        const repetir = document.getElementById('inputEventoRepetir').value;
+        if (repetir) {
+            payload.repetir = repetir;
+            payload.repetirQtd = Number(document.getElementById('inputEventoRepetirQtd').value) || 4;
+        }
+    }
+
     try {
         const id = stateCal.editId;
         const resp = await fetch(id ? `${API_BASE}/eventos/${id}` : `${API_BASE}/eventos`, {
@@ -451,10 +474,18 @@ async function handleSalvarEvento(e) {
 
 async function handleExcluirEvento() {
     if (!stateCal.editId) return;
-    if (!confirm('Deseja realmente excluir este evento?')) return;
+
+    let excluirFuturas = false;
+    if (stateCal.editSerieId) {
+        excluirFuturas = confirm('Este evento faz parte de uma série recorrente.\n\nOK = excluir esta e as próximas ocorrências.\nCancelar = excluir somente esta.');
+        if (!excluirFuturas && !confirm('Excluir apenas este evento?')) return;
+    } else if (!confirm('Deseja realmente excluir este evento?')) {
+        return;
+    }
 
     try {
-        const resp = await fetch(`${API_BASE}/eventos/${stateCal.editId}`, { method: 'DELETE' });
+        const query = excluirFuturas ? '?serie=futuras' : '';
+        const resp = await fetch(`${API_BASE}/eventos/${stateCal.editId}${query}`, { method: 'DELETE' });
         if (!resp.ok) throw new Error('Falha ao excluir evento');
 
         closeModal();
