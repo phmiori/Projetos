@@ -1,10 +1,13 @@
 /**
  * service-worker.js
- * Cache-first para arquivos estáticos (CSS/JS/HTML/ícones), bypass total para /api/* — os
- * dados do hub (preços, saldos, notificações) nunca podem vir de um cache desatualizado.
+ * Network-first para tudo (HTML/CSS/JS/ícones): sempre tenta buscar a versão mais nova da
+ * rede primeiro, e só usa o cache como reserva se a rede falhar (ex.: sem internet). Isso
+ * evita ficar preso servindo uma versão antiga da página depois de um deploy — o cache aqui
+ * existe só para dar suporte a abrir o app offline, nunca para "acelerar" à custa de conteúdo
+ * desatualizado. Bypass total para /api/* — os dados do hub nunca podem vir de cache.
  */
 
-const CACHE_NAME = 'financehub-v1';
+const CACHE_NAME = 'financehub-v2';
 
 self.addEventListener('install', (event) => {
     self.skipWaiting();
@@ -28,16 +31,12 @@ self.addEventListener('fetch', (event) => {
     }
 
     event.respondWith(
-        caches.match(request).then((cached) => {
-            if (cached) return cached;
-
-            return fetch(request).then((response) => {
-                if (response.ok) {
-                    const copia = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => cache.put(request, copia));
-                }
-                return response;
-            }).catch(() => cached);
-        })
+        fetch(request).then((response) => {
+            if (response.ok) {
+                const copia = response.clone();
+                caches.open(CACHE_NAME).then((cache) => cache.put(request, copia));
+            }
+            return response;
+        }).catch(() => caches.match(request))
     );
 });
