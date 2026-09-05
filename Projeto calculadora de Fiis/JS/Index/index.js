@@ -14,7 +14,86 @@ document.addEventListener('DOMContentLoaded', () => {
     carregarModuloCasas();
     carregarModuloCripto();
     carregarDadosConsolidadosHub();
+    carregarResumoDoDia();
 });
+
+/**
+ * Resumo do Dia: combina o próximo evento do Calendário, o clima do local favorito
+ * e a fatura de cartão mais próxima do vencimento num único painel no topo do dashboard.
+ */
+async function carregarResumoDoDia() {
+    const elEvento = document.getElementById('todaySummaryEvento');
+    const cardClima = document.getElementById('todaySummaryClimaCard');
+    const elClimaIcone = document.getElementById('todaySummaryClimaIcone');
+    const elClima = document.getElementById('todaySummaryClima');
+    const cardFatura = document.getElementById('todaySummaryFaturaCard');
+    const elFatura = document.getElementById('todaySummaryFatura');
+
+    const agora = new Date();
+    const daquiA14Dias = new Date(agora.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+    const [eventosRes, climaRes, resumoRes] = await Promise.allSettled([
+        fetch(`/api/eventos?inicio=${agora.toISOString()}&fim=${daquiA14Dias.toISOString()}`),
+        fetch('/api/clima/favorito'),
+        fetch('/api/financas/resumo')
+    ]);
+
+    if (elEvento) {
+        let texto = 'Nenhum evento próximo';
+        try {
+            if (eventosRes.status === 'fulfilled' && eventosRes.value.ok) {
+                const eventos = await eventosRes.value.json();
+                const proximo = (Array.isArray(eventos) ? eventos : [])
+                    .filter(ev => new Date(ev.fim) >= agora)
+                    .sort((a, b) => new Date(a.inicio) - new Date(b.inicio))[0];
+                if (proximo) texto = `${formatarDataResumoEvento(proximo.inicio, proximo.diaTodo)} · ${proximo.titulo}`;
+            }
+        } catch { /* mantém texto padrão */ }
+        elEvento.textContent = texto;
+        elEvento.classList.remove('is-loading');
+    }
+
+    try {
+        if (climaRes.status === 'fulfilled' && climaRes.value.ok) {
+            const dados = await climaRes.value.json();
+            if (dados && dados.current && typeof obterInfoClima === 'function') {
+                const info = obterInfoClima(dados.current.weather_code, dados.current.is_day);
+                if (elClimaIcone) elClimaIcone.textContent = info.icone;
+                if (elClima) elClima.textContent = `${Math.round(dados.current.temperature_2m)}° em ${dados.nome}`;
+                if (cardClima) cardClima.style.display = 'flex';
+            }
+        }
+    } catch { /* widget de clima permanece oculto */ }
+
+    try {
+        if (resumoRes.status === 'fulfilled' && resumoRes.value.ok) {
+            const resumo = await resumoRes.value.json();
+            const proxima = (resumo.faturasAbertas || [])
+                .filter(f => f.fatura && f.fatura.dataVencimento)
+                .sort((a, b) => new Date(a.fatura.dataVencimento) - new Date(b.fatura.dataVencimento))[0];
+            if (proxima && elFatura && cardFatura) {
+                const dataFmt = new Date(proxima.fatura.dataVencimento).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                elFatura.textContent = `${proxima.nome}: ${formatarMoeda(proxima.fatura.valorTotal)} (vence ${dataFmt})`;
+                cardFatura.style.display = 'flex';
+            }
+        }
+    } catch { /* card de fatura permanece oculto */ }
+}
+
+function formatarDataResumoEvento(inicioIso, diaTodo) {
+    const data = new Date(inicioIso);
+    const agora = new Date();
+    const amanha = new Date(agora);
+    amanha.setDate(amanha.getDate() + 1);
+
+    let prefixo;
+    if (data.toDateString() === agora.toDateString()) prefixo = 'Hoje';
+    else if (data.toDateString() === amanha.toDateString()) prefixo = 'Amanhã';
+    else prefixo = data.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+
+    if (diaTodo) return prefixo;
+    return `${prefixo}, ${data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`;
+}
 
 /**
  * Cores fixas por módulo, espelhando os acentos usados nos cards da grade
@@ -139,11 +218,11 @@ function atualizarKpisGlobaisHub({ capitalAlocado, ativosEmAndamento, lucroLiqui
     const hubQtdAtivos = document.getElementById('hubQtdAtivos');
     const hubRoiMedio = document.getElementById('hubRoiMedio');
 
-    if (hubLucroTotal) hubLucroTotal.textContent = formatarMoeda(lucroLiquido);
+    if (hubLucroTotal) { hubLucroTotal.textContent = formatarMoeda(lucroLiquido); hubLucroTotal.classList.remove('is-loading'); }
     if (hubQtdOperacoes) hubQtdOperacoes.textContent = `${operacoesFinalizadas} operação(ões) finalizada(s)`;
-    if (hubCapitalAlocado) hubCapitalAlocado.textContent = formatarMoeda(capitalAlocado);
+    if (hubCapitalAlocado) { hubCapitalAlocado.textContent = formatarMoeda(capitalAlocado); hubCapitalAlocado.classList.remove('is-loading'); }
     if (hubQtdAtivos) hubQtdAtivos.textContent = `${ativosEmAndamento} ativo(s) em andamento`;
-    if (hubRoiMedio) hubRoiMedio.textContent = `${roiGlobal.toFixed(1)}%`;
+    if (hubRoiMedio) { hubRoiMedio.textContent = `${roiGlobal.toFixed(1)}%`; hubRoiMedio.classList.remove('is-loading'); }
 }
 
 function renderizarGraficosHub({ alocacao, resultado }) {
@@ -271,9 +350,11 @@ async function carregarBadgeCofrinho() {
         const moduleCofrinhoRendimento = document.getElementById('moduleCofrinhoRendimento');
 
         if (moduleCofrinhoCount) moduleCofrinhoCount.textContent = `${cofrinhos.length} cofrinhos`;
-        if (moduleCofrinhoInvestido) moduleCofrinhoInvestido.textContent = formatarMoeda(totalInvestido);
-        if (moduleCofrinhoRendaDia) moduleCofrinhoRendaDia.textContent = formatarMoeda(totalRendaDia);
-        if (moduleCofrinhoRendimento) moduleCofrinhoRendimento.textContent = formatarMoeda(totalRendimentoBruto);
+        [
+            [moduleCofrinhoInvestido, formatarMoeda(totalInvestido)],
+            [moduleCofrinhoRendaDia, formatarMoeda(totalRendaDia)],
+            [moduleCofrinhoRendimento, formatarMoeda(totalRendimentoBruto)]
+        ].forEach(([el, texto]) => { if (el) { el.textContent = texto; el.classList.remove('is-loading'); } });
     } catch (err) {
         console.warn('[FinanceHub] Não foi possível carregar o total de cofrinhos.', err.message);
     }
@@ -391,9 +472,11 @@ async function carregarBadgeFii() {
         const moduleFiiYield = document.getElementById('moduleFiiYield');
 
         if (moduleFiiCount) moduleFiiCount.textContent = `${fundos.length} FIIs`;
-        if (moduleFiiRenda) moduleFiiRenda.textContent = formatarMoeda(rendaMensalTotal);
-        if (moduleFiiPatrimonio) moduleFiiPatrimonio.textContent = formatarMoeda(totalMercado);
-        if (moduleFiiYield) moduleFiiYield.textContent = `${yieldMedio.toFixed(2)}% a.m.`;
+        [
+            [moduleFiiRenda, formatarMoeda(rendaMensalTotal)],
+            [moduleFiiPatrimonio, formatarMoeda(totalMercado)],
+            [moduleFiiYield, `${yieldMedio.toFixed(2)}% a.m.`]
+        ].forEach(([el, texto]) => { if (el) { el.textContent = texto; el.classList.remove('is-loading'); } });
     } catch (err) {
         console.warn('[FinanceHub] Não foi possível carregar o total de fundos imobiliários.', err.message);
         if (badge) badge.textContent = '0';
@@ -435,9 +518,11 @@ async function carregarModuloCasas() {
         const moduleCasasRoi = document.getElementById('moduleCasasRoi');
 
         if (moduleCasasEstoque) moduleCasasEstoque.textContent = `${totalEstoque} imóveis`;
-        if (moduleCasasLucro) moduleCasasLucro.textContent = formatarMoeda(lucroTotal);
-        if (moduleCasasCapital) moduleCasasCapital.textContent = formatarMoeda(capitalAlocado);
-        if (moduleCasasRoi) moduleCasasRoi.textContent = `${roiMedio.toFixed(1)}%`;
+        [
+            [moduleCasasLucro, formatarMoeda(lucroTotal)],
+            [moduleCasasCapital, formatarMoeda(capitalAlocado)],
+            [moduleCasasRoi, `${roiMedio.toFixed(1)}%`]
+        ].forEach(([el, texto]) => { if (el) { el.textContent = texto; el.classList.remove('is-loading'); } });
     } catch (err) {
         console.warn('[FinanceHub] Não foi possível carregar o total de casas de leilão.', err.message);
     }
@@ -470,8 +555,10 @@ async function carregarModuloCripto() {
         const moduleCriptoValorizacao = document.getElementById('moduleCriptoValorizacao');
 
         if (moduleCriptoCount) moduleCriptoCount.textContent = `${moedas.length} moedas`;
-        if (moduleCriptoPatrimonio) moduleCriptoPatrimonio.textContent = formatarMoeda(totalMercado);
-        if (moduleCriptoCusto) moduleCriptoCusto.textContent = formatarMoeda(totalInvestido);
+        [
+            [moduleCriptoPatrimonio, formatarMoeda(totalMercado)],
+            [moduleCriptoCusto, formatarMoeda(totalInvestido)]
+        ].forEach(([el, texto]) => { if (el) { el.textContent = texto; el.classList.remove('is-loading'); } });
         if (moduleCriptoValorizacao) {
             const sinal = valorizacaoPct >= 0 ? '+' : '';
             moduleCriptoValorizacao.textContent = `${sinal}${valorizacaoPct.toFixed(2)}%`;
@@ -558,9 +645,11 @@ async function carregarModuloLeilaoCarros() {
 
         // Card do Módulo Leilão
         document.getElementById('moduleLeilaoEstoque').textContent = `${kpis.totalEstoque || 0} carros`;
-        document.getElementById('moduleLeilaoLucro').textContent = formatarMoeda(kpis.lucroTotalAcumulado || 0);
-        document.getElementById('moduleLeilaoCapital').textContent = formatarMoeda(kpis.capitalInvestidoParado || 0);
-        document.getElementById('moduleLeilaoRoi').textContent = `${(kpis.roiMedio || 0).toFixed(1)}%`;
+        [
+            ['moduleLeilaoLucro', formatarMoeda(kpis.lucroTotalAcumulado || 0)],
+            ['moduleLeilaoCapital', formatarMoeda(kpis.capitalInvestidoParado || 0)],
+            ['moduleLeilaoRoi', `${(kpis.roiMedio || 0).toFixed(1)}%`]
+        ].forEach(([id, texto]) => { const el = document.getElementById(id); if (el) { el.textContent = texto; el.classList.remove('is-loading'); } });
 
         // Badge na Sidebar
         const badge = document.getElementById('badgeLeilaoCount');
@@ -597,9 +686,11 @@ async function carregarModuloLeilaoCarros() {
         const roiMedio = totalVendidos > 0 ? (somaRoi / totalVendidos) : 0;
 
         document.getElementById('moduleLeilaoEstoque').textContent = `${totalEstoque} carros`;
-        document.getElementById('moduleLeilaoLucro').textContent = formatarMoeda(lucroTotal);
-        document.getElementById('moduleLeilaoCapital').textContent = formatarMoeda(capitalAlocado);
-        document.getElementById('moduleLeilaoRoi').textContent = `${roiMedio.toFixed(1)}%`;
+        [
+            ['moduleLeilaoLucro', formatarMoeda(lucroTotal)],
+            ['moduleLeilaoCapital', formatarMoeda(capitalAlocado)],
+            ['moduleLeilaoRoi', `${roiMedio.toFixed(1)}%`]
+        ].forEach(([id, texto]) => { const el = document.getElementById(id); if (el) { el.textContent = texto; el.classList.remove('is-loading'); } });
 
         const badge = document.getElementById('badgeLeilaoCount');
         if (badge) badge.textContent = veiculos.length;

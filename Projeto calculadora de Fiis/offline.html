@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#EEBB00">
+    <title>FinanceHub - Sem Conexão</title>
+    <link rel="stylesheet" href="/CSS/Global/global_tokens.css">
+    <style>
+        .offline-wrap {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            gap: 16px;
+            padding: 24px;
+        }
+        .offline-icon {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            color: var(--accent-color);
+        }
+        .offline-title { font-size: 1.4rem; font-weight: 700; }
+        .offline-text { color: var(--text-sub); max-width: 340px; font-size: 0.95rem; }
+    </style>
+</head>
+<body>
+    <div class="offline-wrap">
+        <div class="offline-icon">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="1" y1="1" x2="23" y2="23"></line>
+                <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"></path>
+                <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"></path>
+                <path d="M10.71 5.05A16 16 0 0 1 22.58 9"></path>
+                <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"></path>
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                <line x1="12" y1="20" x2="12.01" y2="20"></line>
+            </svg>
+        </div>
+        <p class="offline-title">Você está sem conexão</p>
+        <p class="offline-text">Não foi possível carregar esta página. Verifique sua internet e tente novamente — os dados do FinanceHub sempre precisam se conectar ao servidor.</p>
+        <button class="btn-missao-primary" onclick="location.reload()">Tentar novamente</button>
+    </div>
+</body>
+</html>

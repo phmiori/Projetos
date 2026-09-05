@@ -230,3 +230,59 @@ body.auth-pending {
     background-color: rgba(46, 125, 50, 0.12);
     color: var(--color-income);
 }
+
+/* --- Skeleton Loader: usado em qualquer valor que dependa de fetch assíncrono ---
+   Aplique a classe "is-loading" ao elemento que já contém o texto placeholder
+   (ex.: "R$ 0,00"); ao chegar o dado real, remova a classe via JS. */
+.is-loading {
+    position: relative;
+    color: transparent !important;
+    background: linear-gradient(90deg, var(--border-color) 25%, var(--bg-main) 50%, var(--border-color) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-shimmer 1.4s ease-in-out infinite;
+    border-radius: 4px;
+}
+
+@keyframes skeleton-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .is-loading { animation: none; }
+}
+
+/* --- Empty State: usado quando uma lista/tabela ainda não tem nenhum registro --- */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 10px;
+    padding: 48px 20px;
+    color: var(--text-sub);
+}
+
+.empty-state-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    color: var(--text-sub);
+}
+
+.empty-state-title {
+    color: var(--text-main);
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.empty-state-text {
+    font-size: 0.85rem;
+    max-width: 320px;
+}

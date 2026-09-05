@@ -344,6 +344,31 @@
                     </div>
                 </section>
 
+                <!-- Resumo do Dia: próximo evento, clima atual e fatura mais próxima do vencimento -->
+                <section class="today-summary" aria-label="Resumo do Dia" id="todaySummarySection">
+                    <article class="today-summary-card">
+                        <span class="today-summary-icon">📅</span>
+                        <div class="today-summary-body">
+                            <span class="today-summary-label">Próximo Evento</span>
+                            <strong class="today-summary-value is-loading" id="todaySummaryEvento">Nenhum evento próximo</strong>
+                        </div>
+                    </article>
+                    <article class="today-summary-card" id="todaySummaryClimaCard" style="display:none;">
+                        <span class="today-summary-icon" id="todaySummaryClimaIcone">🌡️</span>
+                        <div class="today-summary-body">
+                            <span class="today-summary-label">Clima Agora</span>
+                            <strong class="today-summary-value" id="todaySummaryClima">--°</strong>
+                        </div>
+                    </article>
+                    <article class="today-summary-card" id="todaySummaryFaturaCard" style="display:none;">
+                        <span class="today-summary-icon">💳</span>
+                        <div class="today-summary-body">
+                            <span class="today-summary-label">Fatura Mais Próxima</span>
+                            <strong class="today-summary-value" id="todaySummaryFatura">—</strong>
+                        </div>
+                    </article>
+                </section>
+
                 <!-- Seção de KPIs Globais do Hub -->
                 <section class="kpi-section" aria-label="Métricas Consolidadas">
                     <div class="kpi-grid">
@@ -360,7 +385,7 @@
                                 </div>
                             </div>
                             <div class="kpi-body">
-                                <div class="kpi-value text-income" id="hubLucroTotal">R$ 0,00</div>
+                                <div class="kpi-value text-income is-loading" id="hubLucroTotal">R$ 0,00</div>
                                 <div class="kpi-status-tag tag-income">
                                     <span id="hubQtdOperacoes">0 operações finalizadas</span>
                                 </div>
@@ -379,7 +404,7 @@
                                 </div>
                             </div>
                             <div class="kpi-body">
-                                <div class="kpi-value" id="hubCapitalAlocado">R$ 0,00</div>
+                                <div class="kpi-value is-loading" id="hubCapitalAlocado">R$ 0,00</div>
                                 <div class="kpi-status-tag tag-accent">
                                     <span id="hubQtdAtivos">0 ativos em andamento</span>
                                 </div>
@@ -398,7 +423,7 @@
                                 </div>
                             </div>
                             <div class="kpi-body">
-                                <div class="kpi-value text-accent" id="hubRoiMedio">0.0%</div>
+                                <div class="kpi-value text-accent is-loading" id="hubRoiMedio">0.0%</div>
                                 <div class="kpi-status-tag tag-accent">
                                     <span>Retorno médio sobre custo</span>
                                 </div>
@@ -478,15 +503,15 @@
                                     </div>
                                     <div class="mini-stat">
                                         <span class="mini-stat-label">Renda Mensal Est.</span>
-                                        <strong class="mini-stat-val text-income" id="moduleFiiRenda">R$ 0,00</strong>
+                                        <strong class="mini-stat-val text-income is-loading" id="moduleFiiRenda">R$ 0,00</strong>
                                     </div>
                                     <div class="mini-stat">
                                         <span class="mini-stat-label">Patrimônio FII</span>
-                                        <strong class="mini-stat-val" id="moduleFiiPatrimonio">R$ 0,00</strong>
+                                        <strong class="mini-stat-val is-loading" id="moduleFiiPatrimonio">R$ 0,00</strong>
                                     </div>
                                     <div class="mini-stat">
                                         <span class="mini-stat-label">Yield Médio</span>
-                                        <strong class="mini-stat-val text-accent" id="moduleFiiYield">0.00% a.m.</strong>
+                                        <strong class="mini-stat-val text-accent is-loading" id="moduleFiiYield">0.00% a.m.</strong>
                                     </div>
                                 </div>
                             </div>
@@ -529,15 +554,15 @@
                                     </div>
                                     <div class="mini-stat">
                                         <span class="mini-stat-label">Patrimônio Atual</span>
-                                        <strong class="mini-stat-val" id="moduleCriptoPatrimonio">R$ 0,00</strong>
+                                        <strong class="mini-stat-val is-loading" id="moduleCriptoPatrimonio">R$ 0,00</strong>
                                     </div>
                                     <div class="mini-stat">
                                         <span class="mini-stat-label">Custo de Aquisição</span>
-                                        <strong class="mini-stat-val" id="moduleCriptoCusto">R$ 0,00</strong>
+                                        <strong class="mini-stat-val is-loading" id="moduleCriptoCusto">R$ 0,00</strong>
                                     </div>
                                     <div class="mini-stat">
                                         <span class="mini-stat-label">Valorização</span>
-                                        <strong class="mini-stat-val text-accent" id="moduleCriptoValorizacao">0.00%</strong>
+                                        <strong class="mini-stat-val text-accent is-loading" id="moduleCriptoValorizacao">0.00%</strong>
                                     </div>
                                 </div>
                             </div>
@@ -577,15 +602,15 @@
                                     </div>
                                     <div class="mini-stat">
                                         <span class="mini-stat-label">Lucro Apurado</span>
-                                        <strong class="mini-stat-val text-income" id="moduleLeilaoLucro">R$ 0,00</strong>
+                                        <strong class="mini-stat-val text-income is-loading" id="moduleLeilaoLucro">R$ 0,00</strong>
                                     </div>
                                     <div class="mini-stat">
                                         <span class="mini-stat-label">Capital Alocado</span>
-                                        <strong class="mini-stat-val" id="moduleLeilaoCapital">R$ 0,00</strong>
+                                        <strong class="mini-stat-val is-loading" id="moduleLeilaoCapital">R$ 0,00</strong>
                                     </div>
                                     <div class="mini-stat">
                                         <span class="mini-stat-label">ROI Médio</span>
-                                        <strong class="mini-stat-val text-accent" id="moduleLeilaoRoi">0.0%</strong>
+                                        <strong class="mini-stat-val text-accent is-loading" id="moduleLeilaoRoi">0.0%</strong>
                                     </div>
                                 </div>
                             </div>
@@ -623,15 +648,15 @@
                                     </div>
                                     <div class="mini-stat">
                                         <span class="mini-stat-label">Lucro Apurado</span>
-                                        <strong class="mini-stat-val text-income" id="moduleCasasLucro">R$ 0,00</strong>
+                                        <strong class="mini-stat-val text-income is-loading" id="moduleCasasLucro">R$ 0,00</strong>
                                     </div>
                                     <div class="mini-stat">
                                         <span class="mini-stat-label">Capital Alocado</span>
-                                        <strong class="mini-stat-val" id="moduleCasasCapital">R$ 0,00</strong>
+                                        <strong class="mini-stat-val is-loading" id="moduleCasasCapital">R$ 0,00</strong>
                                     </div>
                                     <div class="mini-stat">
                                         <span class="mini-stat-label">ROI Médio</span>
-                                        <strong class="mini-stat-val text-accent" id="moduleCasasRoi">0.0%</strong>
+                                        <strong class="mini-stat-val text-accent is-loading" id="moduleCasasRoi">0.0%</strong>
                                     </div>
                                 </div>
                             </div>
@@ -669,15 +694,15 @@
                                     </div>
                                     <div class="mini-stat">
                                         <span class="mini-stat-label">Valor Investido</span>
-                                        <strong class="mini-stat-val" id="moduleCofrinhoInvestido">R$ 0,00</strong>
+                                        <strong class="mini-stat-val is-loading" id="moduleCofrinhoInvestido">R$ 0,00</strong>
                                     </div>
                                     <div class="mini-stat">
                                         <span class="mini-stat-label">Renda Diária Total</span>
-                                        <strong class="mini-stat-val text-income" id="moduleCofrinhoRendaDia">R$ 0,00</strong>
+                                        <strong class="mini-stat-val text-income is-loading" id="moduleCofrinhoRendaDia">R$ 0,00</strong>
                                     </div>
                                     <div class="mini-stat">
                                         <span class="mini-stat-label">Rendimento Acumulado</span>
-                                        <strong class="mini-stat-val text-accent" id="moduleCofrinhoRendimento">R$ 0,00</strong>
+                                        <strong class="mini-stat-val text-accent is-loading" id="moduleCofrinhoRendimento">R$ 0,00</strong>
                                     </div>
                                 </div>
                             </div>

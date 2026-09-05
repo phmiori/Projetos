@@ -7,9 +7,13 @@
  * desatualizado. Bypass total para /api/* — os dados do hub nunca podem vir de cache.
  */
 
-const CACHE_NAME = 'financehub-v2';
+const CACHE_NAME = 'financehub-v3';
+const OFFLINE_URL = '/offline.html';
 
 self.addEventListener('install', (event) => {
+    event.waitUntil(
+        caches.open(CACHE_NAME).then((cache) => cache.add(OFFLINE_URL))
+    );
     self.skipWaiting();
 });
 
@@ -37,6 +41,8 @@ self.addEventListener('fetch', (event) => {
                 caches.open(CACHE_NAME).then((cache) => cache.put(request, copia));
             }
             return response;
-        }).catch(() => caches.match(request))
+        }).catch(() =>
+            caches.match(request).then((cached) => cached || (request.mode === 'navigate' ? caches.match(OFFLINE_URL) : undefined))
+        )
     );
 });
