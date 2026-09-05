@@ -57,11 +57,7 @@
 - [x] Sino no cabeçalho com contador de não vistas (persistido no navegador) presente em todos os módulos do Hub, com dropdown de notificações recentes e link para a Central de Notificações
 - [x] Verificação automática a cada 60 segundos
 
-> ⚠️ Pendência manual: rodar `npm run prisma:push` (com o servidor Node parado, para evitar o erro EPERM de arquivo em uso no Windows) para criar as tabelas `Evento`, `LocalClimaSalvo`, `GastoCasa`, `ItemDespensa`, `TarefaCasa`, `BlocoTreino`, `ExercicioTreino`, `RegistroSaude`, `VeiculoGaragem` e `ManutencaoGaragem` no banco SQLite local antes de usar os módulos Calendário/Notificação, Locais Salvos do Clima, Finanças & Casa, Treinos & Saúde e Garagem.
->
-> ⚠️ Pendência manual: rodar `npm run prisma:push` novamente para adicionar as novas colunas `metodoPagamento`, `valorEntrada`, `valorParcelado`, `qtdParcelas` e `valorParcela` na tabela `Veiculo` (módulo Leilão) antes de cadastrar/editar veículos com o novo campo Método de Arrematação.
->
-> ⚠️ Pendência manual: rodar `npm run prisma:push` novamente (com o servidor Node parado) para adicionar a nova coluna `favoritoHeader` na tabela `LocalClimaSalvo` antes de usar o botão de "pin" que define o local exibido no Widget de Clima do Cabeçalho.
+> ✅ Migração aplicada em 05/09/2026 (`npm run prisma:push`).
 
 ## 🌤️ Módulo Clima (Hub Pessoal)
 - [x] Novo módulo dedicado: `HTML/Clima/clima.html`, `CSS/Clima/clima.css` e `JS/Clima/clima.js` — sem necessidade de tabela no banco (dados sempre em tempo real via APIs públicas e gratuitas, sem chave de API)
@@ -85,7 +81,7 @@
 - [x] Alerta de **fatura vencendo** integrado ao sino de notificações (substituindo os alertas de estoque baixo/tarefa vencida do módulo antigo)
 - [x] Integração da navegação (sidebar) no Hub Pessoal de todos os módulos
 
-> ⚠️ Pendência manual: rodar `npm run prisma:push` (com o servidor Node parado) para remover as tabelas `GastoCasa`, `ItemDespensa` e `TarefaCasa` e criar as novas tabelas `ContaBancaria`, `CartaoCredito`, `CategoriaFinanceira`, `Transacao` e `FaturaCartao` antes de usar o módulo Finanças.
+> ✅ Migração aplicada em 05/09/2026 (`npm run prisma:push`) — as 3 tabelas antigas foram removidas (a `GastoCasa` tinha 3 registros órfãos do módulo já substituído, removidos com autorização do usuário).
 
 ## 💪 Módulo Treinos & Saúde (Hub Pessoal)
 - [x] Novo módulo dedicado: `HTML/TreinosSaude/treinossaude.html`, `CSS/TreinosSaude/treinossaude.css` e `JS/TreinosSaude/treinossaude.js`, com 2 sub-abas
@@ -106,7 +102,7 @@
 - [x] **Cartão Perfil**: alteração do nome de exibição (`PUT /api/auth/perfil`) e upload de foto de perfil (redimensionada no navegador via `<canvas>` e salva como Data URL Base64 no campo `Usuario.fotoUrl`), com botão de remover foto — avatar exibido em tempo real no botão de conta do cabeçalho em todas as páginas
 - [x] **Cartão Negócios do Hub Financeiro**: lista com interruptor (toggle) para cada negócio (Fundos Imobiliários, Cripto, Carros de Leilão, Casas de Leilão, Cofrinho) — ao desativar, o modelo `ModuloOculto` grava a preferência (`POST/DELETE /api/auth/modulos-ocultos/:modulo`) e o item some da sidebar e dos cards da Visão Geral em todas as páginas (via atributo `data-modulo` + `aplicarModulosOcultos()` em `JS/Global/auth.js`)
 
-> ⚠️ Pendência manual: rodar `npm run prisma:push` (com o servidor Node parado, para evitar o erro EPERM de arquivo em uso no Windows) para criar a tabela `ModuloOculto` e a coluna `fotoUrl` em `Usuario` antes de usar o módulo Configurações.
+> ✅ Migração aplicada em 05/09/2026 (`npm run prisma:push`).
 
 ## 🛡️ Administração de Usuários (Cartão dentro de Configurações, apenas Davi_olp/PhMiori)
 - [x] Novo campo `role` no modelo `Usuario` do Prisma (`"admin"` ou `"usuario"`, padrão `"usuario"`) — coluna criada automaticamente no banco Neon ao subir o servidor (`garantirColunaRole()` em `server.js`, que também promove `Davi_olp` e `PhMiori` a `role: "admin"`)
@@ -126,7 +122,7 @@
 - [x] **Exportar/backup de dados**: `GET /api/backup/export` reúne todos os dados do usuário logado (veículos, imóveis, FIIs, watchlist, cripto, cofrinhos, eventos, casa, treinos, saúde, garagem, clima) em um único JSON para download; botão "Baixar meus dados" no Cartão "Meus Dados" em Configurações
 - [x] **PWA**: `manifest.json`, `service-worker.js` (cache-first para estáticos, bypass total para `/api/*`) e `JS/Global/pwa-register.js`, incluídos nas 14 páginas HTML; ícones placeholder gerados em `icons/icon-192.png` e `icons/icon-512.png` (trocar por uma marca real quando quiser)
 
-> ⚠️ Pendência manual: rodar `npm run prisma:push` (com o servidor Node parado) para criar as tabelas `NotificacaoDispensada` e `FiiWatchlist` no banco — até lá, as notificações de Despensa/Tarefas e a Lista de Observação de FIIs ficam inativas (sem erro para o resto do sistema, só essas duas funcionalidades não funcionam ainda).
+> ✅ Migração aplicada em 05/09/2026 (`npm run prisma:push`).
 
 ## 🎨 Rodada de Melhorias de UX (Visão Geral)
 - [x] **Skeleton loaders**: classe global `.is-loading` (`CSS/Global/global_tokens.css`) com efeito shimmer, aplicada aos valores dos KPIs e mini-stats da Visão Geral (`HTML/Index/index.html` + `JS/Index/index.js`) enquanto os dados dos módulos ainda não chegaram da API
@@ -144,9 +140,11 @@
 - [x] **Histórico de Preço de FII** (gráfico de evolução da cota): novo modelo `HistoricoPrecoFii` (1 snapshot por FII por dia). Toda atualização de cotação (botão "Atualizar Cotações", cron de alerta de 5 min, ou o novo cron diário `snapshotHistoricoTodosFiis` às 19h que atualiza TODOS os FIIs, não só os com alerta) grava o snapshot do dia. Botão "📈" na tabela da carteira abre modal com gráfico de linha (Chart.js) via `GET /api/fii/:id/historico`
 - [x] **Notificações Push reais**: infraestrutura completa de Web Push — modelos `PushSubscription` e `PushNotificacaoEnviada`, `lib/push-shared.js` (envio via `web-push`, cron a cada 5 min que notifica lembretes de evento e faturas vencendo, sem repetir a mesma notificação), rotas `GET /api/notificacoes/push/chave-publica` + `POST/DELETE /api/notificacoes/push/inscrever`, `service-worker.js` com handlers de `push`/`notificationclick`, e botão "Ativar notificações push" em Configurações. Chaves VAPID já geradas e configuradas no `.env` local (`.env.example` documentado com placeholder)
 
-> ⚠️ **Pendências manuais desta rodada** (nesta ordem):
-> 1. Parar o servidor Node local (o processo atual ficou com o Prisma Client desatualizado — `npm run prisma:generate` falhou com `EPERM` por causa disso).
-> 2. Rodar `npm run prisma:push` — cria as tabelas `HistoricoPrecoFii`, `PushSubscription`, `PushNotificacaoEnviada` e as novas colunas em `Transacao` (`recorrenciaOrigemId`, `recorrenciaProximaGerada`) e `Evento` (`serieRecorrenciaId`), além de regenerar o Prisma Client com os novos campos.
-> 3. Rodar `npm install` (já rodado nesta sessão — adiciona a dependência `web-push`) e reiniciar o servidor (`npm run dev` ou `npm start`).
-> 4. Sem esse reinício, o servidor local atual também vai continuar retornando 404 em `/api/financas/resumo` e nas novas rotas de push — não é um bug do código, é só o processo Node em memória estar desatualizado.
+> ✅ Migração aplicada em 05/09/2026 (`npm run prisma:push` + `npm install` + reinício do servidor). Todas as tabelas/colunas novas foram criadas e testadas (recorrência de transação, recorrência de evento, push, histórico de FII — ver nota abaixo sobre a rodada de testes e correção de bug).
+
+## 🐛 Correção Crítica: Módulo Finanças Não Salvava Nada (Produção e Local)
+- [x] **Causa raiz encontrada**: as tabelas do módulo Finanças (`ContaBancaria`, `CartaoCredito`, `CategoriaFinanceira`, `Transacao`, `FaturaCartao`) nunca haviam sido criadas no banco Neon — a migração ficou pendente desde a criação do módulo (antes desta sessão) e só foi notada quando o usuário tentou cadastrar uma conta em produção (Render) e recebeu "Falha ao salvar conta"
+- [x] **Corrigido**: rodado `npm run prisma:push --accept-data-loss` (com autorização do usuário, que confirmou que os 3 registros da tabela órfã `GastoCasa` podiam ser descartados) — banco local/produção (mesmo Neon) sincronizado com o schema atual
+- [x] **Testado de ponta a ponta** (via API, com limpeza dos dados de teste ao final): criação de Conta Bancária, Categoria, Transação recorrente (confirmado que a próxima ocorrência é gerada automaticamente), Evento recorrente (3 ocorrências semanais geradas corretamente), FII, Cripto, Cofrinho, Veículo de Garagem, Veículo de Leilão, Imóvel de Leilão, Bloco de Treino, Registro de Saúde, chave pública de Push, Dashboard e Backup/Export — todos funcionando
+- [x] **Corrigido `.claude/launch.json`**: `runtimeExecutable` apontava para `npm`, que não está no PATH do ambiente de execução de comandos deste projeto — trocado para o caminho completo do `node.exe` com os mesmos argumentos, para o preview local conseguir iniciar o servidor
 
