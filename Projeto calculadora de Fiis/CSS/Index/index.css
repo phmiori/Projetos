@@ -501,6 +501,7 @@
 .kpi-income { --kpi-color: var(--color-income); }
 .kpi-total { --kpi-color: var(--accent-color); }
 .kpi-roi { --kpi-color: #3B82F6; }
+.kpi-patrimonio { --kpi-color: #8B5CF6; }
 
 .kpi-header {
     display: flex;

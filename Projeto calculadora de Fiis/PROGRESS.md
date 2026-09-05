@@ -135,4 +135,5 @@
 
 > ⚠️ Nota: `GET /api/financas/resumo` retornou 404 no servidor local durante o teste desta rodada — a rota existe em `routes/financas.js`, então provavelmente é só o processo Node local (rodando via `npm run dev`) estar com uma versão antiga em memória. Reinicie o servidor local para o card de "Fatura Mais Próxima" funcionar.
 - [x] **Empty states ilustrados**: telas de "nenhum registro ainda" da Garagem (`JS/Garagem/garagem.js`), Cofrinho (`JS/Cofrinho/cofrinho.js`) e Treinos & Saúde (`JS/TreinosSaude/treinossaude.js`) agora usam o componente global `.empty-state` (ícone + título + texto + botão de ação que já abre o modal de cadastro correspondente), em vez de só uma frase
+- [x] **4º KPI "Patrimônio Líquido Total"** na Visão Geral: soma o capital já alocado em investimentos/negócios (FII, Cripto, Cofrinho, Casas e Carros de Leilão) com o saldo das Contas Bancárias e subtrai as Faturas de Cartão em aberto (via `/api/financas/resumo`), com fallback gracioso caso a rota de Finanças não responda
 

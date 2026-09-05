@@ -112,12 +112,13 @@ let chartResultadoModulos = null;
 let ultimosDadosGraficosHub = null;
 
 async function carregarDadosConsolidadosHub() {
-    const [fiiRes, criptoRes, cofrinhoRes, imoveisRes, dashboardRes] = await Promise.allSettled([
+    const [fiiRes, criptoRes, cofrinhoRes, imoveisRes, dashboardRes, financasRes] = await Promise.allSettled([
         fetch('/api/fii', { cache: 'no-store' }),
         fetch('/api/cripto'),
         fetch('/api/cofrinhos'),
         fetch('/api/imoveis'),
-        fetch('/api/dashboard')
+        fetch('/api/dashboard'),
+        fetch('/api/financas/resumo')
     ]);
 
     const lerJson = async (resultado) => {
@@ -132,6 +133,9 @@ async function carregarDadosConsolidadosHub() {
     const dashboard = dashboardRes.status === 'fulfilled' && dashboardRes.value.ok
         ? await dashboardRes.value.json().catch(() => ({}))
         : {};
+    const financas = financasRes.status === 'fulfilled' && financasRes.value.ok
+        ? await financasRes.value.json().catch(() => null)
+        : null;
 
     // FII: patrimônio de mercado, custo de aquisição e renda mensal estimada
     let fiiPatrimonio = 0, fiiInvestido = 0, fiiRendaMensal = 0;
@@ -192,8 +196,10 @@ async function carregarDadosConsolidadosHub() {
     };
     if (typeof Chart !== 'undefined') renderizarGraficosHub(ultimosDadosGraficosHub);
 
+    const capitalAlocado = fiiPatrimonio + criptoPatrimonio + cofrinhoInvestido + casasCapital + leilaoCapital;
+
     atualizarKpisGlobaisHub({
-        capitalAlocado: fiiPatrimonio + criptoPatrimonio + cofrinhoInvestido + casasCapital + leilaoCapital,
+        capitalAlocado,
         ativosEmAndamento: (Array.isArray(fundos) ? fundos.length : 0)
             + (Array.isArray(moedas) ? moedas.length : 0)
             + (Array.isArray(cofrinhos) ? cofrinhos.length : 0)
@@ -203,6 +209,38 @@ async function carregarDadosConsolidadosHub() {
         ganhoParaRoi: (fiiPatrimonio - fiiInvestido) + criptoValorizacaoRS + cofrinhoRendimento + casasLucro + leilaoLucro,
         capitalBaseRoi: fiiInvestido + criptoInvestido + cofrinhoInvestido + casasCustoTotal + leilaoCapital
     });
+
+    atualizarPatrimonioLiquidoHub(capitalAlocado, financas);
+}
+
+/**
+ * KPI 4: Patrimônio Líquido Total = capital alocado nos investimentos/negócios
+ * + saldo das contas bancárias − faturas de cartão ainda em aberto.
+ * Fica em card separado (não altera o significado do "Capital Alocado em Operações")
+ * porque mistura investimentos com contas do dia a dia.
+ */
+function atualizarPatrimonioLiquidoHub(capitalAlocado, financas) {
+    const elValor = document.getElementById('hubPatrimonioLiquido');
+    const elDetalhe = document.getElementById('hubPatrimonioDetalhe');
+    if (!elValor) return;
+
+    if (!financas) {
+        elValor.textContent = formatarMoeda(capitalAlocado);
+        elValor.classList.remove('is-loading');
+        return;
+    }
+
+    const saldoContas = Number(financas.saldoTotal) || 0;
+    const faturasEmAberto = (financas.faturasAbertas || [])
+        .reduce((soma, c) => soma + (c.fatura ? Number(c.fatura.valorTotal) || 0 : 0), 0);
+
+    const patrimonioLiquido = capitalAlocado + saldoContas - faturasEmAberto;
+
+    elValor.textContent = formatarMoeda(patrimonioLiquido);
+    elValor.classList.remove('is-loading');
+    if (elDetalhe) {
+        elDetalhe.textContent = `Contas: ${formatarMoeda(saldoContas)} · Faturas abertas: ${formatarMoeda(faturasEmAberto)}`;
+    }
 }
 
 /**
