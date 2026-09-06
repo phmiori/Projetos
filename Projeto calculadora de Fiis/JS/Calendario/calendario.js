@@ -313,7 +313,6 @@ function eventoSobrepoeDia(ev, dia) {
 function initModal() {
     const overlay = document.getElementById('modalEventoOverlay');
 
-    document.getElementById('btnNovoEventoHeader').addEventListener('click', () => openCreateModal(stateCal.currentDate));
     document.getElementById('btnNovoEventoToolbar').addEventListener('click', () => openCreateModal(stateCal.currentDate));
     document.getElementById('modalEventoClose').addEventListener('click', closeModal);
     document.getElementById('btnEventoCancelar').addEventListener('click', closeModal);
