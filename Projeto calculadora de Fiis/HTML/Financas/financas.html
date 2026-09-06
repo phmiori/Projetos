@@ -356,6 +356,13 @@
                         </svg>
                         <span>Transações</span>
                     </button>
+                    <button type="button" class="sub-nav-btn" data-subtarget="financasSubProjecao">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 3v18h18"></path>
+                            <path d="m19 9-5 5-4-4-3 3"></path>
+                        </svg>
+                        <span>Projeção</span>
+                    </button>
                     <button type="button" class="sub-nav-btn" data-subtarget="financasSubCartoes">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <rect width="20" height="14" x="2" y="5" rx="2"></rect>
@@ -534,7 +541,53 @@
                 </div>
 
                 <!-- ========================================================= -->
-                <!-- ABA 3: CARTÕES & FATURAS -->
+                <!-- ABA 3: PROJEÇÃO -->
+                <!-- ========================================================= -->
+                <div id="financasSubProjecao" class="financas-subview">
+
+                    <section class="financas-panel">
+                        <h3 class="financas-section-title">Projeção dos Próximos Meses</h3>
+                        <span class="chart-card-subtitle">Estimativa com base nas parcelas já lançadas e nos lançamentos recorrentes.</span>
+                        <div class="financas-table-scroll-wrap">
+                            <table class="financas-table">
+                                <thead>
+                                    <tr>
+                                        <th>Mês</th>
+                                        <th>Receitas Previstas</th>
+                                        <th>Despesas Previstas</th>
+                                        <th>Saldo Previsto</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="projecaoMesesTableBody">
+                                    <!-- Preenchido via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="financas-panel">
+                        <h3 class="financas-section-title">Compras Parceladas em Aberto</h3>
+                        <div class="financas-table-scroll-wrap">
+                            <table class="financas-table">
+                                <thead>
+                                    <tr>
+                                        <th>Descrição</th>
+                                        <th>Cartão</th>
+                                        <th>Próxima Parcela</th>
+                                        <th>Data</th>
+                                        <th>Valor Restante</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="projecaoParcelamentosTableBody">
+                                    <!-- Preenchido via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- ========================================================= -->
+                <!-- ABA 4: CARTÕES & FATURAS -->
                 <!-- ========================================================= -->
                 <div id="financasSubCartoes" class="financas-subview">
 

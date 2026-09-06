@@ -378,9 +378,13 @@ router.post('/transacoes', async (req, res) => {
             const ehUltima = n === numParcelas;
             const valorDaVez = ehUltima ? Math.round((valorTotal - valorParcela * (numParcelas - 1)) * 100) / 100 : valorParcela;
 
+            // Só a parcela informada pelo usuário reflete um status real (Pago/Pendente/Agendado);
+            // as parcelas seguintes ainda não venceram, então entram sempre como "Agendado",
+            // independente do status escolhido no formulário.
             const criada = await prisma.transacao.create({
                 data: {
                     ...base,
+                    status: n === parcelaInicial ? base.status : 'Agendado',
                     valor: valorDaVez,
                     data: dataParcela,
                     faturaId: fatura.id,
@@ -656,6 +660,95 @@ router.get('/resumo', async (req, res) => {
     } catch (err) {
         console.error('Erro ao calcular resumo financeiro:', err);
         res.status(500).json({ error: 'Erro ao calcular resumo financeiro' });
+    }
+});
+
+// =========================================================
+// PROJEÇÃO DE MESES FUTUROS
+// GET /api/financas/projecao
+// =========================================================
+
+router.get('/projecao', async (req, res) => {
+    try {
+        const usuarioId = req.session.userId;
+        const hoje = new Date();
+        const mesAtual = hoje.getUTCMonth() + 1;
+        const anoAtual = hoje.getUTCFullYear();
+        const QTD_MESES = 6;
+
+        const transacoes = await prisma.transacao.findMany({
+            where: { usuarioId },
+            include: { cartao: true }
+        });
+
+        // Ponta de cada corrente recorrente: última ocorrência já lançada, ainda não propagada.
+        // A partir dela, projeta ocorrências virtuais (não gravadas) para os meses seguintes.
+        const pontasRecorrentes = transacoes.filter(t => t.recorrente && !t.recorrenciaProximaGerada);
+
+        const meses = [];
+        for (let i = 0; i < QTD_MESES; i++) {
+            const ref = new Date(Date.UTC(anoAtual, mesAtual - 1 + i, 1));
+            const m = ref.getUTCMonth() + 1;
+            const a = ref.getUTCFullYear();
+
+            const doMes = transacoes.filter(t => {
+                const d = new Date(t.data);
+                return d.getUTCMonth() + 1 === m && d.getUTCFullYear() === a && t.tipo !== 'Transferencia';
+            });
+            let receitas = doMes.filter(t => t.tipo === 'Receita').reduce((s, t) => s + t.valor, 0);
+            let despesas = doMes.filter(t => t.tipo === 'Despesa').reduce((s, t) => s + t.valor, 0);
+
+            // Projeta a recorrência para meses além da ponta já lançada (i > 0 evita duplicar
+            // o mês em que a ponta já existe como transação real).
+            if (i > 0) {
+                pontasRecorrentes.forEach(t => {
+                    const dPonta = new Date(t.data);
+                    const mesesAFrente = (a - dPonta.getUTCFullYear()) * 12 + (m - (dPonta.getUTCMonth() + 1));
+                    if (mesesAFrente > 0) {
+                        if (t.tipo === 'Receita') receitas += t.valor;
+                        else if (t.tipo === 'Despesa') despesas += t.valor;
+                    }
+                });
+            }
+
+            meses.push({
+                mes: m,
+                ano: a,
+                receitas,
+                despesas,
+                saldo: receitas - despesas
+            });
+        }
+
+        // Compras parceladas ainda em aberto: agrupa as parcelas não pagas por grupoParcelamentoId.
+        const grupos = {};
+        transacoes.filter(t => t.grupoParcelamentoId).forEach(t => {
+            if (!grupos[t.grupoParcelamentoId]) grupos[t.grupoParcelamentoId] = [];
+            grupos[t.grupoParcelamentoId].push(t);
+        });
+
+        const parcelamentosAbertos = Object.values(grupos)
+            .map(parcelas => {
+                const emAberto = parcelas.filter(p => p.status !== 'Pago').sort((a, b) => a.parcelaAtual - b.parcelaAtual);
+                if (emAberto.length === 0) return null;
+                const proxima = emAberto[0];
+                return {
+                    grupoParcelamentoId: proxima.grupoParcelamentoId,
+                    descricao: proxima.descricao.replace(/\s*\(\d+\/\d+\)$/, ''),
+                    cartaoNome: proxima.cartao ? proxima.cartao.nome : null,
+                    parcelaTotal: proxima.parcelaTotal,
+                    proximaParcela: proxima.parcelaAtual,
+                    proximaData: proxima.data,
+                    valorRestante: emAberto.reduce((s, p) => s + p.valor, 0)
+                };
+            })
+            .filter(Boolean)
+            .sort((a, b) => new Date(a.proximaData) - new Date(b.proximaData));
+
+        res.json({ meses, parcelamentosAbertos });
+    } catch (err) {
+        console.error('Erro ao calcular projeção financeira:', err);
+        res.status(500).json({ error: 'Erro ao calcular projeção financeira' });
     }
 });
 

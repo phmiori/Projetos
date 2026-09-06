@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function carregarTudo() {
     await Promise.all([carregarContas(), carregarCartoes(), carregarCategorias()]);
     await Promise.all([carregarTransacoes(), carregarFaturas()]);
-    await carregarResumo();
+    await Promise.all([carregarResumo(), carregarProjecao()]);
 }
 
 // =========================================================
@@ -518,6 +518,53 @@ function pillStatusTransacao(status) {
     return 'pill-muted';
 }
 
+// =========================================================
+// PROJEÇÃO DE MESES FUTUROS
+// =========================================================
+
+async function carregarProjecao() {
+    try {
+        const resp = await fetch(`${API_BASE}/projecao`);
+        if (!resp.ok) throw new Error('Erro ao buscar projeção');
+        const dados = await resp.json();
+        renderProjecaoMeses(dados.meses);
+        renderProjecaoParcelamentos(dados.parcelamentosAbertos);
+    } catch (err) {
+        console.warn('[Finanças] Erro ao carregar projeção.', err.message);
+    }
+}
+
+function renderProjecaoMeses(meses) {
+    const tbody = document.getElementById('projecaoMesesTableBody');
+    tbody.innerHTML = (meses || []).map(m => `
+        <tr>
+            <td>${formatarCompetencia(m.mes, m.ano)}</td>
+            <td class="text-income">${formatarMoeda(m.receitas)}</td>
+            <td class="text-expense">${formatarMoeda(m.despesas)}</td>
+            <td class="${m.saldo >= 0 ? 'text-income' : 'text-expense'}">${formatarMoeda(m.saldo)}</td>
+        </tr>
+    `).join('');
+}
+
+function renderProjecaoParcelamentos(parcelamentos) {
+    const tbody = document.getElementById('projecaoParcelamentosTableBody');
+
+    if (!parcelamentos || !parcelamentos.length) {
+        tbody.innerHTML = '<tr><td colspan="5" class="financas-table-empty">Nenhuma compra parcelada em aberto.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = parcelamentos.map(p => `
+        <tr>
+            <td>${escapeHtml(p.descricao)}</td>
+            <td>${p.cartaoNome ? escapeHtml(p.cartaoNome) : '—'}</td>
+            <td>${p.proximaParcela}/${p.parcelaTotal}</td>
+            <td>${formatarDataBR(p.proximaData)}</td>
+            <td class="text-expense">${formatarMoeda(p.valorRestante)}</td>
+        </tr>
+    `).join('');
+}
+
 function initModalTransacao() {
     document.getElementById('btnNovaTransacao').addEventListener('click', () => abrirModalTransacao(null));
     document.getElementById('modalTransacaoClose').addEventListener('click', fecharModalTransacao);
@@ -680,6 +727,7 @@ async function salvarTransacao(e) {
         await carregarContas();
         await carregarCartoes();
         await carregarResumo();
+        await carregarProjecao();
     } catch (err) {
         alert(`Não foi possível salvar o lançamento. ${err.message}`);
     }
@@ -707,6 +755,7 @@ async function excluirTransacao() {
         await carregarContas();
         await carregarCartoes();
         await carregarResumo();
+        await carregarProjecao();
     } catch (err) {
         alert(`Não foi possível excluir o lançamento. ${err.message}`);
     }
@@ -855,6 +904,7 @@ async function pagarFaturaAberta() {
         await carregarTransacoes();
         await carregarContas();
         await carregarResumo();
+        await carregarProjecao();
     } catch (err) {
         alert(`Não foi possível marcar a fatura como paga. ${err.message}`);
     }
