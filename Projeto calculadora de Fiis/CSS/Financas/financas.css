@@ -507,6 +507,23 @@
     letter-spacing: 0.4px;
 }
 
+.parcelas-inline-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.parcelas-inline-group .input-missao {
+    width: 100%;
+    text-align: center;
+}
+
+.parcelas-inline-group span {
+    color: var(--text-sub);
+    font-size: 0.85rem;
+    flex-shrink: 0;
+}
+
 .checkbox-field-label {
     display: flex;
     align-items: center;

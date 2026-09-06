@@ -313,7 +313,7 @@ router.post('/transacoes', async (req, res) => {
     try {
         const {
             tipo, descricao, valor, data, formaPagamento, status, recorrente,
-            categoriaId, contaId, contaDestinoId, cartaoId, parcelaTotal
+            categoriaId, contaId, contaDestinoId, cartaoId, parcelaTotal, parcelaAtual
         } = req.body;
 
         if (!tipo || !descricao || !valor || !data) {
@@ -338,6 +338,7 @@ router.post('/transacoes', async (req, res) => {
 
         const ehCredito = base.formaPagamento === 'Crédito' && base.cartaoId;
         const numParcelas = ehCredito && parcelaTotal ? Math.max(1, Number(parcelaTotal)) : 1;
+        const parcelaInicial = ehCredito && parcelaAtual ? Math.min(Math.max(1, Number(parcelaAtual)), numParcelas) : 1;
 
         if (!ehCredito || numParcelas === 1) {
             let faturaId = null;
@@ -358,19 +359,23 @@ router.post('/transacoes', async (req, res) => {
         const cartao = await prisma.cartaoCredito.findFirst({ where: { id: base.cartaoId, usuarioId: req.session.userId } });
         if (!cartao) return res.status(404).json({ error: 'Cartão não encontrado' });
 
+        // Valor informado é o valor TOTAL da compra: cada parcela recebe uma fração igual,
+        // e a última absorve o arredondamento. Se a compra já está parcialmente paga
+        // (parcelaInicial > 1), só as parcelas de parcelaInicial em diante são lançadas —
+        // as anteriores já foram pagas antes de existir o registro no sistema.
         const valorTotal = Number(valor);
         const valorParcela = Math.round((valorTotal / numParcelas) * 100) / 100;
         const grupoParcelamentoId = crypto.randomUUID();
         const criadas = [];
 
-        for (let i = 0; i < numParcelas; i++) {
+        for (let n = parcelaInicial; n <= numParcelas; n++) {
             const dataParcela = new Date(data);
-            dataParcela.setUTCMonth(dataParcela.getUTCMonth() + i);
+            dataParcela.setUTCMonth(dataParcela.getUTCMonth() + (n - parcelaInicial));
 
             const { mes, ano } = calcularCompetencia(dataParcela, cartao.diaFechamento);
             const fatura = await obterOuCriarFatura(cartao, mes, ano);
 
-            const ehUltima = i === numParcelas - 1;
+            const ehUltima = n === numParcelas;
             const valorDaVez = ehUltima ? Math.round((valorTotal - valorParcela * (numParcelas - 1)) * 100) / 100 : valorParcela;
 
             const criada = await prisma.transacao.create({
@@ -380,9 +385,9 @@ router.post('/transacoes', async (req, res) => {
                     data: dataParcela,
                     faturaId: fatura.id,
                     grupoParcelamentoId,
-                    parcelaAtual: i + 1,
+                    parcelaAtual: n,
                     parcelaTotal: numParcelas,
-                    descricao: `${base.descricao} (${i + 1}/${numParcelas})`
+                    descricao: `${base.descricao} (${n}/${numParcelas})`
                 }
             });
             criadas.push(criada);

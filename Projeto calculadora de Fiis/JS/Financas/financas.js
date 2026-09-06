@@ -532,6 +532,7 @@ function initModalTransacao() {
         atualizarCamposTransacao();
     });
     document.getElementById('inputTransacaoForma').addEventListener('change', atualizarCamposTransacao);
+    document.getElementById('inputTransacaoParcelas').addEventListener('input', atualizarLabelValorTransacao);
 }
 
 function atualizarOpcoesFormaPagamento() {
@@ -579,6 +580,18 @@ function atualizarCamposTransacao() {
     campoCartao.style.display = ehCredito ? '' : 'none';
     campoParcelas.style.display = ehCredito ? '' : 'none';
     campoConta.style.display = ehCredito ? 'none' : '';
+
+    atualizarLabelValorTransacao();
+}
+
+function atualizarLabelValorTransacao() {
+    const ehCredito = document.getElementById('inputTransacaoTipo').value === 'Despesa'
+        && document.getElementById('inputTransacaoForma').value === 'Crédito';
+    const numParcelas = Number(document.getElementById('inputTransacaoParcelas').value) || 1;
+    const parcelado = ehCredito && numParcelas > 1;
+
+    document.getElementById('labelTransacaoValor').textContent = parcelado ? 'Valor Total da Compra (R$) *' : 'Valor (R$) *';
+    document.getElementById('hintTransacaoValor').style.display = parcelado ? '' : 'none';
 }
 
 function abrirModalTransacao(t) {
@@ -598,12 +611,13 @@ function abrirModalTransacao(t) {
     document.getElementById('inputTransacaoContaDestino').value = t && t.contaDestinoId ? t.contaDestinoId : '';
     document.getElementById('inputTransacaoCartao').value = t && t.cartaoId ? t.cartaoId : '';
     document.getElementById('inputTransacaoParcelas').value = t && t.parcelaTotal ? t.parcelaTotal : 1;
+    document.getElementById('inputTransacaoParcelaAtual').value = t && t.parcelaAtual ? t.parcelaAtual : 1;
     document.getElementById('inputTransacaoStatus').value = t ? t.status : 'Pago';
     document.getElementById('inputTransacaoRecorrente').checked = t ? !!t.recorrente : false;
 
-    // Tipo, forma de pagamento, cartão e nº de parcelas só podem ser definidos na criação —
+    // Tipo, forma de pagamento, cartão e nº/parcela atual só podem ser definidos na criação —
     // editar isso exigiria refazer o vínculo de fatura/parcelamento, fora do escopo do PUT.
-    const bloqueados = ['inputTransacaoTipo', 'inputTransacaoForma', 'inputTransacaoCartao', 'inputTransacaoParcelas'];
+    const bloqueados = ['inputTransacaoTipo', 'inputTransacaoForma', 'inputTransacaoCartao', 'inputTransacaoParcelas', 'inputTransacaoParcelaAtual'];
     bloqueados.forEach(id => { document.getElementById(id).disabled = !!t; });
 
     atualizarCamposTransacao();
@@ -640,7 +654,9 @@ async function salvarTransacao(e) {
         if (tipo === 'Despesa' && payload.formaPagamento === 'Crédito') {
             payload.cartaoId = document.getElementById('inputTransacaoCartao').value || null;
             payload.parcelaTotal = Number(document.getElementById('inputTransacaoParcelas').value) || 1;
+            payload.parcelaAtual = Number(document.getElementById('inputTransacaoParcelaAtual').value) || 1;
             if (!payload.cartaoId) return alert('Selecione o cartão utilizado na compra.');
+            if (payload.parcelaAtual > payload.parcelaTotal) return alert('A parcela atual não pode ser maior que o total de parcelas.');
         } else {
             payload.contaId = document.getElementById('inputTransacaoConta').value || null;
         }

@@ -684,8 +684,9 @@
                         </div>
 
                         <div class="input-field">
-                            <label for="inputTransacaoValor">Valor (R$) *</label>
+                            <label for="inputTransacaoValor" id="labelTransacaoValor">Valor (R$) *</label>
                             <input type="number" id="inputTransacaoValor" class="input-missao" min="0.01" step="0.01" placeholder="Ex: 150.00" required>
+                            <small class="input-hint" id="hintTransacaoValor" style="display:none;">Informe o valor TOTAL da compra. O valor de cada parcela é calculado automaticamente.</small>
                         </div>
 
                         <div class="input-field" id="campoCategoria">
@@ -722,8 +723,13 @@
                         </div>
 
                         <div class="input-field" id="campoParcelas" style="display:none;">
-                            <label for="inputTransacaoParcelas">Nº de Parcelas</label>
-                            <input type="number" id="inputTransacaoParcelas" class="input-missao" min="1" max="48" value="1">
+                            <label for="inputTransacaoParcelaAtual">Parcela Atual / Total de Parcelas</label>
+                            <div class="parcelas-inline-group">
+                                <input type="number" id="inputTransacaoParcelaAtual" class="input-missao" min="1" max="48" value="1" title="Parcela atual (ex: 3, se já pagou 2)">
+                                <span>de</span>
+                                <input type="number" id="inputTransacaoParcelas" class="input-missao" min="1" max="48" value="1" title="Total de parcelas da compra">
+                            </div>
+                            <small class="input-hint">Compra já parcialmente paga? Informe em qual parcela você está agora (ex: 3 de 6) e a data desta parcela. As parcelas anteriores não serão lançadas.</small>
                         </div>
 
                         <div class="input-field">
