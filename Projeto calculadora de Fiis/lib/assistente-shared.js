@@ -2,7 +2,7 @@ const prisma = require('./prisma');
 const { mailTransporter } = require('./fii-alerts');
 
 // Gemini (Google AI Studio) tem camada gratuita generosa — chave em https://aistudio.google.com/apikey
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = 'gemini-3.6-flash';
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 const geminiConfigurado = !!process.env.GEMINI_API_KEY;
