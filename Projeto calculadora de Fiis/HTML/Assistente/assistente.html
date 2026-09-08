@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" type="image/png" href="/icons/favicon.png">
+    <meta name="theme-color" content="#EEBB00">
+    <script defer src="/JS/Global/pwa-register.js"></script>
+    <meta name="description" content="FinanceHub - Assistente de IA: converse sobre sua carteira, receba sugestões de investimento e envie e-mails">
+    <title>Assistente de IA - FinanceHub</title>
+
+    <!-- Tokens Globais, CSS do Index (Sidebar/Header), Notificações e CSS Específico do Assistente -->
+    <link rel="stylesheet" href="../../CSS/Global/global_tokens.css">
+    <link rel="stylesheet" href="../../CSS/Index/index.css">
+    <link rel="stylesheet" href="../../CSS/Notificacao/notificacao.css">
+    <link rel="stylesheet" href="../../CSS/Assistente/assistente.css">
+    <link rel="stylesheet" href="../../CSS/Clima/clima-header-widget.css">
+
+    <!-- Guarda de Autenticação (deve carregar antes do script do módulo) -->
+    <script src="../../JS/Global/auth.js" defer></script>
+
+    <!-- Script do Sino de Notificações (compartilhado por todos os módulos) -->
+    <script src="../../JS/Notificacao/notificacao.js" defer></script>
+
+    <!-- Widget de Clima Favorito no Cabeçalho (compartilhado por todos os módulos) -->
+    <script src="../../JS/Clima/clima-codigos.js" defer></script>
+    <script src="../../JS/Clima/clima-header-widget.js" defer></script>
+
+    <!-- Script do Módulo Assistente -->
+    <script src="../../JS/Assistente/assistente.js" defer></script>
+</head>
+<body class="auth-pending">
+
+    <!-- Cabeçalho Fixo Superior (Global) -->
+    <header class="app-header">
+        <div class="header-left">
+            <button class="mobile-toggle-btn" id="mobileMenuBtn" aria-label="Abrir Menu de Navegação">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="3" y1="12" x2="21" y2="12"></line>
+                    <line x1="3" y1="6" x2="21" y2="6"></line>
+                    <line x1="3" y1="18" x2="21" y2="18"></line>
+                </svg>
+            </button>
+            <a href="../Index/index.html" class="logo-link" aria-label="FinanceHub Início">
+                <div class="logo-icon-box">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 5c-1.5-1.5-5-2-7-2-4 0-7 2-7 5 0 2 1 3 2 4l-1 4h3l1-2c1 .3 2 .5 3 .5h1v2h3v-2.3c2-.7 3-2.2 3-4.2 0-1-.3-2-1-3l1-1-1-1z"></path>
+                        <circle cx="15" cy="9" r="1"></circle>
+                    </svg>
+                </div>
+                <span class="logo-title">Assistente <span class="logo-highlight">IA</span></span>
+            </a>
+        </div>
+
+        <nav class="header-center">
+            <a href="../Index/index.html" class="nav-btn-home" id="btnInicio" aria-label="Voltar ao Início">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                </svg>
+                <span>Início</span>
+            </a>
+        </nav>
+
+        <div class="header-right">
+            <!-- Widget de Clima do Local Favorito (compartilhado por todos os módulos) -->
+            <a href="../Clima/clima.html" class="clima-header-widget" id="climaHeaderWidget" style="display:none;" aria-label="Ver clima completo">
+                <span class="clima-header-widget-icon" id="climaHeaderWidgetIcon">🌡️</span>
+                <span class="clima-header-widget-temp" id="climaHeaderWidgetTemp">--°</span>
+            </a>
+
+            <!-- Alternância de Tema Claro / Escuro -->
+            <button class="theme-toggle-switch" id="themeToggleBtn" type="button" role="switch" aria-checked="false" aria-label="Alternar entre modo claro e escuro">
+                <span class="theme-toggle-track">
+                    <span class="theme-toggle-thumb">
+                        <svg class="icon-sun" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="4"></circle>
+                            <path d="M12 2v2"></path>
+                            <path d="M12 20v2"></path>
+                            <path d="m4.93 4.93 1.41 1.41"></path>
+                            <path d="m17.66 17.66 1.41 1.41"></path>
+                            <path d="M2 12h2"></path>
+                            <path d="M20 12h2"></path>
+                            <path d="m6.34 17.66-1.41 1.41"></path>
+                            <path d="m19.07 4.93-1.41 1.41"></path>
+                        </svg>
+                        <svg class="icon-moon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+                        </svg>
+                    </span>
+                </span>
+            </button>
+
+            <!-- Sino de Notificações (compartilhado por todos os módulos) -->
+            <div class="notification-menu" id="notificationMenu">
+                <button class="notification-bell-btn" id="btnNotificacoes" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Ver notificações">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                    <span class="notification-badge" id="notificationBadge" style="display:none;">0</span>
+                </button>
+
+                <div class="notification-dropdown" id="notificationDropdown">
+                    <div class="notification-dropdown-header">
+                        <strong>Notificações</strong>
+                        <a href="../Notificacao/notificacao.html" class="notification-view-all">Ver todas</a>
+                    </div>
+                    <div class="notification-list" id="notificationList">
+                        <p class="notification-empty" id="notificationEmpty">Nenhuma notificação no momento.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Menu de Conta do Usuário -->
+            <div class="account-menu" id="accountMenu">
+                <button class="btn-login" id="btnAccount" type="button" aria-haspopup="true" aria-expanded="false">
+                    <span class="account-icon-wrap" id="accountIconWrap"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg></span>
+                    <img id="accountAvatarImg" class="account-avatar-img" alt="" style="display:none;">
+                    <span id="accountNomeLabel">Usuário</span>
+                </button>
+
+                <div class="account-dropdown" id="accountDropdown">
+                    <div class="account-dropdown-header">
+                        <strong id="accountDropdownNome">—</strong>
+                        <span id="accountDropdownUsername">—</span>
+                    </div>
+
+                    <a href="../Configuracoes/configuracoes.html" class="account-dropdown-item" id="linkConfiguracoes">Configurações</a>
+                    <a href="../Configuracoes/configuracoes.html#cardAdminUsuarios" class="account-dropdown-item" id="linkGerenciarUsuarios" style="display:none;">Gerenciar Usuários</a>
+
+                    <button type="button" class="account-dropdown-item" id="btnTogglePasswordForm">Alterar Senha</button>
+
+                    <form id="changePasswordForm" class="change-password-form" style="display:none;">
+                        <input type="password" id="inputSenhaAtual" class="input-missao" placeholder="Senha atual" required autocomplete="current-password">
+                        <input type="password" id="inputNovaSenha" class="input-missao" placeholder="Nova senha" required autocomplete="new-password">
+                        <input type="password" id="inputConfirmaSenha" class="input-missao" placeholder="Confirmar nova senha" required autocomplete="new-password">
+                        <p class="account-feedback" id="passwordFeedback" style="display:none;"></p>
+                        <button type="submit" class="btn-missao-primary account-save-btn">Salvar Nova Senha</button>
+                    </form>
+
+                    <button type="button" class="account-dropdown-item account-logout-item" id="btnLogout">Sair do Sistema</button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Layout Principal: Sidebar + Conteúdo -->
+    <div class="app-layout">
+
+        <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+        <!-- Barra Lateral Fixa -->
+        <aside class="app-sidebar" id="appSidebar" aria-label="Navegação do Módulo Assistente">
+            <div class="sidebar-header-label">
+                <span>Hub Financeiro</span>
+            </div>
+
+            <nav class="sidebar-nav sidebar-nav-compact">
+                <ul class="nav-list">
+                    <li>
+                        <a href="../Index/index.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect width="7" height="9" x="3" y="3" rx="1"></rect>
+                                    <rect width="7" height="5" x="14" y="3" rx="1"></rect>
+                                    <rect width="7" height="9" x="14" y="12" rx="1"></rect>
+                                    <rect width="7" height="5" x="3" y="16" rx="1"></rect>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Visão Geral</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="../FII/FundoImobiliário.html" class="nav-item-btn" data-modulo="fii">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
+                                    <path d="M9 22v-4h6v4"></path>
+                                    <path d="M8 6h.01"></path>
+                                    <path d="M16 6h.01"></path>
+                                    <path d="M8 10h.01"></path>
+                                    <path d="M16 10h.01"></path>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Fundos Imobiliários</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="../Cripto/cripto.html" class="nav-item-btn" data-modulo="cripto">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <path d="M9.5 8h3.2a2.3 2.3 0 0 1 0 4.6H9.5"></path>
+                                    <path d="M9.5 12.6h3.6a2.3 2.3 0 0 1 0 4.6H9.5"></path>
+                                    <path d="M9.5 8V6.5"></path>
+                                    <path d="M9.5 17.2v1.5"></path>
+                                    <path d="M12.3 8V6.5"></path>
+                                    <path d="M12.3 17.2v1.5"></path>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Cripto Moedas</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="../Leilao/leilao.html" class="nav-item-btn" data-modulo="leilao">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"></path>
+                                    <circle cx="7" cy="17" r="2"></circle>
+                                    <path d="M9 17h6"></path>
+                                    <circle cx="17" cy="17" r="2"></circle>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Carros de Leilão</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="../CasasLeilao/casasleilao.html" class="nav-item-btn" data-modulo="casasleilao">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Casas de Leilão</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="../Cofrinho/cofrinho.html" class="nav-item-btn" data-modulo="cofrinho">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M19 5c-1.5-1.5-5-2-7-2-4 0-7 2-7 5 0 2 1 3 2 4l-1 4h3l1-2c1 .3 2 .5 3 .5h1v2h3v-2.3c2-.7 3-2.2 3-4.2 0-1-.3-2-1-3l1-1-1-1z"></path>
+                                    <circle cx="15" cy="9" r="1"></circle>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Cofrinho</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer"></div>
+
+            <div class="sidebar-header-label">
+                <span>Hub Pessoal</span>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul class="nav-list">
+                    <li>
+                        <a href="../Calendario/calendario.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                    <line x1="16" y1="2" x2="16" y2="6"></line>
+                                    <line x1="8" y1="2" x2="8" y2="6"></line>
+                                    <line x1="3" y1="10" x2="21" y2="10"></line>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Calendário</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="../Clima/clima.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M17.5 19a4.5 4.5 0 1 0-1.44-8.765 5 5 0 1 0-9.302 3.717A3.5 3.5 0 0 0 7.5 19h10Z"></path>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Clima</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="../Financas/financas.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect width="20" height="14" x="2" y="5" rx="2"></rect>
+                                    <line x1="2" y1="10" x2="22" y2="10"></line>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Finanças</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="../TreinosSaude/treinossaude.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"></path>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Treinos & Saúde</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="../Garagem/garagem.html" class="nav-item-btn">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="m21 8-2 2-1.5-3.7A2 2 0 0 0 15.646 5H8.354a2 2 0 0 0-1.855 1.3L5 10 3 8"></path>
+                                    <path d="M7 14h.01"></path>
+                                    <path d="M17 14h.01"></path>
+                                    <rect width="18" height="8" x="3" y="10" rx="2"></rect>
+                                    <path d="M5 18v2"></path>
+                                    <path d="M19 18v2"></path>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Garagem</span>
+                        </a>
+                    </li>
+                    <li>
+                        <a href="assistente.html" class="nav-item-btn active" data-modulo="assistente">
+                            <span class="nav-icon">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 8V4H8"></path>
+                                    <rect width="16" height="12" x="4" y="8" rx="2"></rect>
+                                    <path d="M2 14h2"></path>
+                                    <path d="M20 14h2"></path>
+                                    <path d="M15 13v2"></path>
+                                    <path d="M9 13v2"></path>
+                                </svg>
+                            </span>
+                            <span class="nav-text">Assistente IA</span>
+                        </a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer">
+                <div class="system-status-indicator">
+                    <span class="status-dot"></span>
+                    <span class="status-text">Módulo Assistente Ativo</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Área Principal de Conteúdo -->
+        <main class="app-main" id="mainContent">
+            <div class="main-container">
+
+                <!-- Painel de Boas-Vindas do Módulo Assistente -->
+                <section class="welcome-panel" aria-labelledby="welcomeAssistenteTitle">
+                    <div class="welcome-content">
+                        <span class="welcome-badge">Chat Inteligente</span>
+                        <h1 class="welcome-title" id="welcomeAssistenteTitle">Assistente de IA</h1>
+                        <p class="welcome-subtitle">Converse sobre sua carteira, peça sugestões de investimento com base nos seus dados reais (FIIs, Cripto, Cofrinho e Finanças) e peça para enviar um resumo por e-mail.</p>
+                    </div>
+                </section>
+
+                <!-- Painel de Chat -->
+                <section class="chat-panel-card">
+                    <div class="chat-panel-header">
+                        <h3 class="panel-card-title">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 8V4H8"></path>
+                                <rect width="16" height="12" x="4" y="8" rx="2"></rect>
+                                <path d="M2 14h2"></path>
+                                <path d="M20 14h2"></path>
+                                <path d="M15 13v2"></path>
+                                <path d="M9 13v2"></path>
+                            </svg>
+                            <span>Conversa</span>
+                        </h3>
+                        <button type="button" class="btn-cancel" id="btnLimparConversa">Limpar Conversa</button>
+                    </div>
+
+                    <div class="chat-messages" id="chatMensagens">
+                        <div class="chat-empty-state" id="chatEmptyState">
+                            <p><strong>Pergunte algo para começar:</strong></p>
+                            <ul>
+                                <li>"Como está minha carteira de FIIs hoje?"</li>
+                                <li>"Onde eu poderia investir meu próximo aporte?"</li>
+                                <li>"Manda um resumo do meu patrimônio pro meu e-mail"</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <form class="chat-input-row" id="chatForm">
+                        <textarea class="chat-textarea" id="chatInput" placeholder="Digite sua pergunta para o assistente..." rows="1" required></textarea>
+                        <button type="submit" class="btn-missao-primary chat-send-btn" id="btnEnviarChat">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                        </button>
+                    </form>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+</body>
+</html>

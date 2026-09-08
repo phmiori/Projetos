@@ -14,6 +14,7 @@ const { mailTransporter, verificarAlertasPrecoFII, snapshotHistoricoTodosFiis } 
 const { verificarAlertasPrecoCripto } = require('./lib/cripto-alerts');
 const { gerarTransacoesRecorrentesPendentes } = require('./lib/financas-shared');
 const { pushConfigurado, enviarPushNotificacoesPendentes } = require('./lib/push-shared');
+const { geminiConfigurado } = require('./lib/assistente-shared');
 const { garantirColunasAlertaFII, garantirColunasAlertaCripto, garantirColunaRole, seedUsuarios } = require('./lib/bootstrap');
 
 const app = express();
@@ -76,6 +77,7 @@ app.use('/api/treinos', requireAuth, require('./routes/treinos'));
 app.use('/api/saude', requireAuth, require('./routes/saude'));
 app.use('/api/garagem', requireAuth, require('./routes/garagem'));
 app.use('/api/backup', requireAuth, require('./routes/backup'));
+app.use('/api/assistente', requireAuth, require('./routes/assistente'));
 
 // Redirecionamento da raiz para a página inicial
 app.get('/', (req, res) => {
@@ -125,6 +127,7 @@ app.listen(PORT, async () => {
     console.log(`====================================================`);
     console.log(mailTransporter ? ' Alertas de preço por e-mail: ativos (SMTP configurado)' : ' Alertas de preço por e-mail: DESATIVADOS (defina SMTP_USER e SMTP_PASS no .env)');
     console.log(pushConfigurado ? ' Notificações push: ativas (VAPID configurado)' : ' Notificações push: DESATIVADAS (defina VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no .env)');
+    console.log(geminiConfigurado ? ' Assistente de IA: ativo (GEMINI_API_KEY configurado)' : ' Assistente de IA: DESATIVADO (defina GEMINI_API_KEY no .env)');
     console.log(`====================================================`);
     await garantirColunasAlertaFII();
     await garantirColunasAlertaCripto();

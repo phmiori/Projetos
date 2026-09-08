@@ -98,9 +98,27 @@ model Usuario {
   fiiWatchlist    FiiWatchlist[]
   pushSubscriptions PushSubscription[]
   pushNotificacoesEnviadas PushNotificacaoEnviada[]
+  mensagensAssistente MensagemAssistente[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+/**
+ * Histórico de conversa do Assistente de IA (módulo Assistente): cada linha é uma mensagem,
+ * do usuário ou da IA, usada para manter contexto entre perguntas e para reexibir a conversa
+ * ao reabrir o módulo. `papel` é 'usuario' ou 'assistente'.
+ */
+model MensagemAssistente {
+  id        Int      @id @default(autoincrement())
+
+  usuarioId Int
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  papel     String
+  conteudo  String
+
+  createdAt DateTime @default(now())
 }
 
 model ModuloOculto {
