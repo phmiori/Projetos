@@ -1,19 +1,39 @@
 /**
  * JS/Assistente/assistente.js
- * Lógica do Módulo Assistente de IA: chat com histórico persistido, sugestões de investimento
- * com base nos dados reais do usuário e envio de e-mails a pedido (tudo processado no backend).
+ * Botão do Assistente de IA no cabeçalho + janela flutuante e arrastável do chat (compartilhada
+ * por todos os módulos), com histórico persistido, sugestões de investimento com base nos dados
+ * reais do usuário e envio de e-mails a pedido (tudo processado no backend).
  */
 
 const API_BASE_ASSISTENTE = '/api/assistente';
 
 let enviandoMensagem = false;
+let historicoCarregado = false;
 
 document.addEventListener('DOMContentLoaded', () => {
+    const btnAbrir = document.getElementById('btnAssistenteIA');
+    const painel = document.getElementById('assistenteFloatPanel');
+    const cabecalho = document.getElementById('assistenteFloatHeader');
+    const btnFechar = document.getElementById('btnAssistenteFechar');
+    const btnLimpar = document.getElementById('btnAssistenteLimpar');
     const chatForm = document.getElementById('chatForm');
     const chatInput = document.getElementById('chatInput');
-    const btnLimparConversa = document.getElementById('btnLimparConversa');
 
-    carregarHistorico();
+    if (!btnAbrir || !painel) return;
+
+    btnAbrir.addEventListener('click', () => {
+        const vaiAbrir = !painel.classList.contains('is-open');
+        painel.classList.toggle('is-open');
+        if (vaiAbrir && !historicoCarregado) {
+            historicoCarregado = true;
+            carregarHistorico();
+        }
+    });
+
+    btnFechar.addEventListener('click', () => painel.classList.remove('is-open'));
+    btnLimpar.addEventListener('click', limparConversa);
+
+    ativarArrastar(painel, cabecalho);
 
     chatForm.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -29,11 +49,45 @@ document.addEventListener('DOMContentLoaded', () => {
 
     chatInput.addEventListener('input', () => {
         chatInput.style.height = 'auto';
-        chatInput.style.height = Math.min(chatInput.scrollHeight, 140) + 'px';
+        chatInput.style.height = Math.min(chatInput.scrollHeight, 100) + 'px';
+    });
+});
+
+/**
+ * Arrastar a janela flutuante pela alça do cabeçalho, com Pointer Events (funciona com mouse e
+ * toque). Ao começar a arrastar, troca o posicionamento de bottom/right (padrão inicial) para
+ * top/left em pixels, e mantém a janela sempre dentro dos limites visíveis da tela.
+ */
+function ativarArrastar(painel, alca) {
+    let arrastando = false;
+    let offsetX = 0, offsetY = 0;
+
+    alca.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('.assistente-float-icon-btn')) return;
+        arrastando = true;
+        const rect = painel.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+        painel.style.left = rect.left + 'px';
+        painel.style.top = rect.top + 'px';
+        painel.style.right = 'auto';
+        painel.style.bottom = 'auto';
+        alca.setPointerCapture(e.pointerId);
     });
 
-    btnLimparConversa.addEventListener('click', limparConversa);
-});
+    alca.addEventListener('pointermove', (e) => {
+        if (!arrastando) return;
+        const largura = painel.offsetWidth;
+        const altura = painel.offsetHeight;
+        const novoX = Math.max(4, Math.min(e.clientX - offsetX, window.innerWidth - largura - 4));
+        const novoY = Math.max(4, Math.min(e.clientY - offsetY, window.innerHeight - altura - 4));
+        painel.style.left = novoX + 'px';
+        painel.style.top = novoY + 'px';
+    });
+
+    alca.addEventListener('pointerup', () => { arrastando = false; });
+    alca.addEventListener('pointercancel', () => { arrastando = false; });
+}
 
 async function carregarHistorico() {
     try {
