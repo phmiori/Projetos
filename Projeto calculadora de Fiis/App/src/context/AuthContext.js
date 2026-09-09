@@ -35,8 +35,13 @@ export function AuthProvider({ children }) {
     }
   }
 
+  async function atualizarPerfil(dados) {
+    const atualizado = await authApi.atualizarPerfil(dados);
+    setUsuario((atual) => ({ ...atual, ...atualizado }));
+  }
+
   return (
-    <AuthContext.Provider value={{ usuario, carregando, entrar, sair }}>
+    <AuthContext.Provider value={{ usuario, carregando, entrar, sair, atualizarPerfil }}>
       {children}
     </AuthContext.Provider>
   );

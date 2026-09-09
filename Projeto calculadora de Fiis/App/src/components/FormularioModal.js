@@ -11,7 +11,7 @@ import { formatarData, formatarDataHora } from '../utils/formatadores';
  * padrão do site: "Adicionar/Editar X"). Botão "Excluir" só aparece em modo de edição
  * (quando `onExcluir` é passado).
  */
-export default function FormularioModal({ visivel, titulo, subtitulo, onFechar, onSalvar, onExcluir, salvando, children }) {
+export default function FormularioModal({ visivel, titulo, subtitulo, onFechar, onSalvar, onExcluir, salvando, textoSalvar, children }) {
   return (
     <Modal visible={visivel} animationType="slide" transparent onRequestClose={onFechar}>
       <KeyboardAvoidingView style={estilos.overlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -37,7 +37,7 @@ export default function FormularioModal({ visivel, titulo, subtitulo, onFechar, 
               </TouchableOpacity>
             ) : <View />}
             <TouchableOpacity style={[estilos.btnSalvar, salvando && { opacity: 0.6 }]} onPress={onSalvar} disabled={salvando}>
-              <Text style={estilos.btnSalvarTexto}>{salvando ? 'Salvando...' : 'Salvar'}</Text>
+              <Text style={estilos.btnSalvarTexto}>{salvando ? 'Salvando...' : (textoSalvar || 'Salvar')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -55,14 +55,19 @@ export function CampoTexto({ label, obrigatorio, ...props }) {
   );
 }
 
+/**
+ * `opcoes` aceita tanto strings simples (label === value) quanto objetos
+ * { label, value } — usado quando o valor precisa ser um id numérico (ex: conta, categoria).
+ */
 export function CampoSelect({ label, valor, onValorChange, opcoes }) {
+  const normalizadas = opcoes.map((op) => (typeof op === 'object' ? op : { label: op, value: op }));
   return (
     <View style={estilos.campo}>
       <Text style={estilos.label}>{label}</Text>
       <View style={estilos.selectBox}>
         <Picker selectedValue={valor} onValueChange={onValorChange} style={{ color: colors.textMain }} dropdownIconColor={colors.textMain}>
-          {opcoes.map((op) => (
-            <Picker.Item key={op} label={op} value={op} color={Platform.OS === 'android' ? colors.textMain : undefined} />
+          {normalizadas.map((op) => (
+            <Picker.Item key={String(op.value)} label={op.label} value={op.value} color={Platform.OS === 'android' ? colors.textMain : undefined} />
           ))}
         </Picker>
       </View>
