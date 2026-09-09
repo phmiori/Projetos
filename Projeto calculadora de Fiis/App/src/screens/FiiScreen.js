@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { SafeAreaView, View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import ListaTela from '../components/ListaTela';
 import CartaoItem from '../components/CartaoItem';
 import BotaoFab from '../components/BotaoFab';
@@ -21,6 +22,10 @@ function CarteiraTab() {
   const [form, setForm] = useState(FORM_VAZIO);
   const [salvando, setSalvando] = useState(false);
   const [atualizandoCotacoes, setAtualizandoCotacoes] = useState(false);
+
+  // Reflete na hora quaisquer mudanças feitas em outra tela (ex.: o Assistente de IA
+  // adicionando um FII pelo chat), igual ao evento financehub:fii-atualizado do site.
+  useFocusEffect(useCallback(() => { carregar(); }, [carregar]));
 
   function abrirNovo() {
     setItemEditando(null);

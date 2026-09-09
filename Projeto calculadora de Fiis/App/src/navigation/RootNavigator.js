@@ -19,6 +19,7 @@ import TreinosSaudeScreen from '../screens/TreinosSaudeScreen';
 import GaragemScreen from '../screens/GaragemScreen';
 import NotificacoesScreen from '../screens/NotificacoesScreen';
 import ConfiguracoesScreen from '../screens/ConfiguracoesScreen';
+import AssistenteScreen from '../screens/AssistenteScreen';
 
 const Drawer = createDrawerNavigator();
 
@@ -83,6 +84,7 @@ function ConteudoDrawer(props) {
       ))}
 
       <View style={estilos.divisor} />
+      <ItemMenu label="Assistente IA" ativo={rotaAtual === 'Assistente'} onPress={() => props.navigation.navigate('Assistente')} />
       <ItemMenu label="Configurações" ativo={rotaAtual === 'Configuracoes'} onPress={() => props.navigation.navigate('Configuracoes')} />
 
       <TouchableOpacity style={estilos.botaoSair} onPress={sair}>
@@ -114,6 +116,7 @@ function TelasPrincipais() {
       <Drawer.Screen name="TreinosSaude" component={TreinosSaudeScreen} options={{ title: 'Treinos & Saúde' }} />
       <Drawer.Screen name="Garagem" component={GaragemScreen} options={{ title: 'Garagem' }} />
       <Drawer.Screen name="Notificacoes" component={NotificacoesScreen} options={{ title: 'Notificações' }} />
+      <Drawer.Screen name="Assistente" component={AssistenteScreen} options={{ headerShown: false }} />
       <Drawer.Screen name="Configuracoes" component={ConfiguracoesScreen} options={{ title: 'Configurações' }} />
     </Drawer.Navigator>
   );
