@@ -3,22 +3,23 @@ import { View, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 're
 import CartaoItem from '../../components/CartaoItem';
 import BotaoFab from '../../components/BotaoFab';
 import FormularioModal, { CampoTexto, CampoSelect, CampoData } from '../../components/FormularioModal';
-import { listarTransacoes, criarTransacao, atualizarTransacao, excluirTransacao, listarContas, listarCategorias } from '../../api/financas';
+import { listarTransacoes, criarTransacao, atualizarTransacao, excluirTransacao, listarContas, listarCategorias, listarCartoes } from '../../api/financas';
 import { formatarMoeda, formatarData } from '../../utils/formatadores';
 import { colors } from '../../theme/colors';
 
 const TIPOS = ['Despesa', 'Receita', 'Transferencia'];
-const FORMAS_PAGAMENTO = ['Débito', 'Pix', 'Dinheiro', 'Boleto'];
+const FORMAS_PAGAMENTO = ['Débito', 'Crédito', 'Pix', 'Dinheiro', 'Boleto'];
 const STATUS = ['Pago', 'Pendente', 'Agendado'];
 
 function formVazio() {
-  return { tipo: 'Despesa', descricao: '', valor: '', data: new Date().toISOString(), formaPagamento: 'Débito', status: 'Pago', categoriaId: null, contaId: null, contaDestinoId: null };
+  return { tipo: 'Despesa', descricao: '', valor: '', data: new Date().toISOString(), formaPagamento: 'Débito', status: 'Pago', categoriaId: null, contaId: null, contaDestinoId: null, cartaoId: null, parcelaTotal: '1' };
 }
 
 export default function TransacoesTab() {
   const [transacoes, setTransacoes] = useState([]);
   const [contas, setContas] = useState([]);
   const [categorias, setCategorias] = useState([]);
+  const [cartoes, setCartoes] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState('');
 
@@ -30,10 +31,11 @@ export default function TransacoesTab() {
   const carregar = useCallback(async () => {
     try {
       setErro('');
-      const [t, c, cat] = await Promise.all([listarTransacoes(), listarContas(), listarCategorias()]);
+      const [t, c, cat, cart] = await Promise.all([listarTransacoes(), listarContas(), listarCategorias(), listarCartoes()]);
       setTransacoes(t);
       setContas(c);
       setCategorias(cat);
+      setCartoes(cart);
     } catch (err) {
       setErro(err.message || 'Não foi possível carregar as transações.');
     } finally {
@@ -56,11 +58,13 @@ export default function TransacoesTab() {
       descricao: item.descricao,
       valor: String(item.valor),
       data: item.data,
-      formaPagamento: item.formaPagamento === 'Crédito' ? 'Débito' : item.formaPagamento,
+      formaPagamento: item.formaPagamento,
       status: item.status,
       categoriaId: item.categoriaId,
       contaId: item.contaId,
-      contaDestinoId: item.contaDestinoId
+      contaDestinoId: item.contaDestinoId,
+      cartaoId: item.cartaoId,
+      parcelaTotal: item.parcelaTotal ? String(item.parcelaTotal) : '1'
     });
     setModalAberto(true);
   }
@@ -74,6 +78,11 @@ export default function TransacoesTab() {
       Alert.alert('Campos obrigatórios', 'Transferência exige conta de origem e de destino.');
       return;
     }
+    const ehCreditoNovo = !itemEditando && form.tipo !== 'Transferencia' && form.formaPagamento === 'Crédito';
+    if (ehCreditoNovo && !form.cartaoId) {
+      Alert.alert('Campo obrigatório', 'Selecione o cartão de crédito.');
+      return;
+    }
     setSalvando(true);
     try {
       const dadosEnvio = {
@@ -85,7 +94,8 @@ export default function TransacoesTab() {
         status: form.status,
         categoriaId: form.tipo === 'Transferencia' ? null : form.categoriaId,
         contaId: form.contaId,
-        contaDestinoId: form.tipo === 'Transferencia' ? form.contaDestinoId : null
+        contaDestinoId: form.tipo === 'Transferencia' ? form.contaDestinoId : null,
+        ...(ehCreditoNovo ? { cartaoId: form.cartaoId, parcelaTotal: Number(form.parcelaTotal) || 1 } : {})
       };
       if (itemEditando) await atualizarTransacao(itemEditando.id, dadosEnvio);
       else await criarTransacao(dadosEnvio);
@@ -119,6 +129,8 @@ export default function TransacoesTab() {
 
   const opcoesContas = contas.map((c) => ({ label: c.nome, value: c.id }));
   const opcoesCategorias = categorias.filter((c) => c.tipo === form.tipo).map((c) => ({ label: c.nome, value: c.id }));
+  const opcoesCartoes = cartoes.map((c) => ({ label: c.nome, value: c.id }));
+  const mostrarParcelamento = !itemEditando && form.tipo !== 'Transferencia' && form.formaPagamento === 'Crédito';
 
   if (carregando) {
     return <ActivityIndicator color={colors.accent} size="large" style={{ marginTop: 40 }} />;
@@ -163,7 +175,18 @@ export default function TransacoesTab() {
           </>
         ) : (
           <>
-            <CampoSelect label="Forma de Pagamento" valor={form.formaPagamento} onValorChange={(v) => setForm({ ...form, formaPagamento: v })} opcoes={FORMAS_PAGAMENTO} />
+            <CampoSelect
+              label="Forma de Pagamento"
+              valor={form.formaPagamento}
+              onValorChange={(v) => setForm({ ...form, formaPagamento: v })}
+              opcoes={itemEditando ? [form.formaPagamento] : FORMAS_PAGAMENTO}
+            />
+            {mostrarParcelamento && (
+              <>
+                <CampoSelect label="Cartão" valor={form.cartaoId} onValorChange={(v) => setForm({ ...form, cartaoId: v })} opcoes={[{ label: 'Selecione...', value: null }, ...opcoesCartoes]} />
+                <CampoTexto label="Quantidade de Parcelas" placeholder="Ex: 1 (sem parcelar)" keyboardType="numeric" value={form.parcelaTotal} onChangeText={(v) => setForm({ ...form, parcelaTotal: v })} />
+              </>
+            )}
             <CampoSelect label="Categoria" valor={form.categoriaId} onValorChange={(v) => setForm({ ...form, categoriaId: v })} opcoes={[{ label: 'Sem categoria', value: null }, ...opcoesCategorias]} />
             <CampoSelect label="Conta" valor={form.contaId} onValorChange={(v) => setForm({ ...form, contaId: v })} opcoes={[{ label: 'Sem conta', value: null }, ...opcoesContas]} />
           </>
