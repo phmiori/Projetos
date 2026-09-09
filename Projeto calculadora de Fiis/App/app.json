@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "FinanceHub",
+    "slug": "financehub-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#121212"
+    },
+    "android": {
+      "package": "com.financehub.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#121212"
+      }
+    },
+    "extra": {
+      "apiUrl": "https://projetos-mnw4.onrender.com"
+    }
+  }
+}
