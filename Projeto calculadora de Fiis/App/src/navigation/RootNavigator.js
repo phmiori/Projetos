@@ -34,14 +34,15 @@ const temaEscuro = {
   }
 };
 
-// Mesmo agrupamento da sidebar do site (ver HTML/*/[modulo].html): Hub Financeiro e Hub Pessoal
+// Mesmo agrupamento da sidebar do site (ver HTML/*/[modulo].html): Hub Financeiro e Hub Pessoal.
+// `modulo` casa com a chave usada em Configurações > Negócios do Hub Financeiro (data-modulo no site).
 const HUB_FINANCEIRO = [
   { rota: 'Dashboard', label: 'Visão Geral' },
-  { rota: 'FII', label: 'Fundos Imobiliários' },
-  { rota: 'Cripto', label: 'Cripto Moedas' },
-  { rota: 'Leilao', label: 'Carros de Leilão' },
-  { rota: 'CasasLeilao', label: 'Casas de Leilão' },
-  { rota: 'Cofrinho', label: 'Cofrinho' }
+  { rota: 'FII', label: 'Fundos Imobiliários', modulo: 'fii' },
+  { rota: 'Cripto', label: 'Cripto Moedas', modulo: 'cripto' },
+  { rota: 'Leilao', label: 'Carros de Leilão', modulo: 'leilao' },
+  { rota: 'CasasLeilao', label: 'Casas de Leilão', modulo: 'casasleilao' },
+  { rota: 'Cofrinho', label: 'Cofrinho', modulo: 'cofrinho' }
 ];
 
 const HUB_PESSOAL = [
@@ -62,8 +63,9 @@ function ItemMenu({ label, ativo, onPress }) {
 }
 
 function ConteudoDrawer(props) {
-  const { usuario, sair } = useAuth();
+  const { usuario, sair, modulosOcultos } = useAuth();
   const rotaAtual = props.state.routeNames[props.state.index];
+  const hubFinanceiroVisivel = HUB_FINANCEIRO.filter((item) => !item.modulo || !modulosOcultos.includes(item.modulo));
 
   return (
     <DrawerContentScrollView {...props} contentContainerStyle={estilos.drawer}>
@@ -71,7 +73,7 @@ function ConteudoDrawer(props) {
       <Text style={estilos.usuarioLogin}>@{usuario?.username}</Text>
 
       <Text style={estilos.secaoLabel}>Hub Financeiro</Text>
-      {HUB_FINANCEIRO.map((item) => (
+      {hubFinanceiroVisivel.map((item) => (
         <ItemMenu key={item.rota} label={item.label} ativo={rotaAtual === item.rota} onPress={() => props.navigation.navigate(item.rota)} />
       ))}
 

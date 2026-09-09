@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SafeAreaView, ScrollView, View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { SafeAreaView, ScrollView, View, Text, TouchableOpacity, Switch, StyleSheet, Alert } from 'react-native';
 import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
 import FormularioModal, { CampoTexto } from '../components/FormularioModal';
@@ -14,8 +14,29 @@ function Linha({ rotulo, valor }) {
   );
 }
 
+// Mesma lista/rótulos do site (JS/Global/auth.js, `MODULOS_HUB_FINANCEIRO`)
+const NEGOCIOS_HUB = [
+  { chave: 'fii', nome: 'Fundos Imobiliários' },
+  { chave: 'cripto', nome: 'Cripto Moedas' },
+  { chave: 'leilao', nome: 'Carros de Leilão' },
+  { chave: 'casasleilao', nome: 'Casas de Leilão' },
+  { chave: 'cofrinho', nome: 'Cofrinho' }
+];
+
 export default function ConfiguracoesScreen() {
-  const { usuario, sair, atualizarPerfil } = useAuth();
+  const { usuario, sair, atualizarPerfil, modulosOcultos, alternarModulo } = useAuth();
+  const [alternandoModulo, setAlternandoModulo] = useState(null);
+
+  async function aoAlternarNegocio(chave, visivelAtual) {
+    setAlternandoModulo(chave);
+    try {
+      await alternarModulo(chave, visivelAtual);
+    } catch (err) {
+      Alert.alert('Erro', err.message || 'Não foi possível salvar a preferência.');
+    } finally {
+      setAlternandoModulo(null);
+    }
+  }
 
   const [modalPerfilAberto, setModalPerfilAberto] = useState(false);
   const [formPerfil, setFormPerfil] = useState({ nome: usuario?.nome || '', email: usuario?.email || '' });
@@ -84,6 +105,25 @@ export default function ConfiguracoesScreen() {
           <Linha rotulo="Cargo" valor={usuario?.role === 'admin' ? 'Administrador' : 'Usuário'} />
         </View>
 
+        <Text style={estilos.secaoTitulo}>Negócios do Hub Financeiro</Text>
+        <Text style={estilos.secaoSubtitulo}>Desative para esconder um negócio do menu lateral</Text>
+        <View style={estilos.card}>
+          {NEGOCIOS_HUB.map((negocio) => {
+            const visivel = !modulosOcultos.includes(negocio.chave);
+            return (
+              <View key={negocio.chave} style={estilos.linha}>
+                <Text style={estilos.rotulo}>{negocio.nome}</Text>
+                <Switch
+                  value={visivel}
+                  disabled={alternandoModulo === negocio.chave}
+                  onValueChange={() => aoAlternarNegocio(negocio.chave, visivel)}
+                  trackColor={{ false: colors.border, true: colors.accent }}
+                />
+              </View>
+            );
+          })}
+        </View>
+
         <TouchableOpacity style={estilos.botaoSecundario} onPress={abrirEdicaoPerfil}>
           <Text style={estilos.botaoSecundarioTexto}>Editar Perfil</Text>
         </TouchableOpacity>
@@ -126,6 +166,8 @@ export default function ConfiguracoesScreen() {
 const estilos = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgMain, padding: 16 },
   titulo: { color: colors.textMain, fontSize: 22, fontWeight: '800', marginBottom: 16 },
+  secaoTitulo: { color: colors.textMain, fontWeight: '700', fontSize: 15, marginBottom: 2 },
+  secaoSubtitulo: { color: colors.textSub, fontSize: 12, marginBottom: 10 },
   card: {
     backgroundColor: colors.bgSurface,
     borderColor: colors.border,

@@ -22,3 +22,15 @@ export function atualizarPerfil(dados) {
 export function alterarSenha(senhaAtual, novaSenha) {
   return apiFetch('/api/auth/senha', { method: 'PUT', body: JSON.stringify({ senhaAtual, novaSenha }) });
 }
+
+export function listarModulosOcultos() {
+  return apiFetch('/api/auth/modulos-ocultos');
+}
+
+export function ocultarModulo(modulo) {
+  return apiFetch(`/api/auth/modulos-ocultos/${modulo}`, { method: 'POST' });
+}
+
+export function reexibirModulo(modulo) {
+  return apiFetch(`/api/auth/modulos-ocultos/${modulo}`, { method: 'DELETE' });
+}
