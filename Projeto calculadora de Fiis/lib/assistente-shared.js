@@ -219,6 +219,7 @@ async function chamarAssistenteIA({ usuarioId, emailUsuario, historico, mensagem
         let resultadoFuncao;
         let emailEnviado = null;
         let fiiAdicionado = null;
+        let respostaPadrao;
 
         if (chamadaFuncao.name === 'enviar_email') {
             const { destinatario, assunto, corpo } = chamadaFuncao.args || {};
@@ -242,29 +243,44 @@ async function chamarAssistenteIA({ usuarioId, emailUsuario, historico, mensagem
                     resultadoFuncao = { sucesso: false, motivo: e.message };
                 }
             }
+            respostaPadrao = resultadoFuncao.sucesso
+                ? `E-mail enviado para ${alvo}.`
+                : `Não consegui enviar o e-mail: ${resultadoFuncao.motivo}`;
         } else if (chamadaFuncao.name === 'adicionar_fii') {
             resultadoFuncao = await executarAdicionarFii(usuarioId, chamadaFuncao.args || {});
-            if (resultadoFuncao.sucesso) fiiAdicionado = resultadoFuncao;
+            if (resultadoFuncao.sucesso) {
+                fiiAdicionado = resultadoFuncao;
+                const acao = resultadoFuncao.tipo === 'aporte' ? 'atualizado' : 'adicionado';
+                respostaPadrao = `${resultadoFuncao.ticker} ${acao}: ${resultadoFuncao.cotas} cotas, preço médio R$ ${resultadoFuncao.precoMedio.toFixed(2)}.`;
+            } else {
+                respostaPadrao = `Não consegui concluir: ${resultadoFuncao.motivo}`;
+            }
         } else {
             resultadoFuncao = { sucesso: false, motivo: 'Ferramenta desconhecida.' };
+            respostaPadrao = 'Não reconheci essa ação.';
         }
 
-        const segundaResposta = await chamarGemini({
-            systemInstruction,
-            contents: [
-                ...contents,
-                { role: 'model', parts: [{ functionCall: chamadaFuncao }] },
-                { role: 'user', parts: [{ functionResponse: { name: chamadaFuncao.name, response: resultadoFuncao } }] }
-            ],
-            tools: [FERRAMENTAS_DISPONIVEIS]
-        });
+        // A ação (e-mail enviado, FII adicionado) já foi executada acima — se esta segunda
+        // chamada (só para gerar o texto de confirmação em linguagem natural) falhar, a
+        // resposta cai para o texto padrão em vez de esconder o resultado real por trás de
+        // um erro genérico.
+        let textoFinal = null;
+        try {
+            const segundaResposta = await chamarGemini({
+                systemInstruction,
+                contents: [
+                    ...contents,
+                    { role: 'model', parts: [{ functionCall: chamadaFuncao }] },
+                    { role: 'user', parts: [{ functionResponse: { name: chamadaFuncao.name, response: resultadoFuncao } }] }
+                ],
+                tools: [FERRAMENTAS_DISPONIVEIS]
+            });
+            textoFinal = segundaResposta?.candidates?.[0]?.content?.parts?.find(p => p.text)?.text;
+        } catch (e) {
+            console.error('[Assistente] Falha na segunda chamada ao Gemini (texto de confirmação), usando resposta padrão:', e.message);
+        }
 
-        const textoFinal = segundaResposta?.candidates?.[0]?.content?.parts?.find(p => p.text)?.text;
-        return {
-            resposta: textoFinal || (resultadoFuncao.sucesso ? 'Feito.' : `Não consegui concluir: ${resultadoFuncao.motivo}`),
-            emailEnviado,
-            fiiAdicionado
-        };
+        return { resposta: textoFinal || respostaPadrao, emailEnviado, fiiAdicionado };
     }
 
     const texto = parts.find(p => p.text)?.text;
