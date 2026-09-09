@@ -8,6 +8,7 @@ import AdminUsuariosTab from './configuracoes/AdminUsuariosTab';
 import { exportarBackup } from '../api/backup';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { ativarNotificacoesPush } from '../utils/pushNotifications';
 
 function Linha({ rotulo, valor }) {
   return (
@@ -31,6 +32,23 @@ export default function ConfiguracoesScreen() {
   const { usuario, sair, atualizarPerfil, modulosOcultos, alternarModulo } = useAuth();
   const [alternandoModulo, setAlternandoModulo] = useState(null);
   const [baixando, setBaixando] = useState(false);
+  const [ativandoPush, setAtivandoPush] = useState(false);
+
+  async function aoAtivarPush() {
+    setAtivandoPush(true);
+    try {
+      await ativarNotificacoesPush();
+      Alert.alert('Notificações ativadas', 'Você vai receber lembretes de evento e avisos de fatura vencendo direto no celular.');
+    } catch (err) {
+      Alert.alert(
+        'Não foi possível ativar',
+        (err.message || 'Erro desconhecido.') +
+          '\n\nNotificações push só funcionam num app instalado via EAS Build — não funcionam dentro do Expo Go.'
+      );
+    } finally {
+      setAtivandoPush(false);
+    }
+  }
 
   async function baixarMeusDados() {
     setBaixando(true);
@@ -154,6 +172,11 @@ export default function ConfiguracoesScreen() {
 
         <TouchableOpacity style={estilos.botaoSecundario} onPress={abrirTrocaSenha}>
           <Text style={estilos.botaoSecundarioTexto}>Alterar Senha</Text>
+        </TouchableOpacity>
+
+        <Text style={estilos.secaoTitulo}>Notificações</Text>
+        <TouchableOpacity style={estilos.botaoSecundario} onPress={aoAtivarPush} disabled={ativandoPush}>
+          <Text style={estilos.botaoSecundarioTexto}>{ativandoPush ? 'Ativando...' : 'Ativar Notificações Push'}</Text>
         </TouchableOpacity>
 
         <Text style={estilos.secaoTitulo}>Meus Dados</Text>

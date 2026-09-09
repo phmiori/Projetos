@@ -18,6 +18,15 @@
         "backgroundColor": "#121212"
       }
     },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#EEBB00"
+        }
+      ]
+    ],
     "extra": {
       "apiUrl": "https://projetos-mnw4.onrender.com"
     }
