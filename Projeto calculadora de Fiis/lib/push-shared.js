@@ -47,20 +47,59 @@ async function enviarPushParaUsuario(usuarioId, payload) {
 }
 
 /**
+ * Envia um push pelo serviço do Expo (https://exp.host) para todos os tokens registrados pelo
+ * app mobile (pasta App/) deste usuário — equivalente ao enviarPushParaUsuario, mas pro app
+ * nativo em vez do navegador. Sem chave/VAPID: o serviço do Expo é gratuito e não precisa de
+ * configuração extra no .env. Remove tokens que o Expo reporta como não registrados/inválidos.
+ */
+async function enviarPushExpoParaUsuario(usuarioId, payload) {
+    const tokens = await prisma.pushTokenExpo.findMany({ where: { usuarioId } });
+    if (!tokens.length) return;
+
+    try {
+        const resposta = await fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify(tokens.map(t => ({
+                to: t.token,
+                title: payload.title,
+                body: payload.body,
+                data: { url: payload.url }
+            })))
+        });
+
+        const resultado = await resposta.json().catch(() => null);
+        const tickets = resultado?.data || [];
+
+        await Promise.all(tickets.map(async (ticket, i) => {
+            if (ticket.status === 'error' && ticket.details?.error === 'DeviceNotRegistered') {
+                await prisma.pushTokenExpo.delete({ where: { id: tokens[i].id } }).catch(() => {});
+            }
+        }));
+    } catch (err) {
+        console.error(`[Push Expo] Falha ao enviar para usuário ${usuarioId}:`, err.message);
+    }
+}
+
+/**
  * Job agendado: para cada usuário com ao menos um dispositivo inscrito, verifica lembretes de
  * evento e faturas vencendo (mesmas fontes do sino de notificações) e envia push só das que
  * ainda não foram enviadas (controlado por PushNotificacaoEnviada), evitando reenvio repetido.
  */
 async function enviarPushNotificacoesPendentes() {
-    if (!pushConfigurado) return;
-
     try {
-        const usuariosComPush = await prisma.pushSubscription.findMany({
-            select: { usuarioId: true },
-            distinct: ['usuarioId']
-        });
+        // Web Push (VAPID) só entra na lista se estiver configurado no .env — o push do app
+        // mobile (Expo) não depende de nenhuma configuração extra, então sempre é considerado.
+        const [usuariosComPushWeb, usuariosComPushExpo] = await Promise.all([
+            pushConfigurado
+                ? prisma.pushSubscription.findMany({ select: { usuarioId: true }, distinct: ['usuarioId'] })
+                : [],
+            prisma.pushTokenExpo.findMany({ select: { usuarioId: true }, distinct: ['usuarioId'] }).catch(() => [])
+        ]);
+        const usuarioIds = [...new Set([...usuariosComPushWeb, ...usuariosComPushExpo].map(u => u.usuarioId))];
+        if (!usuarioIds.length) return;
 
-        for (const { usuarioId } of usuariosComPush) {
+        for (const usuarioId of usuarioIds) {
             try {
                 const [eventos, faturas] = await Promise.all([
                     buscarEventosComNotificacaoAtiva(usuarioId),
@@ -92,7 +131,10 @@ async function enviarPushNotificacoesPendentes() {
 
                 for (const c of candidatos) {
                     if (enviadasSet.has(`${c.tipo}-${c.entidadeId}`)) continue;
-                    await enviarPushParaUsuario(usuarioId, { title: c.title, body: c.body, url: c.url });
+                    await Promise.all([
+                        enviarPushParaUsuario(usuarioId, { title: c.title, body: c.body, url: c.url }),
+                        enviarPushExpoParaUsuario(usuarioId, { title: c.title, body: c.body, url: c.url })
+                    ]);
                     await prisma.pushNotificacaoEnviada.create({
                         data: { usuarioId, tipo: c.tipo, entidadeId: c.entidadeId }
                     }).catch(() => {});
@@ -110,5 +152,6 @@ module.exports = {
     pushConfigurado,
     VAPID_PUBLIC_KEY,
     enviarPushParaUsuario,
+    enviarPushExpoParaUsuario,
     enviarPushNotificacoesPendentes
 };

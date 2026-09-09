@@ -57,6 +57,47 @@ router.delete('/push/inscrever', async (req, res) => {
     }
 });
 
+/**
+ * ROTA: Registrar Token de Push do Expo (app mobile)
+ * POST /api/notificacoes/push-expo/inscrever
+ */
+router.post('/push-expo/inscrever', async (req, res) => {
+    try {
+        const { token } = req.body;
+        if (!token) {
+            return res.status(400).json({ error: 'Token de push inválido' });
+        }
+
+        await prisma.pushTokenExpo.upsert({
+            where: { token },
+            update: { usuarioId: req.session.userId },
+            create: { usuarioId: req.session.userId, token }
+        });
+
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Erro ao salvar token de push do Expo:', err);
+        res.status(500).json({ error: 'Erro ao salvar token de push' });
+    }
+});
+
+/**
+ * ROTA: Remover Token de Push do Expo (app mobile)
+ * DELETE /api/notificacoes/push-expo/inscrever
+ */
+router.delete('/push-expo/inscrever', async (req, res) => {
+    try {
+        const { token } = req.body;
+        if (token) {
+            await prisma.pushTokenExpo.deleteMany({ where: { token, usuarioId: req.session.userId } });
+        }
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Erro ao remover token de push do Expo:', err);
+        res.status(500).json({ error: 'Erro ao remover token de push' });
+    }
+});
+
 // Cor de alerta reaproveitada de CSS/Global/global_tokens.css (--color-expense), usada como
 // dado (assim como Evento.cor já é um hex salvo no banco), não como CSS hardcoded.
 const COR_ALERTA = '#D32F2F';
