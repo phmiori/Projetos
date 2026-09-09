@@ -476,9 +476,17 @@ async function handleExcluirEvento() {
 
     let excluirFuturas = false;
     if (stateCal.editSerieId) {
-        excluirFuturas = confirm('Este evento faz parte de uma série recorrente.\n\nOK = excluir esta e as próximas ocorrências.\nCancelar = excluir somente esta.');
-        if (!excluirFuturas && !confirm('Excluir apenas este evento?')) return;
-    } else if (!confirm('Deseja realmente excluir este evento?')) {
+        const escolha = await confirmarAcao('Este evento faz parte de uma série recorrente. O que deseja excluir?', {
+            titulo: 'Excluir evento recorrente',
+            botoes: [
+                { valor: 'cancelar', texto: 'Cancelar' },
+                { valor: 'uma', texto: 'Somente esta' },
+                { valor: 'futuras', texto: 'Esta e as futuras', primario: true, perigo: true }
+            ]
+        });
+        if (escolha === 'cancelar' || escolha === null) return;
+        excluirFuturas = escolha === 'futuras';
+    } else if (!(await confirmarAcao('Deseja realmente excluir este evento?', { perigo: true }))) {
         return;
     }
 

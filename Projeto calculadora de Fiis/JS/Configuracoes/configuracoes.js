@@ -420,7 +420,7 @@ function criarLinhaUsuario(usuario, idUsuarioLogado) {
 }
 
 async function excluirUsuario(usuario, idUsuarioLogado) {
-    const confirmado = confirm(`Excluir o usuário "${usuario.nome}" (@${usuario.username})?\n\nTodos os dados cadastrados por ele (veículos, imóveis, investimentos, etc.) serão apagados permanentemente.`);
+    const confirmado = await confirmarAcao(`Excluir o usuário "${usuario.nome}" (@${usuario.username})?\n\nTodos os dados cadastrados por ele (veículos, imóveis, investimentos, etc.) serão apagados permanentemente.`, { titulo: 'Excluir usuário', perigo: true });
     if (!confirmado) return;
 
     try {

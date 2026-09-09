@@ -507,7 +507,7 @@ async function excluirCofrinho(id) {
     const item = stateCofrinho.cofrinhos.find(i => String(i.id) === String(id));
     if (!item) return;
 
-    if (!confirm(`Tem certeza que deseja remover o cofrinho "${item.nome}"?`)) return;
+    if (!(await confirmarAcao(`Tem certeza que deseja remover o cofrinho "${item.nome}"?`, { perigo: true }))) return;
 
     try {
         const response = await fetch(`${API_BASE}/cofrinhos/${id}`, { method: 'DELETE' });

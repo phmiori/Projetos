@@ -118,6 +118,14 @@
 - [x] Testado localmente contra o banco Neon: gravação, leitura e expiração de sessão na tabela `sessao_usuario` funcionando corretamente
 - [x] Nova dependência: `connect-pg-simple` (`package.json`)
 
+## 💬 Modal de Confirmação Componentizado (substitui o `confirm()` nativo em todo o app)
+- [x] Novo componente global: `CSS/Global/confirm-dialog.css` + `JS/Global/confirm-dialog.js`, injetado dinamicamente no DOM (sem precisar de markup fixo em cada página) — função `confirmarAcao(mensagem, opcoes)`, retorna uma Promise, com a identidade visual do FinanceHub (Modo Claro/Escuro automático)
+- [x] Suporta o caso simples de 2 botões (Cancelar/Confirmar, com variante `perigo` em vermelho para ações destrutivas) e também decisões de múltiplos caminhos via `botoes: [...]` customizados (ex.: excluir evento recorrente "esta e as futuras" / "somente esta" / "cancelar")
+- [x] Fecha por clique no botão, no backdrop ou tecla Esc
+- [x] Substituídos **todos os 25 usos** de `window.confirm()` do app (FII, Cripto, Cofrinho, Financas, Calendário, Garagem, Carros/Casas de Leilão, Treinos & Saúde, Notificação, Configurações e Assistente de IA) por `await confirmarAcao(...)`
+- [x] Testado no navegador: diálogo de 2 botões, diálogo de 3 botões (recorrência) e fechamento por Esc — todos resolvendo o valor correto
+- [x] Incluído (CSS + JS) no cabeçalho de todos os módulos, junto com o Assistente de IA
+
 ## 🔧 Segurança, Refatoração, Testes e Melhorias Transversais
 - [x] **Segurança**: `helmet` (com CSP customizada para liberar o Chart.js via CDN), `express-rate-limit` no login (10 tentativas / 15 min), cookie de sessão `secure` condicionado a `NODE_ENV=production`, aviso no console se `SESSION_SECRET` não estiver configurado em produção
 - [x] **Correção de doc**: `README.md` e `ARCHITECTURE.md` atualizados para refletir a stack real (Node/Express + Prisma/PostgreSQL), que havia divergido do texto original (SQLite/PHP)

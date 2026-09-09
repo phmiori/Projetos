@@ -617,7 +617,7 @@ async function confirmarExclusao(id) {
     const imovel = state.imoveis.find(im => String(im.id) === String(id));
     if (!imovel) return;
 
-    const confirmou = confirm(`Tem certeza que deseja excluir o imóvel "${imovel.endereco}"?`);
+    const confirmou = await confirmarAcao(`Tem certeza que deseja excluir o imóvel "${imovel.endereco}"?`, { perigo: true });
     if (!confirmou) return;
 
     try {
@@ -956,7 +956,7 @@ function vincularEventosExclusaoGasto(imovelId) {
             const gastoId = btn.getAttribute('data-gasto-id');
             if (!gastoId) return;
 
-            if (!confirm('Deseja realmente remover este lançamento de gasto?')) return;
+            if (!(await confirmarAcao('Deseja realmente remover este lançamento de gasto?', { perigo: true }))) return;
 
             try {
                 if (state.modoApi) {

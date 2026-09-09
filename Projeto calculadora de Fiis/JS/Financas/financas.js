@@ -165,7 +165,7 @@ async function salvarConta(e) {
 
 async function excluirConta() {
     if (!stateFin.editContaId) return;
-    if (!confirm('Excluir esta conta? Transações vinculadas perdem a referência à conta.')) return;
+    if (!(await confirmarAcao('Excluir esta conta? Transações vinculadas perdem a referência à conta.', { perigo: true }))) return;
 
     try {
         const resp = await fetch(`${API_BASE}/contas/${stateFin.editContaId}`, { method: 'DELETE' });
@@ -302,7 +302,7 @@ async function salvarCartao(e) {
 
 async function excluirCartao() {
     if (!stateFin.editCartaoId) return;
-    if (!confirm('Excluir este cartão e todas as suas faturas?')) return;
+    if (!(await confirmarAcao('Excluir este cartão e todas as suas faturas?', { perigo: true }))) return;
 
     try {
         const resp = await fetch(`${API_BASE}/cartoes/${stateFin.editCartaoId}`, { method: 'DELETE' });
@@ -427,7 +427,7 @@ async function salvarCategoria(e) {
 
 async function excluirCategoria() {
     if (!stateFin.editCategoriaId) return;
-    if (!confirm('Excluir esta categoria?')) return;
+    if (!(await confirmarAcao('Excluir esta categoria?', { perigo: true }))) return;
 
     try {
         const resp = await fetch(`${API_BASE}/categorias/${stateFin.editCategoriaId}`, { method: 'DELETE' });
@@ -739,8 +739,13 @@ async function excluirTransacao() {
     const transacao = stateFin.transacoes.find(t => t.id === stateFin.editTransacaoId);
     let todasParcelas = false;
     if (transacao && transacao.grupoParcelamentoId) {
-        todasParcelas = confirm('Esta é uma parcela de uma compra parcelada. Excluir TODAS as parcelas dessa compra? Cancelar exclui apenas esta parcela.');
-    } else if (!confirm('Deseja realmente excluir este lançamento?')) {
+        todasParcelas = await confirmarAcao('Esta é uma parcela de uma compra parcelada. O que deseja excluir?', {
+            titulo: 'Excluir lançamento parcelado',
+            textoConfirmar: 'Excluir todas as parcelas',
+            textoCancelar: 'Somente esta parcela',
+            perigo: true
+        });
+    } else if (!(await confirmarAcao('Deseja realmente excluir este lançamento?', { perigo: true }))) {
         return;
     }
 
@@ -889,7 +894,10 @@ function fecharModalFatura() {
 
 async function pagarFaturaAberta() {
     if (!stateFin.faturaAbertaId) return;
-    const debitar = confirm('Marcar fatura como paga. Deseja lançar automaticamente uma despesa em débito na conta vinculada ao cartão?');
+    const debitar = await confirmarAcao('Marcar fatura como paga. Deseja lançar automaticamente uma despesa em débito na conta vinculada ao cartão?', {
+        textoConfirmar: 'Sim, lançar despesa',
+        textoCancelar: 'Não lançar'
+    });
 
     try {
         const resp = await fetch(`${API_BASE}/faturas/${stateFin.faturaAbertaId}/pagar`, {

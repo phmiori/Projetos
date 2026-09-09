@@ -152,7 +152,7 @@ async function enviarMensagem() {
 }
 
 async function limparConversa() {
-    if (!confirm('Tem certeza que deseja apagar toda a conversa com o assistente?')) return;
+    if (!(await confirmarAcao('Tem certeza que deseja apagar toda a conversa com o assistente?', { perigo: true }))) return;
 
     try {
         await fetch(`${API_BASE_ASSISTENTE}/historico`, { method: 'DELETE' });

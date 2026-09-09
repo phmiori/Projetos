@@ -292,7 +292,7 @@ async function salvarBloco(e) {
 
 async function excluirBloco() {
     if (!stateTS.editBlocoId) return;
-    if (!confirm('Excluir este bloco e todos os seus exercícios?')) return;
+    if (!(await confirmarAcao('Excluir este bloco e todos os seus exercícios?', { perigo: true }))) return;
 
     try {
         const resp = await fetch(`${API_BASE}/treinos/blocos/${stateTS.editBlocoId}`, { method: 'DELETE' });
@@ -365,7 +365,7 @@ async function salvarExercicio(e) {
 
 async function excluirExercicio() {
     if (!stateTS.editExercicioId) return;
-    if (!confirm('Deseja realmente excluir este exercício?')) return;
+    if (!(await confirmarAcao('Deseja realmente excluir este exercício?', { perigo: true }))) return;
 
     try {
         const resp = await fetch(`${API_BASE}/treinos/exercicios/${stateTS.editExercicioId}`, { method: 'DELETE' });
@@ -518,7 +518,7 @@ async function salvarRegistroSaude(e) {
 
 async function excluirRegistroSaude() {
     if (!stateTS.editSaudeId) return;
-    if (!confirm('Deseja realmente excluir este registro?')) return;
+    if (!(await confirmarAcao('Deseja realmente excluir este registro?', { perigo: true }))) return;
 
     try {
         const resp = await fetch(`${API_BASE}/saude/registros/${stateTS.editSaudeId}`, { method: 'DELETE' });
