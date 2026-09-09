@@ -1,39 +1,15 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React from 'react';
 import { SafeAreaView, Text, FlatList, ActivityIndicator, RefreshControl, StyleSheet } from 'react-native';
 import { colors } from '../theme/colors';
+import { useLista } from '../hooks/useLista';
 
 /**
  * src/components/ListaTela.js
  * Casca comum pras telas de lista (busca a API, mostra loading/erro/vazio, pull-to-refresh),
  * pra cada módulo (Cripto, Cofrinho, Garagem, etc.) não repetir esse código.
  */
-export default function ListaTela({ titulo, buscar, keyExtractor, renderItem, vazio, cabecalho }) {
-  const [dados, setDados] = useState([]);
-  const [carregando, setCarregando] = useState(true);
-  const [atualizando, setAtualizando] = useState(false);
-  const [erro, setErro] = useState('');
-
-  const carregar = useCallback(async () => {
-    try {
-      setErro('');
-      const resultado = await buscar();
-      setDados(Array.isArray(resultado) ? resultado : []);
-    } catch (err) {
-      setErro(err.message || 'Não foi possível carregar os dados.');
-    } finally {
-      setCarregando(false);
-      setAtualizando(false);
-    }
-  }, [buscar]);
-
-  useEffect(() => {
-    carregar();
-  }, [carregar]);
-
-  function aoAtualizar() {
-    setAtualizando(true);
-    carregar();
-  }
+export default function ListaTela({ titulo, buscar, keyExtractor, renderItem, vazio, cabecalho, fab }) {
+  const { dados, carregando, atualizando, erro, aoAtualizar } = useLista(buscar);
 
   if (carregando) {
     return (
@@ -54,8 +30,9 @@ export default function ListaTela({ titulo, buscar, keyExtractor, renderItem, va
         refreshControl={<RefreshControl refreshing={atualizando} onRefresh={aoAtualizar} tintColor={colors.accent} />}
         ListEmptyComponent={<Text style={estilos.vazio}>{vazio || 'Nada por aqui ainda.'}</Text>}
         renderItem={renderItem}
-        contentContainerStyle={dados.length === 0 ? estilos.vazioContainer : undefined}
+        contentContainerStyle={dados.length === 0 ? estilos.vazioContainer : { paddingBottom: 90 }}
       />
+      {fab}
     </SafeAreaView>
   );
 }

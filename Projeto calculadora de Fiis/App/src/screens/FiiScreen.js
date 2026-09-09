@@ -1,133 +1,160 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, RefreshControl, ActivityIndicator, SafeAreaView } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import ListaTela from '../components/ListaTela';
+import CartaoItem from '../components/CartaoItem';
+import BotaoFab from '../components/BotaoFab';
+import FormularioModal, { CampoTexto, CampoSelect } from '../components/FormularioModal';
+import { listarCarteiraFii, criarFii, atualizarFii, excluirFii, atualizarCotacoesFii } from '../api/fii';
+import { formatarMoeda } from '../utils/formatadores';
 import { colors } from '../theme/colors';
-import { listarCarteiraFii } from '../api/fii';
+import { useLista } from '../hooks/useLista';
 
-function formatarMoeda(valor) {
-  return (Number(valor) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
+const SEGMENTOS = ['Papel / CRI', 'Fiagro', 'Logística', 'Shoppings', 'Lajes Corporativas', 'Híbrido', 'FoF', 'Outro'];
+
+const FORM_VAZIO = { ticker: '', segmento: 'Papel / CRI', cotas: '', precoMedio: '', ultimoDividendo: '', observacoes: '' };
 
 export default function FiiScreen() {
-  const [fundos, setFundos] = useState([]);
-  const [carregando, setCarregando] = useState(true);
-  const [atualizando, setAtualizando] = useState(false);
-  const [erro, setErro] = useState('');
+  const { dados, carregando, atualizando, erro, carregar, aoAtualizar } = useLista(listarCarteiraFii);
+  const [modalAberto, setModalAberto] = useState(false);
+  const [itemEditando, setItemEditando] = useState(null);
+  const [form, setForm] = useState(FORM_VAZIO);
+  const [salvando, setSalvando] = useState(false);
+  const [atualizandoCotacoes, setAtualizandoCotacoes] = useState(false);
 
-  const carregar = useCallback(async () => {
-    try {
-      setErro('');
-      const dados = await listarCarteiraFii();
-      setFundos(dados);
-    } catch (err) {
-      setErro(err.message || 'Não foi possível carregar a carteira.');
-    } finally {
-      setCarregando(false);
-      setAtualizando(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    carregar();
-  }, [carregar]);
-
-  function aoAtualizar() {
-    setAtualizando(true);
-    carregar();
+  function abrirNovo() {
+    setItemEditando(null);
+    setForm(FORM_VAZIO);
+    setModalAberto(true);
   }
 
-  if (carregando) {
-    return (
-      <SafeAreaView style={[estilos.container, estilos.centralizado]}>
-        <ActivityIndicator color={colors.accent} size="large" />
-      </SafeAreaView>
-    );
+  function abrirEdicao(item) {
+    setItemEditando(item);
+    setForm({
+      ticker: item.ticker,
+      segmento: item.segmento,
+      cotas: String(item.cotas),
+      precoMedio: String(item.precoMedio),
+      ultimoDividendo: String(item.ultimoDividendo || ''),
+      observacoes: item.observacoes || ''
+    });
+    setModalAberto(true);
+  }
+
+  async function salvar() {
+    if (!form.ticker.trim() || !form.cotas || !form.precoMedio) {
+      Alert.alert('Campos obrigatórios', 'Informe ticker, cotas e preço médio.');
+      return;
+    }
+    setSalvando(true);
+    try {
+      const dados = {
+        ticker: form.ticker.trim().toUpperCase(),
+        segmento: form.segmento,
+        cotas: Number(form.cotas),
+        precoMedio: Number(form.precoMedio),
+        ultimoDividendo: Number(form.ultimoDividendo) || 0,
+        observacoes: form.observacoes.trim() || null
+      };
+      if (itemEditando) {
+        await atualizarFii(itemEditando.id, dados);
+      } else {
+        await criarFii(dados);
+      }
+      setModalAberto(false);
+      carregar();
+    } catch (err) {
+      Alert.alert('Erro', err.message || 'Não foi possível salvar.');
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  function confirmarExclusao() {
+    Alert.alert('Excluir FII', `Remover ${itemEditando.ticker} da carteira?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Excluir',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await excluirFii(itemEditando.id);
+            setModalAberto(false);
+            carregar();
+          } catch (err) {
+            Alert.alert('Erro', err.message || 'Não foi possível excluir.');
+          }
+        }
+      }
+    ]);
+  }
+
+  async function aoAtualizarCotacoes() {
+    setAtualizandoCotacoes(true);
+    try {
+      await atualizarCotacoesFii();
+      carregar();
+    } catch (err) {
+      Alert.alert('Erro', err.message || 'Não foi possível atualizar as cotações.');
+    } finally {
+      setAtualizandoCotacoes(false);
+    }
   }
 
   return (
-    <SafeAreaView style={estilos.container}>
-      <Text style={estilos.titulo}>Fundos Imobiliários</Text>
-
-      {erro ? <Text style={estilos.erro}>{erro}</Text> : null}
-
-      <FlatList
-        data={fundos}
+    <>
+      <ListaTela
+        titulo="Fundos Imobiliários"
+        buscar={listarCarteiraFii}
         keyExtractor={(item) => String(item.id)}
-        refreshControl={<RefreshControl refreshing={atualizando} onRefresh={aoAtualizar} tintColor={colors.accent} />}
-        ListEmptyComponent={<Text style={estilos.vazio}>Nenhum FII cadastrado ainda.</Text>}
+        vazio="Nenhum FII cadastrado ainda. Toque no + para adicionar."
+        cabecalho={
+          <TouchableOpacity style={estilos.btnCotacoes} onPress={aoAtualizarCotacoes} disabled={atualizandoCotacoes}>
+            <Text style={estilos.btnCotacoesTexto}>{atualizandoCotacoes ? 'Atualizando...' : 'Atualizar Cotações'}</Text>
+          </TouchableOpacity>
+        }
         renderItem={({ item }) => {
           const precoRef = item.precoAtual != null ? item.precoAtual : item.precoMedio;
-          const totalInvestido = item.cotas * (precoRef || 0);
           return (
-            <View style={estilos.card}>
-              <View style={estilos.cardHeader}>
-                <Text style={estilos.ticker}>{item.ticker}</Text>
-                <Text style={estilos.segmento}>{item.segmento}</Text>
-              </View>
-              <Text style={estilos.linha}>{item.cotas} cotas · preço médio {formatarMoeda(item.precoMedio)}</Text>
-              <Text style={estilos.total}>{formatarMoeda(totalInvestido)}</Text>
-            </View>
+            <TouchableOpacity onPress={() => abrirEdicao(item)}>
+              <CartaoItem
+                titulo={item.ticker}
+                tag={item.segmento}
+                linhas={[`${item.cotas} cotas · preço médio ${formatarMoeda(item.precoMedio)}`]}
+                valor={formatarMoeda(item.cotas * (precoRef || 0))}
+              />
+            </TouchableOpacity>
           );
         }}
+        fab={<BotaoFab onPress={abrirNovo} />}
       />
-    </SafeAreaView>
+
+      <FormularioModal
+        visivel={modalAberto}
+        titulo={itemEditando ? `Editar ${itemEditando.ticker}` : 'Novo FII'}
+        onFechar={() => setModalAberto(false)}
+        onSalvar={salvar}
+        onExcluir={itemEditando ? confirmarExclusao : undefined}
+        salvando={salvando}
+      >
+        <CampoTexto label="Ticker" obrigatorio placeholder="Ex: SNAG11" autoCapitalize="characters" value={form.ticker} onChangeText={(v) => setForm({ ...form, ticker: v })} />
+        <CampoSelect label="Segmento" valor={form.segmento} onValorChange={(v) => setForm({ ...form, segmento: v })} opcoes={SEGMENTOS} />
+        <CampoTexto label="Cotas" obrigatorio placeholder="Ex: 1234" keyboardType="numeric" value={form.cotas} onChangeText={(v) => setForm({ ...form, cotas: v })} />
+        <CampoTexto label="Preço Médio (R$)" obrigatorio placeholder="Ex: 9.87" keyboardType="decimal-pad" value={form.precoMedio} onChangeText={(v) => setForm({ ...form, precoMedio: v })} />
+        <CampoTexto label="Último Dividendo por Cota (R$)" placeholder="Ex: 0.12" keyboardType="decimal-pad" value={form.ultimoDividendo} onChangeText={(v) => setForm({ ...form, ultimoDividendo: v })} />
+        <CampoTexto label="Anotações" placeholder="Opcional" value={form.observacoes} onChangeText={(v) => setForm({ ...form, observacoes: v })} />
+      </FormularioModal>
+    </>
   );
 }
 
 const estilos = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgMain,
-    padding: 16
-  },
-  centralizado: {
-    justifyContent: 'center'
-  },
-  titulo: {
-    color: colors.textMain,
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 16
-  },
-  erro: {
-    color: colors.expense,
-    marginBottom: 12
-  },
-  vazio: {
-    color: colors.textSub,
-    textAlign: 'center',
-    marginTop: 40
-  },
-  card: {
-    backgroundColor: colors.bgSurface,
+  btnCotacoes: {
     borderColor: colors.border,
     borderWidth: 1,
     borderRadius: 8,
-    padding: 14,
-    marginBottom: 10
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    paddingVertical: 10,
     alignItems: 'center',
-    marginBottom: 6
+    marginBottom: 14
   },
-  ticker: {
-    color: colors.accent,
-    fontWeight: '800',
-    fontSize: 16
-  },
-  segmento: {
-    color: colors.textSub,
-    fontSize: 12
-  },
-  linha: {
-    color: colors.textSub,
-    fontSize: 13,
-    marginBottom: 4
-  },
-  total: {
-    color: colors.textMain,
-    fontWeight: '700',
-    fontSize: 15
-  }
+  btnCotacoesTexto: { color: colors.accent, fontWeight: '700', fontSize: 13 }
 });

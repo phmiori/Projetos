@@ -3,3 +3,19 @@ import { apiFetch } from './client';
 export function listarCarteiraFii() {
   return apiFetch('/api/fii');
 }
+
+export function criarFii(dados) {
+  return apiFetch('/api/fii', { method: 'POST', body: JSON.stringify(dados) });
+}
+
+export function atualizarFii(id, dados) {
+  return apiFetch(`/api/fii/${id}`, { method: 'PUT', body: JSON.stringify(dados) });
+}
+
+export function excluirFii(id) {
+  return apiFetch(`/api/fii/${id}`, { method: 'DELETE' });
+}
+
+export function atualizarCotacoesFii() {
+  return apiFetch('/api/fii/atualizar-precos', { method: 'POST' });
+}
