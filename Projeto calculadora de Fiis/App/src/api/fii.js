@@ -19,3 +19,19 @@ export function excluirFii(id) {
 export function atualizarCotacoesFii() {
   return apiFetch('/api/fii/atualizar-precos', { method: 'POST' });
 }
+
+export function listarWatchlistFii() {
+  return apiFetch('/api/fii/watchlist');
+}
+
+export function criarWatchlistFii(dados) {
+  return apiFetch('/api/fii/watchlist', { method: 'POST', body: JSON.stringify(dados) });
+}
+
+export function atualizarWatchlistFii(id, dados) {
+  return apiFetch(`/api/fii/watchlist/${id}`, { method: 'PUT', body: JSON.stringify(dados) });
+}
+
+export function excluirWatchlistFii(id) {
+  return apiFetch(`/api/fii/watchlist/${id}`, { method: 'DELETE' });
+}

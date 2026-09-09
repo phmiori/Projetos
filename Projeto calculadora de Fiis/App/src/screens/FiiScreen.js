@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { SafeAreaView, View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import ListaTela from '../components/ListaTela';
 import CartaoItem from '../components/CartaoItem';
 import BotaoFab from '../components/BotaoFab';
@@ -8,12 +8,13 @@ import { listarCarteiraFii, criarFii, atualizarFii, excluirFii, atualizarCotacoe
 import { formatarMoeda } from '../utils/formatadores';
 import { colors } from '../theme/colors';
 import { useLista } from '../hooks/useLista';
+import WatchlistTab from './fii/WatchlistTab';
 
 const SEGMENTOS = ['Papel / CRI', 'Fiagro', 'Logística', 'Shoppings', 'Lajes Corporativas', 'Híbrido', 'FoF', 'Outro'];
-
 const FORM_VAZIO = { ticker: '', segmento: 'Papel / CRI', cotas: '', precoMedio: '', ultimoDividendo: '', observacoes: '' };
+const ABAS = ['Carteira', 'Lista de Observação'];
 
-export default function FiiScreen() {
+function CarteiraTab() {
   const { dados, carregando, atualizando, erro, carregar, aoAtualizar } = useLista(listarCarteiraFii);
   const [modalAberto, setModalAberto] = useState(false);
   const [itemEditando, setItemEditando] = useState(null);
@@ -103,7 +104,7 @@ export default function FiiScreen() {
   return (
     <>
       <ListaTela
-        titulo="Fundos Imobiliários"
+        titulo=""
         buscar={listarCarteiraFii}
         keyExtractor={(item) => String(item.id)}
         vazio="Nenhum FII cadastrado ainda. Toque no + para adicionar."
@@ -147,14 +148,44 @@ export default function FiiScreen() {
   );
 }
 
+export default function FiiScreen() {
+  const [aba, setAba] = useState('Carteira');
+
+  return (
+    <SafeAreaView style={estilos.container}>
+      <Text style={estilos.titulo}>Fundos Imobiliários</Text>
+
+      <View style={estilos.abas}>
+        {ABAS.map((nome) => (
+          <TouchableOpacity key={nome} style={[estilos.aba, aba === nome && estilos.abaAtiva]} onPress={() => setAba(nome)}>
+            <Text style={[estilos.abaTexto, aba === nome && estilos.abaTextoAtivo]}>{nome}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <View style={{ flex: 1 }}>
+        {aba === 'Carteira' ? <CarteiraTab /> : <WatchlistTab />}
+      </View>
+    </SafeAreaView>
+  );
+}
+
 const estilos = StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.bgMain, paddingHorizontal: 16, paddingTop: 16 },
+  titulo: { color: colors.textMain, fontSize: 22, fontWeight: '800', marginBottom: 12 },
+  abas: { flexDirection: 'row', marginBottom: 4, gap: 8 },
+  aba: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderColor: colors.border, borderWidth: 1 },
+  abaAtiva: { backgroundColor: colors.accent, borderColor: colors.accent },
+  abaTexto: { color: colors.textSub, fontSize: 12, fontWeight: '600' },
+  abaTextoAtivo: { color: colors.accentText },
   btnCotacoes: {
     borderColor: colors.border,
     borderWidth: 1,
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: 'center',
-    marginBottom: 14
+    marginBottom: 14,
+    marginTop: 12
   },
   btnCotacoesTexto: { color: colors.accent, fontWeight: '700', fontSize: 13 }
 });

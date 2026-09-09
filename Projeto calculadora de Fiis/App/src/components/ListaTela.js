@@ -21,7 +21,7 @@ export default function ListaTela({ titulo, buscar, keyExtractor, renderItem, va
 
   return (
     <SafeAreaView style={estilos.container}>
-      <Text style={estilos.titulo}>{titulo}</Text>
+      {titulo ? <Text style={estilos.titulo}>{titulo}</Text> : null}
       {cabecalho}
       {erro ? <Text style={estilos.erro}>{erro}</Text> : null}
       <FlatList

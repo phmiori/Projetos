@@ -6,8 +6,9 @@ import { formatarMoeda, formatarData } from '../utils/formatadores';
 import ContasTab from './financas/ContasTab';
 import CategoriasTab from './financas/CategoriasTab';
 import TransacoesTab from './financas/TransacoesTab';
+import CartoesTab from './financas/CartoesTab';
 
-const ABAS = ['Visão Geral', 'Transações', 'Contas', 'Categorias'];
+const ABAS = ['Visão Geral', 'Transações', 'Cartões', 'Contas', 'Categorias'];
 
 function Kpi({ titulo, valor, cor }) {
   return (
@@ -80,17 +81,18 @@ export default function FinancasScreen() {
     <SafeAreaView style={estilos.container}>
       <Text style={estilos.titulo}>Finanças</Text>
 
-      <View style={estilos.abas}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={estilos.abas} contentContainerStyle={{ gap: 8 }}>
         {ABAS.map((nome) => (
           <TouchableOpacity key={nome} style={[estilos.aba, aba === nome && estilos.abaAtiva]} onPress={() => setAba(nome)}>
             <Text style={[estilos.abaTexto, aba === nome && estilos.abaTextoAtivo]}>{nome}</Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
 
       <View style={{ flex: 1 }}>
         {aba === 'Visão Geral' && <VisaoGeralTab />}
         {aba === 'Transações' && <TransacoesTab />}
+        {aba === 'Cartões' && <CartoesTab />}
         {aba === 'Contas' && <ContasTab />}
         {aba === 'Categorias' && <CategoriasTab />}
       </View>
@@ -101,7 +103,7 @@ export default function FinancasScreen() {
 const estilos = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.bgMain, paddingHorizontal: 16, paddingTop: 16 },
   titulo: { color: colors.textMain, fontSize: 22, fontWeight: '800', marginBottom: 12 },
-  abas: { flexDirection: 'row', marginBottom: 12, gap: 8 },
+  abas: { flexGrow: 0, marginBottom: 12 },
   aba: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, borderColor: colors.border, borderWidth: 1 },
   abaAtiva: { backgroundColor: colors.accent, borderColor: colors.accent },
   abaTexto: { color: colors.textSub, fontSize: 12, fontWeight: '600' },

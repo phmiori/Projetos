@@ -20,6 +20,26 @@ export function excluirConta(id) {
   return apiFetch(`/api/financas/contas/${id}`, { method: 'DELETE' });
 }
 
+export function listarCartoes() {
+  return apiFetch('/api/financas/cartoes');
+}
+
+export function criarCartao(dados) {
+  return apiFetch('/api/financas/cartoes', { method: 'POST', body: JSON.stringify(dados) });
+}
+
+export function atualizarCartao(id, dados) {
+  return apiFetch(`/api/financas/cartoes/${id}`, { method: 'PUT', body: JSON.stringify(dados) });
+}
+
+export function excluirCartao(id) {
+  return apiFetch(`/api/financas/cartoes/${id}`, { method: 'DELETE' });
+}
+
+export function pagarFatura(id, debitarDeConta) {
+  return apiFetch(`/api/financas/faturas/${id}/pagar`, { method: 'POST', body: JSON.stringify({ debitarDeConta }) });
+}
+
 export function listarCategorias() {
   return apiFetch('/api/financas/categorias');
 }
