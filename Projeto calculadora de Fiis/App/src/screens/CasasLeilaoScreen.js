@@ -4,13 +4,15 @@ import ListaTela from '../components/ListaTela';
 import CartaoItem from '../components/CartaoItem';
 import BotaoFab from '../components/BotaoFab';
 import FormularioModal, { CampoTexto, CampoSelect } from '../components/FormularioModal';
-import { listarCasasLeilao, criarCasaLeilao, atualizarCasaLeilao, excluirCasaLeilao } from '../api/leilao';
+import { listarCasasLeilao, criarCasaLeilao, atualizarCasaLeilao, excluirCasaLeilao, listarGastosCasa, criarGastoCasa, excluirGastoCasa } from '../api/leilao';
 import { formatarMoeda } from '../utils/formatadores';
 import { colors } from '../theme/colors';
 import { useLista } from '../hooks/useLista';
+import GastosModal from '../components/GastosModal';
 
 const STATUS = ['Em Desocupação', 'Em Regularização', 'Em Reforma', 'Anunciado', 'Vendido'];
 const TIPOS = ['Casa', 'Apartamento', 'Terreno', 'Comercial', 'Rural', 'Outro'];
+const CATEGORIAS_GASTO = ['Taxa Leilão / Processual', 'Desocupação', 'Reforma', 'Acabamento / Pintura', 'Documentação / Cartório', 'Limpeza', 'Outros'];
 const FORM_VAZIO = { endereco: '', cidade: '', uf: '', tipoImovel: 'Casa', status: 'Em Desocupação', valorArremate: '', comissaoPct: '5', custasProcessuais: '', custoDesocupacao: '', valorVenda: '', observacoes: '' };
 
 export default function CasasLeilaoScreen() {
@@ -19,6 +21,7 @@ export default function CasasLeilaoScreen() {
   const [itemEditando, setItemEditando] = useState(null);
   const [form, setForm] = useState(FORM_VAZIO);
   const [salvando, setSalvando] = useState(false);
+  const [modalGastosAberto, setModalGastosAberto] = useState(false);
 
   function abrirNovo() {
     setItemEditando(null);
@@ -142,7 +145,30 @@ export default function CasasLeilaoScreen() {
         <CampoTexto label="Custo de Desocupação (R$)" placeholder="Opcional" keyboardType="decimal-pad" value={form.custoDesocupacao} onChangeText={(v) => setForm({ ...form, custoDesocupacao: v })} />
         <CampoTexto label="Valor de Venda (R$)" placeholder="Preencha se já vendeu" keyboardType="decimal-pad" value={form.valorVenda} onChangeText={(v) => setForm({ ...form, valorVenda: v })} />
         <CampoTexto label="Observações" placeholder="Opcional" value={form.observacoes} onChangeText={(v) => setForm({ ...form, observacoes: v })} />
+
+        {itemEditando && (
+          <TouchableOpacity onPress={() => setModalGastosAberto(true)}>
+            <CartaoItem titulo="Ver Gastos Detalhados" linhas={['Lançamentos linha a linha (reforma, cartório, etc.)']} />
+          </TouchableOpacity>
+        )}
       </FormularioModal>
+
+      {itemEditando && (
+        <GastosModal
+          visivel={modalGastosAberto}
+          onFechar={() => setModalGastosAberto(false)}
+          titulo={`Gastos: ${itemEditando.endereco}`}
+          categorias={CATEGORIAS_GASTO}
+          labelFornecedor="Fornecedor"
+          buscar={() => listarGastosCasa(itemEditando.id)}
+          criar={(dados) => criarGastoCasa(itemEditando.id, dados)}
+          excluir={(gastoId) => excluirGastoCasa(itemEditando.id, gastoId)}
+          aoSalvar={(resultado) => {
+            if (resultado?.imovel) setItemEditando(resultado.imovel);
+            carregar();
+          }}
+        />
+      )}
     </>
   );
 }

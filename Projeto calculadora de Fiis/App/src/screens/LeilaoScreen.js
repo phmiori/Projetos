@@ -4,12 +4,14 @@ import ListaTela from '../components/ListaTela';
 import CartaoItem from '../components/CartaoItem';
 import BotaoFab from '../components/BotaoFab';
 import FormularioModal, { CampoTexto, CampoSelect } from '../components/FormularioModal';
-import { listarCarrosLeilao, criarCarroLeilao, atualizarCarroLeilao, excluirCarroLeilao } from '../api/leilao';
+import { listarCarrosLeilao, criarCarroLeilao, atualizarCarroLeilao, excluirCarroLeilao, listarGastosCarro, criarGastoCarro, excluirGastoCarro } from '../api/leilao';
 import { formatarMoeda } from '../utils/formatadores';
 import { colors } from '../theme/colors';
 import { useLista } from '../hooks/useLista';
+import GastosModal from '../components/GastosModal';
 
 const STATUS = ['Em Trânsito', 'Em Preparação', 'Regularização', 'Anunciado', 'Vendido'];
+const CATEGORIAS_GASTO = ['Taxa Leiloeiro / Pátio', 'Guincho', 'Mecânica', 'Funilaria / Pintura', 'Documentação', 'Estética', 'Outros'];
 const FORM_VAZIO = { marca: '', modelo: '', ano: '', status: 'Em Trânsito', valorArremate: '', comissaoPct: '5', taxasPatio: '', custoGuincho: '', valorVenda: '', observacoes: '' };
 
 export default function LeilaoScreen() {
@@ -18,6 +20,7 @@ export default function LeilaoScreen() {
   const [itemEditando, setItemEditando] = useState(null);
   const [form, setForm] = useState(FORM_VAZIO);
   const [salvando, setSalvando] = useState(false);
+  const [modalGastosAberto, setModalGastosAberto] = useState(false);
 
   function abrirNovo() {
     setItemEditando(null);
@@ -138,7 +141,30 @@ export default function LeilaoScreen() {
         <CampoTexto label="Custo de Guincho (R$)" placeholder="Opcional" keyboardType="decimal-pad" value={form.custoGuincho} onChangeText={(v) => setForm({ ...form, custoGuincho: v })} />
         <CampoTexto label="Valor de Venda (R$)" placeholder="Preencha se já vendeu" keyboardType="decimal-pad" value={form.valorVenda} onChangeText={(v) => setForm({ ...form, valorVenda: v })} />
         <CampoTexto label="Observações" placeholder="Opcional" value={form.observacoes} onChangeText={(v) => setForm({ ...form, observacoes: v })} />
+
+        {itemEditando && (
+          <TouchableOpacity onPress={() => setModalGastosAberto(true)}>
+            <CartaoItem titulo="Ver Gastos Detalhados" linhas={['Lançamentos linha a linha (mecânica, funilaria, etc.)']} />
+          </TouchableOpacity>
+        )}
       </FormularioModal>
+
+      {itemEditando && (
+        <GastosModal
+          visivel={modalGastosAberto}
+          onFechar={() => setModalGastosAberto(false)}
+          titulo={`Gastos: ${itemEditando.marca} ${itemEditando.modelo}`}
+          categorias={CATEGORIAS_GASTO}
+          labelFornecedor="Oficina"
+          buscar={() => listarGastosCarro(itemEditando.id)}
+          criar={(dados) => criarGastoCarro(itemEditando.id, { ...dados, oficina: dados.fornecedor, fornecedor: undefined })}
+          excluir={(gastoId) => excluirGastoCarro(itemEditando.id, gastoId)}
+          aoSalvar={(resultado) => {
+            if (resultado?.veiculo) setItemEditando(resultado.veiculo);
+            carregar();
+          }}
+        />
+      )}
     </>
   );
 }

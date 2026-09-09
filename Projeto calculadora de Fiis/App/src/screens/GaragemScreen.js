@@ -3,12 +3,14 @@ import { TouchableOpacity, Alert } from 'react-native';
 import ListaTela from '../components/ListaTela';
 import CartaoItem from '../components/CartaoItem';
 import BotaoFab from '../components/BotaoFab';
-import FormularioModal, { CampoTexto, CampoData } from '../components/FormularioModal';
-import { listarVeiculosGaragem, criarVeiculoGaragem, atualizarVeiculoGaragem, excluirVeiculoGaragem } from '../api/garagem';
-import { formatarMoeda } from '../utils/formatadores';
+import FormularioModal, { CampoTexto, CampoData, CampoSelect } from '../components/FormularioModal';
+import { listarVeiculosGaragem, criarVeiculoGaragem, atualizarVeiculoGaragem, excluirVeiculoGaragem, criarManutencao, atualizarManutencao, excluirManutencao } from '../api/garagem';
+import { formatarMoeda, formatarData } from '../utils/formatadores';
 import { useLista } from '../hooks/useLista';
 
 const FORM_VAZIO = { marca: '', modelo: '', ano: '', placa: '', cor: '', quilometragem: '', dataCompra: new Date().toISOString(), valorCompra: '', observacoes: '' };
+const CATEGORIAS_MANUTENCAO = ['Troca de Óleo', 'Troca de Pneu', 'Revisão', 'Freios', 'Suspensão', 'Bateria', 'Elétrica', 'Funilaria/Pintura', 'Documentação/IPVA', 'Outros'];
+const MANUTENCAO_VAZIA = { categoria: CATEGORIAS_MANUTENCAO[0], descricao: '', valor: '', oficina: '', quilometragem: '', data: new Date().toISOString() };
 
 export default function GaragemScreen() {
   const { dados, carregando, erro, carregar } = useLista(listarVeiculosGaragem);
@@ -16,6 +18,12 @@ export default function GaragemScreen() {
   const [itemEditando, setItemEditando] = useState(null);
   const [form, setForm] = useState(FORM_VAZIO);
   const [salvando, setSalvando] = useState(false);
+
+  const [modalManutencoesAberto, setModalManutencoesAberto] = useState(false);
+  const [modalManutencaoFormAberto, setModalManutencaoFormAberto] = useState(false);
+  const [manutencaoEditando, setManutencaoEditando] = useState(null);
+  const [formManutencao, setFormManutencao] = useState(MANUTENCAO_VAZIA);
+  const [salvandoManutencao, setSalvandoManutencao] = useState(false);
 
   function abrirNovo() {
     setItemEditando(null);
@@ -90,6 +98,85 @@ export default function GaragemScreen() {
     ]);
   }
 
+  function abrirNovaManutencao() {
+    setManutencaoEditando(null);
+    setFormManutencao(MANUTENCAO_VAZIA);
+    setModalManutencaoFormAberto(true);
+  }
+
+  function abrirEdicaoManutencao(m) {
+    setManutencaoEditando(m);
+    setFormManutencao({
+      categoria: m.categoria,
+      descricao: m.descricao,
+      valor: String(m.valor),
+      oficina: m.oficina || '',
+      quilometragem: m.quilometragem != null ? String(m.quilometragem) : '',
+      data: m.data
+    });
+    setModalManutencaoFormAberto(true);
+  }
+
+  function aoAtualizarVeiculoManutencoes(veiculoAtualizado) {
+    if (veiculoAtualizado) setItemEditando(veiculoAtualizado);
+    carregar();
+  }
+
+  async function salvarManutencao() {
+    if (!formManutencao.descricao.trim() || !formManutencao.valor) {
+      Alert.alert('Campos obrigatórios', 'Informe descrição e valor.');
+      return;
+    }
+    setSalvandoManutencao(true);
+    try {
+      const dadosEnvio = {
+        categoria: formManutencao.categoria,
+        descricao: formManutencao.descricao.trim(),
+        valor: Number(formManutencao.valor),
+        oficina: formManutencao.oficina.trim() || null,
+        quilometragem: formManutencao.quilometragem ? Number(formManutencao.quilometragem) : null,
+        data: formManutencao.data
+      };
+      if (manutencaoEditando) {
+        await atualizarManutencao(manutencaoEditando.id, dadosEnvio);
+        aoAtualizarVeiculoManutencoes({
+          ...itemEditando,
+          manutencoes: itemEditando.manutencoes.map((m) => (m.id === manutencaoEditando.id ? { ...m, ...dadosEnvio } : m))
+        });
+      } else {
+        const resultado = await criarManutencao(itemEditando.id, dadosEnvio);
+        aoAtualizarVeiculoManutencoes(resultado.veiculo);
+      }
+      setModalManutencaoFormAberto(false);
+    } catch (err) {
+      Alert.alert('Erro', err.message || 'Não foi possível salvar a manutenção.');
+    } finally {
+      setSalvandoManutencao(false);
+    }
+  }
+
+  function confirmarExclusaoManutencao() {
+    Alert.alert('Excluir Manutenção', `Remover "${manutencaoEditando.descricao}"?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Excluir',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await excluirManutencao(manutencaoEditando.id);
+            aoAtualizarVeiculoManutencoes({
+              ...itemEditando,
+              manutencoes: itemEditando.manutencoes.filter((m) => m.id !== manutencaoEditando.id)
+            });
+            setModalManutencaoFormAberto(false);
+          } catch (err) {
+            Alert.alert('Erro', err.message || 'Não foi possível excluir.');
+          }
+        }
+      }
+    ]);
+  }
+
   return (
     <>
       <ListaTela
@@ -127,6 +214,45 @@ export default function GaragemScreen() {
         <CampoData label="Data de Compra" obrigatorio valor={form.dataCompra} onValorChange={(v) => setForm({ ...form, dataCompra: v })} />
         <CampoTexto label="Valor de Compra (R$)" placeholder="Ex: 85000" keyboardType="decimal-pad" value={form.valorCompra} onChangeText={(v) => setForm({ ...form, valorCompra: v })} />
         <CampoTexto label="Observações" placeholder="Opcional" value={form.observacoes} onChangeText={(v) => setForm({ ...form, observacoes: v })} />
+
+        {itemEditando && (
+          <TouchableOpacity onPress={() => setModalManutencoesAberto(true)}>
+            <CartaoItem titulo="Ver Manutenções" linhas={[`${itemEditando.manutencoes?.length || 0} lançamento(s)`]} />
+          </TouchableOpacity>
+        )}
+      </FormularioModal>
+
+      {itemEditando && (
+        <FormularioModal
+          visivel={modalManutencoesAberto}
+          titulo={`Manutenções: ${itemEditando.marca} ${itemEditando.modelo}`}
+          onFechar={() => setModalManutencoesAberto(false)}
+          onSalvar={abrirNovaManutencao}
+          textoSalvar="+ Nova Manutenção"
+        >
+          {(itemEditando.manutencoes || []).length === 0 && <CartaoItem titulo="Nenhuma manutenção lançada ainda" />}
+          {(itemEditando.manutencoes || []).map((m) => (
+            <TouchableOpacity key={m.id} onPress={() => abrirEdicaoManutencao(m)}>
+              <CartaoItem titulo={m.descricao} tag={m.categoria} linhas={[formatarData(m.data), m.oficina].filter(Boolean)} valor={formatarMoeda(m.valor)} />
+            </TouchableOpacity>
+          ))}
+        </FormularioModal>
+      )}
+
+      <FormularioModal
+        visivel={modalManutencaoFormAberto}
+        titulo={manutencaoEditando ? 'Editar Manutenção' : 'Nova Manutenção'}
+        onFechar={() => setModalManutencaoFormAberto(false)}
+        onSalvar={salvarManutencao}
+        onExcluir={manutencaoEditando ? confirmarExclusaoManutencao : undefined}
+        salvando={salvandoManutencao}
+      >
+        <CampoTexto label="Descrição" obrigatorio placeholder="Ex: Troca de óleo 0W20" value={formManutencao.descricao} onChangeText={(v) => setFormManutencao({ ...formManutencao, descricao: v })} />
+        <CampoSelect label="Categoria" valor={formManutencao.categoria} onValorChange={(v) => setFormManutencao({ ...formManutencao, categoria: v })} opcoes={CATEGORIAS_MANUTENCAO} />
+        <CampoTexto label="Valor (R$)" obrigatorio placeholder="Ex: 250" keyboardType="decimal-pad" value={formManutencao.valor} onChangeText={(v) => setFormManutencao({ ...formManutencao, valor: v })} />
+        <CampoTexto label="Oficina" placeholder="Opcional" value={formManutencao.oficina} onChangeText={(v) => setFormManutencao({ ...formManutencao, oficina: v })} />
+        <CampoTexto label="Quilometragem" placeholder="Opcional" keyboardType="numeric" value={formManutencao.quilometragem} onChangeText={(v) => setFormManutencao({ ...formManutencao, quilometragem: v })} />
+        <CampoData label="Data" valor={formManutencao.data} onValorChange={(v) => setFormManutencao({ ...formManutencao, data: v })} />
       </FormularioModal>
     </>
   );

@@ -16,6 +16,30 @@ export function excluirCarroLeilao(id) {
   return apiFetch(`/api/veiculos/${id}`, { method: 'DELETE' });
 }
 
+export function listarGastosCarro(veiculoId) {
+  return apiFetch(`/api/veiculos/${veiculoId}/gastos`);
+}
+
+export function criarGastoCarro(veiculoId, dados) {
+  return apiFetch(`/api/veiculos/${veiculoId}/gastos`, { method: 'POST', body: JSON.stringify(dados) });
+}
+
+export function excluirGastoCarro(veiculoId, gastoId) {
+  return apiFetch(`/api/veiculos/${veiculoId}/gastos/${gastoId}`, { method: 'DELETE' });
+}
+
+export function listarGastosCasa(imovelId) {
+  return apiFetch(`/api/imoveis/${imovelId}/gastos`);
+}
+
+export function criarGastoCasa(imovelId, dados) {
+  return apiFetch(`/api/imoveis/${imovelId}/gastos`, { method: 'POST', body: JSON.stringify(dados) });
+}
+
+export function excluirGastoCasa(imovelId, gastoId) {
+  return apiFetch(`/api/imoveis/${imovelId}/gastos/${gastoId}`, { method: 'DELETE' });
+}
+
 export function listarCasasLeilao() {
   return apiFetch('/api/imoveis');
 }
