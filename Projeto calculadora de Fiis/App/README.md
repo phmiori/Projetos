@@ -61,18 +61,20 @@ App/
 ## O que já funciona
 
 - Login/logout de verdade (mesmo usuário e senha do site, `POST /api/auth/login`)
-- Menu lateral (Drawer) com o mesmo agrupamento Hub Financeiro / Hub Pessoal da sidebar do site
+- Menu lateral (Drawer) com o mesmo agrupamento Hub Financeiro / Hub Pessoal da sidebar do site, respeitando os negócios que você ocultou em Configurações
+- **Visão Geral com os 4 KPIs reais do site** (Patrimônio Líquido Total, Capital Alocado em Operações, Lucro Líquido Realizado, ROI Médio) + resumo por módulo
 - **Cadastrar, editar e excluir** (não é só visualização) em:
-  - **Hub Financeiro**: Fundos Imobiliários (+ "Atualizar Cotações"), Cripto Moedas, Carros de Leilão, Casas de Leilão, Cofrinho
-  - **Hub Pessoal**: Calendário, Garagem, Treinos & Saúde (blocos + exercícios + registros de saúde), Finanças (Transações, Contas, Categorias)
-  - Configurações: editar perfil (nome/e-mail) e alterar senha
-- **Só visualização** (ainda): Visão Geral, Clima (local favorito), Notificações — nenhum desses tem "cadastrar" no site também (Notificações é derivada do Calendário/Faturas; Clima só tem o favorito, que se configura no site)
+  - **Hub Financeiro**: Fundos Imobiliários (carteira + "Atualizar Cotações" + Lista de Observação com alerta por e-mail), Cripto Moedas, Carros de Leilão, Casas de Leilão, Cofrinho
+  - **Hub Pessoal**: Calendário, Garagem, Treinos & Saúde (blocos + exercícios + registros de saúde), Finanças (Transações, Cartões de Crédito + pagar fatura, Contas, Categorias)
+  - **Configurações**: editar perfil, alterar senha, mostrar/ocultar negócios do Hub Financeiro, baixar meus dados (backup), e administração de usuários (só para admins)
+- **Só visualização** (ainda): Clima (local favorito), Notificações — nenhum desses tem "cadastrar" no site também (Notificações é derivada do Calendário/Faturas; Clima só tem o favorito, que se configura no site)
 
 ## O que falta
 
-- **Finanças**: Cartões de Crédito (CRUD) e o fluxo de pagar fatura ainda só no site — Transações no app cobrem Débito/Pix/Dinheiro/Boleto, mas não Crédito/parcelamento (evita duplicar a lógica de fatura/competência do servidor)
 - **Assistente de IA** (chat) — não portado ainda
-- **Lista de Observação de FIIs** (watchlist) e **Backup/Export** — não portados
-- **Administração de usuários** (Configurações, só para admins) — não portado
+- **Finanças**: parcelamento no cartão de crédito ainda só no site (Transações no app cobrem Crédito sem parcelar, mas não a divisão em N parcelas)
+- **Gastos detalhados** de Carros/Casas de Leilão (lançador de gastos linha a linha) e **Manutenções** da Garagem — hoje só os campos agregados, sem o histórico detalhado
+- Gráficos da Visão Geral (doughnut/barras) — só os números, sem os gráficos do Chart.js
+- Notificações push (o site tem via Web Push; o app ainda não pede permissão nem registra token)
 - Ícone e splash screen definitivos (`App/assets/icon.png` está usando o mesmo placeholder do PWA do site)
 - Publicar na Play Store (hoje só dá para instalar via Expo Go ou gerar um `.apk` manualmente com EAS Build)
