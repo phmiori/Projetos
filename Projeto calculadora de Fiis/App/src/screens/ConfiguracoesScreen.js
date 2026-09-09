@@ -4,6 +4,10 @@ import { colors } from '../theme/colors';
 import { useAuth } from '../context/AuthContext';
 import FormularioModal, { CampoTexto } from '../components/FormularioModal';
 import { alterarSenha } from '../api/auth';
+import AdminUsuariosTab from './configuracoes/AdminUsuariosTab';
+import { exportarBackup } from '../api/backup';
+import { File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 function Linha({ rotulo, valor }) {
   return (
@@ -26,6 +30,26 @@ const NEGOCIOS_HUB = [
 export default function ConfiguracoesScreen() {
   const { usuario, sair, atualizarPerfil, modulosOcultos, alternarModulo } = useAuth();
   const [alternandoModulo, setAlternandoModulo] = useState(null);
+  const [baixando, setBaixando] = useState(false);
+
+  async function baixarMeusDados() {
+    setBaixando(true);
+    try {
+      const dados = await exportarBackup();
+      const arquivo = new File(Paths.cache, `financehub-backup-${Date.now()}.json`);
+      arquivo.create();
+      arquivo.write(JSON.stringify(dados, null, 2));
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(arquivo.uri);
+      } else {
+        Alert.alert('Backup salvo', `Arquivo salvo em: ${arquivo.uri}`);
+      }
+    } catch (err) {
+      Alert.alert('Erro', err.message || 'Não foi possível gerar o backup.');
+    } finally {
+      setBaixando(false);
+    }
+  }
 
   async function aoAlternarNegocio(chave, visivelAtual) {
     setAlternandoModulo(chave);
@@ -131,6 +155,18 @@ export default function ConfiguracoesScreen() {
         <TouchableOpacity style={estilos.botaoSecundario} onPress={abrirTrocaSenha}>
           <Text style={estilos.botaoSecundarioTexto}>Alterar Senha</Text>
         </TouchableOpacity>
+
+        <Text style={estilos.secaoTitulo}>Meus Dados</Text>
+        <TouchableOpacity style={estilos.botaoSecundario} onPress={baixarMeusDados} disabled={baixando}>
+          <Text style={estilos.botaoSecundarioTexto}>{baixando ? 'Gerando...' : 'Baixar Meus Dados'}</Text>
+        </TouchableOpacity>
+
+        {usuario?.role === 'admin' && (
+          <>
+            <Text style={estilos.secaoTitulo}>Administração de Usuários</Text>
+            <AdminUsuariosTab />
+          </>
+        )}
 
         <TouchableOpacity style={estilos.botaoSair} onPress={sair}>
           <Text style={estilos.botaoSairTexto}>Sair do Sistema</Text>

@@ -34,3 +34,23 @@ export function ocultarModulo(modulo) {
 export function reexibirModulo(modulo) {
   return apiFetch(`/api/auth/modulos-ocultos/${modulo}`, { method: 'DELETE' });
 }
+
+export function listarUsuarios() {
+  return apiFetch('/api/auth/usuarios');
+}
+
+export function criarUsuario(dados) {
+  return apiFetch('/api/auth/usuarios', { method: 'POST', body: JSON.stringify(dados) });
+}
+
+export function atualizarUsuario(id, dados) {
+  return apiFetch(`/api/auth/usuarios/${id}`, { method: 'PUT', body: JSON.stringify(dados) });
+}
+
+export function redefinirSenhaUsuario(id, novaSenha) {
+  return apiFetch(`/api/auth/usuarios/${id}/senha`, { method: 'PUT', body: JSON.stringify({ novaSenha }) });
+}
+
+export function excluirUsuario(id) {
+  return apiFetch(`/api/auth/usuarios/${id}`, { method: 'DELETE' });
+}
