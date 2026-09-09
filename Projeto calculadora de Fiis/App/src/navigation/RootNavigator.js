@@ -20,6 +20,7 @@ import GaragemScreen from '../screens/GaragemScreen';
 import NotificacoesScreen from '../screens/NotificacoesScreen';
 import ConfiguracoesScreen from '../screens/ConfiguracoesScreen';
 import AssistenteScreen from '../screens/AssistenteScreen';
+import CabecalhoWidgets from '../components/CabecalhoWidgets';
 
 const Drawer = createDrawerNavigator();
 
@@ -101,6 +102,7 @@ function TelasPrincipais() {
       screenOptions={{
         headerStyle: { backgroundColor: colors.bgSurface },
         headerTintColor: colors.textMain,
+        headerRight: () => <CabecalhoWidgets />,
         drawerType: 'front'
       }}
     >
