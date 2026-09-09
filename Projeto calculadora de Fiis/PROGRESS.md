@@ -140,6 +140,8 @@
 
 > ⚠️ Pendente: cadastrar/editar/excluir em cada módulo (hoje só visualização no app), Assistente de IA (chat) ainda não portado, ícone/splash definitivos (usando o placeholder do PWA), e publicar na Play Store (hoje só via Expo Go ou `.apk` manual com EAS Build).
 
+- [x] **Correção crítica de compatibilidade com o Expo Go**: o app abria no celular mas quebrava com `hitSlop cannot be cast from ReadableNativeArray to ReadableNativeMap` — causa real era `react-native-gesture-handler` na versão 3.x, quando o Expo Go do SDK 57 (instalado via Play Store) só é compatível com a série 2.32.x (o Expo Go traz versões nativas fixas dessas bibliotecas; usar uma versão JS diferente da nativa quebra o bridge). Corrigido rodando `expo install` (que consulta a tabela oficial de compatibilidade do SDK) para os pacotes nativos: `react-native-gesture-handler@~2.32.0`, `react-native-reanimated@4.5.1`, `react-native-screens@~4.26.0`, `react-native-safe-area-context@~5.7.0`, `react-native-worklets@0.10.1`. Reinstalado e testado com `expo export` de novo (1315 módulos, sem erro)
+
 ## 🔧 Segurança, Refatoração, Testes e Melhorias Transversais
 - [x] **Segurança**: `helmet` (com CSP customizada para liberar o Chart.js via CDN), `express-rate-limit` no login (10 tentativas / 15 min), cookie de sessão `secure` condicionado a `NODE_ENV=production`, aviso no console se `SESSION_SECRET` não estiver configurado em produção
 - [x] **Correção de doc**: `README.md` e `ARCHITECTURE.md` atualizados para refletir a stack real (Node/Express + Prisma/PostgreSQL), que havia divergido do texto original (SQLite/PHP)
