@@ -68,14 +68,12 @@ App/
   - **Hub Pessoal**: Calendário, Garagem, Treinos & Saúde (blocos + exercícios + registros de saúde), Finanças (Transações, Cartões de Crédito + pagar fatura, Contas, Categorias)
   - **Configurações**: editar perfil, alterar senha, mostrar/ocultar negócios do Hub Financeiro, baixar meus dados (backup), e administração de usuários (só para admins)
 - **Só visualização** (ainda): Clima (local favorito), Notificações — nenhum desses tem "cadastrar" no site também (Notificações é derivada do Calendário/Faturas; Clima só tem o favorito, que se configura no site)
+- **Notificações Push nativas**: botão "Ativar Notificações Push" em Configurações — pede permissão, gera o token do Expo e registra no backend. **Só funciona num app instalado via EAS Build** (development ou production); dentro do Expo Go, o Android não suporta push remoto desde o SDK 53, e o botão mostra um aviso explicando isso em vez de falhar silenciosamente
 
 Também tem o **Assistente de IA** (chat), item próprio no menu — mesmo backend do site: responde perguntas com os dados reais da carteira, sugere alocações, manda e-mail e adiciona FII na carteira quando você pede na conversa.
 
 ## O que falta
 
-- **Finanças**: parcelamento no cartão de crédito ainda só no site (Transações no app cobrem Crédito sem parcelar, mas não a divisão em N parcelas)
-- **Gastos detalhados** de Carros/Casas de Leilão (lançador de gastos linha a linha) e **Manutenções** da Garagem — hoje só os campos agregados, sem o histórico detalhado
-- Gráficos da Visão Geral (doughnut/barras) — só os números, sem os gráficos do Chart.js
-- Notificações push (o site tem via Web Push; o app ainda não pede permissão nem registra token)
 - Ícone e splash screen definitivos (`App/assets/icon.png` está usando o mesmo placeholder do PWA do site)
 - Publicar na Play Store (hoje só dá para instalar via Expo Go ou gerar um `.apk` manualmente com EAS Build)
+- Testar as notificações push de verdade (precisa de um build EAS, não dá para testar no Expo Go)
