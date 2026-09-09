@@ -69,9 +69,10 @@ App/
   - **Configurações**: editar perfil, alterar senha, mostrar/ocultar negócios do Hub Financeiro, baixar meus dados (backup), e administração de usuários (só para admins)
 - **Só visualização** (ainda): Clima (local favorito), Notificações — nenhum desses tem "cadastrar" no site também (Notificações é derivada do Calendário/Faturas; Clima só tem o favorito, que se configura no site)
 
+Também tem o **Assistente de IA** (chat), item próprio no menu — mesmo backend do site: responde perguntas com os dados reais da carteira, sugere alocações, manda e-mail e adiciona FII na carteira quando você pede na conversa.
+
 ## O que falta
 
-- **Assistente de IA** (chat) — não portado ainda
 - **Finanças**: parcelamento no cartão de crédito ainda só no site (Transações no app cobrem Crédito sem parcelar, mas não a divisão em N parcelas)
 - **Gastos detalhados** de Carros/Casas de Leilão (lançador de gastos linha a linha) e **Manutenções** da Garagem — hoje só os campos agregados, sem o histórico detalhado
 - Gráficos da Visão Geral (doughnut/barras) — só os números, sem os gráficos do Chart.js
