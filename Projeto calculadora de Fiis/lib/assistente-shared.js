@@ -7,26 +7,90 @@ const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GE
 
 const geminiConfigurado = !!process.env.GEMINI_API_KEY;
 
-const FERRAMENTA_ENVIAR_EMAIL = {
-    functionDeclarations: [{
-        name: 'enviar_email',
-        description: 'Envia um e-mail para o usuário. Use apenas quando ele pedir explicitamente para enviar/mandar algo por e-mail (ex.: um resumo da carteira).',
-        parameters: {
-            type: 'object',
-            properties: {
-                destinatario: { type: 'string', description: 'E-mail de destino. Se o usuário não especificar outro endereço, use o e-mail cadastrado dele informado no contexto.' },
-                assunto: { type: 'string', description: 'Assunto do e-mail.' },
-                corpo: { type: 'string', description: 'Corpo do e-mail em texto simples, já pronto para envio.' }
-            },
-            required: ['assunto', 'corpo']
+const FERRAMENTAS_DISPONIVEIS = {
+    functionDeclarations: [
+        {
+            name: 'enviar_email',
+            description: 'Envia um e-mail para o usuário. Use apenas quando ele pedir explicitamente para enviar/mandar algo por e-mail (ex.: um resumo da carteira).',
+            parameters: {
+                type: 'object',
+                properties: {
+                    destinatario: { type: 'string', description: 'E-mail de destino. Se o usuário não especificar outro endereço, use o e-mail cadastrado dele informado no contexto.' },
+                    assunto: { type: 'string', description: 'Assunto do e-mail.' },
+                    corpo: { type: 'string', description: 'Corpo do e-mail em texto simples, já pronto para envio.' }
+                },
+                required: ['assunto', 'corpo']
+            }
+        },
+        {
+            name: 'adicionar_fii',
+            description: 'Registra uma compra de cotas de um Fundo Imobiliário (FII) na carteira do usuário. Se o ticker já existir na carteira, soma as cotas e recalcula o preço médio ponderado (mesmo cálculo do "Novo Aporte" do app); se não existir, cria uma posição nova. Use apenas quando o usuário pedir explicitamente para adicionar/registrar/comprar um FII.',
+            parameters: {
+                type: 'object',
+                properties: {
+                    ticker: { type: 'string', description: 'Código do FII, ex: SNAG11.' },
+                    cotas: { type: 'number', description: 'Quantidade de cotas compradas nesta operação.' },
+                    precoCompra: { type: 'number', description: 'Preço pago por cota nesta compra, em R$.' },
+                    ultimoDividendo: { type: 'number', description: 'Último dividendo por cota recebido, em R$ (opcional).' },
+                    segmento: { type: 'string', description: 'Segmento do fundo, ex: Papel / CRI, Tijolo, Fiagro (opcional, usado só se for uma posição nova).' }
+                },
+                required: ['ticker', 'cotas', 'precoCompra']
+            }
         }
-    }]
+    ]
 };
 
 const SYSTEM_INSTRUCTION_BASE = `Você é o Assistente do FinanceHub, um app pessoal de gestão financeira (Fundos Imobiliários, Cripto, Cofrinho e Finanças).
 Responda sempre em português do Brasil, de forma direta e objetiva.
 Use os dados em "SITUAÇÃO FINANCEIRA ATUAL DO USUÁRIO" abaixo para responder perguntas e sugerir alocações de investimento personalizadas — deixe sempre claro que são sugestões educativas, não uma recomendação profissional/regulada, e que a decisão final é do usuário.
-Você pode enviar e-mails usando a ferramenta enviar_email quando o usuário pedir isso explicitamente. Nunca invente dados que não estejam no contexto fornecido.`;
+Você pode enviar e-mails usando a ferramenta enviar_email e adicionar FIIs à carteira usando a ferramenta adicionar_fii, sempre que o usuário pedir isso explicitamente. Nunca invente dados que não estejam no contexto fornecido.`;
+
+/**
+ * Executa a ferramenta adicionar_fii: soma às cotas existentes (recalculando o preço médio
+ * ponderado, igual ao modal "Novo Aporte" de JS/FII/fii.js) se o ticker já estiver na carteira,
+ * ou cria uma posição nova caso contrário.
+ */
+async function executarAdicionarFii(usuarioId, args) {
+    const ticker = String(args?.ticker || '').trim().toUpperCase();
+    const cotasNovas = Math.round(Number(args?.cotas));
+    const precoCompra = Number(args?.precoCompra);
+
+    if (!ticker || !Number.isFinite(cotasNovas) || cotasNovas <= 0 || !Number.isFinite(precoCompra) || precoCompra <= 0) {
+        return { sucesso: false, motivo: 'Dados inválidos: informe ticker, quantidade de cotas e preço de compra válidos.' };
+    }
+
+    const ultimoDividendo = args?.ultimoDividendo != null ? Number(args.ultimoDividendo) : null;
+    const existente = await prisma.investimentoFII.findFirst({ where: { usuarioId, ticker } });
+
+    if (existente) {
+        const custoAtual = existente.cotas * existente.precoMedio;
+        const custoAporte = cotasNovas * precoCompra;
+        const totalCotas = existente.cotas + cotasNovas;
+        const novoPrecoMedio = totalCotas > 0 ? (custoAtual + custoAporte) / totalCotas : precoCompra;
+
+        const atualizado = await prisma.investimentoFII.update({
+            where: { id: existente.id },
+            data: {
+                cotas: totalCotas,
+                precoMedio: novoPrecoMedio,
+                ultimoDividendo: ultimoDividendo != null && Number.isFinite(ultimoDividendo) ? ultimoDividendo : existente.ultimoDividendo
+            }
+        });
+        return { sucesso: true, tipo: 'aporte', ticker, cotas: atualizado.cotas, precoMedio: atualizado.precoMedio };
+    }
+
+    const criado = await prisma.investimentoFII.create({
+        data: {
+            usuarioId,
+            ticker,
+            segmento: args?.segmento ? String(args.segmento).trim() : 'Papel / CRI',
+            cotas: cotasNovas,
+            precoMedio: precoCompra,
+            ultimoDividendo: ultimoDividendo != null && Number.isFinite(ultimoDividendo) ? ultimoDividendo : 0
+        }
+    });
+    return { sucesso: true, tipo: 'novo', ticker, cotas: criado.cotas, precoMedio: criado.precoMedio };
+}
 
 /**
  * Reúne um resumo textual da situação financeira do usuário (FII, Cripto, Cofrinho e
@@ -130,7 +194,8 @@ async function chamarAssistenteIA({ usuarioId, emailUsuario, historico, mensagem
     if (!geminiConfigurado) {
         return {
             resposta: 'A IA do assistente ainda não foi configurada neste servidor. Peça para o administrador definir GEMINI_API_KEY no arquivo .env (chave gratuita em https://aistudio.google.com/apikey).',
-            emailEnviado: null
+            emailEnviado: null,
+            fiiAdicionado: null
         };
     }
 
@@ -146,34 +211,42 @@ async function chamarAssistenteIA({ usuarioId, emailUsuario, historico, mensagem
         { role: 'user', parts: [{ text: mensagemUsuario }] }
     ];
 
-    const primeiraResposta = await chamarGemini({ systemInstruction, contents, tools: [FERRAMENTA_ENVIAR_EMAIL] });
+    const primeiraResposta = await chamarGemini({ systemInstruction, contents, tools: [FERRAMENTAS_DISPONIVEIS] });
     const parts = primeiraResposta?.candidates?.[0]?.content?.parts || [];
     const chamadaFuncao = parts.find(p => p.functionCall)?.functionCall;
 
-    if (chamadaFuncao?.name === 'enviar_email') {
-        const { destinatario, assunto, corpo } = chamadaFuncao.args || {};
-        const alvo = (typeof destinatario === 'string' && /\S+@\S+\.\S+/.test(destinatario)) ? destinatario : emailUsuario;
-
+    if (chamadaFuncao) {
         let resultadoFuncao;
         let emailEnviado = null;
+        let fiiAdicionado = null;
 
-        if (!alvo) {
-            resultadoFuncao = { sucesso: false, motivo: 'O usuário não tem e-mail cadastrado em Configurações.' };
-        } else if (!mailTransporter) {
-            resultadoFuncao = { sucesso: false, motivo: 'Envio de e-mail não está configurado no servidor (SMTP_USER/SMTP_PASS ausentes no .env).' };
-        } else {
-            try {
-                await mailTransporter.sendMail({
-                    from: `"FinanceHub" <${process.env.SMTP_USER}>`,
-                    to: alvo,
-                    subject: assunto || 'Mensagem do Assistente FinanceHub',
-                    text: corpo || ''
-                });
-                resultadoFuncao = { sucesso: true };
-                emailEnviado = { destinatario: alvo, assunto: assunto || null };
-            } catch (e) {
-                resultadoFuncao = { sucesso: false, motivo: e.message };
+        if (chamadaFuncao.name === 'enviar_email') {
+            const { destinatario, assunto, corpo } = chamadaFuncao.args || {};
+            const alvo = (typeof destinatario === 'string' && /\S+@\S+\.\S+/.test(destinatario)) ? destinatario : emailUsuario;
+
+            if (!alvo) {
+                resultadoFuncao = { sucesso: false, motivo: 'O usuário não tem e-mail cadastrado em Configurações.' };
+            } else if (!mailTransporter) {
+                resultadoFuncao = { sucesso: false, motivo: 'Envio de e-mail não está configurado no servidor (SMTP_USER/SMTP_PASS ausentes no .env).' };
+            } else {
+                try {
+                    await mailTransporter.sendMail({
+                        from: `"FinanceHub" <${process.env.SMTP_USER}>`,
+                        to: alvo,
+                        subject: assunto || 'Mensagem do Assistente FinanceHub',
+                        text: corpo || ''
+                    });
+                    resultadoFuncao = { sucesso: true };
+                    emailEnviado = { destinatario: alvo, assunto: assunto || null };
+                } catch (e) {
+                    resultadoFuncao = { sucesso: false, motivo: e.message };
+                }
             }
+        } else if (chamadaFuncao.name === 'adicionar_fii') {
+            resultadoFuncao = await executarAdicionarFii(usuarioId, chamadaFuncao.args || {});
+            if (resultadoFuncao.sucesso) fiiAdicionado = resultadoFuncao;
+        } else {
+            resultadoFuncao = { sucesso: false, motivo: 'Ferramenta desconhecida.' };
         }
 
         const segundaResposta = await chamarGemini({
@@ -181,20 +254,21 @@ async function chamarAssistenteIA({ usuarioId, emailUsuario, historico, mensagem
             contents: [
                 ...contents,
                 { role: 'model', parts: [{ functionCall: chamadaFuncao }] },
-                { role: 'user', parts: [{ functionResponse: { name: 'enviar_email', response: resultadoFuncao } }] }
+                { role: 'user', parts: [{ functionResponse: { name: chamadaFuncao.name, response: resultadoFuncao } }] }
             ],
-            tools: [FERRAMENTA_ENVIAR_EMAIL]
+            tools: [FERRAMENTAS_DISPONIVEIS]
         });
 
         const textoFinal = segundaResposta?.candidates?.[0]?.content?.parts?.find(p => p.text)?.text;
         return {
-            resposta: textoFinal || (resultadoFuncao.sucesso ? 'E-mail enviado com sucesso.' : `Não consegui enviar o e-mail: ${resultadoFuncao.motivo}`),
-            emailEnviado
+            resposta: textoFinal || (resultadoFuncao.sucesso ? 'Feito.' : `Não consegui concluir: ${resultadoFuncao.motivo}`),
+            emailEnviado,
+            fiiAdicionado
         };
     }
 
     const texto = parts.find(p => p.text)?.text;
-    return { resposta: texto || 'Não consegui gerar uma resposta agora. Tente novamente em instantes.', emailEnviado: null };
+    return { resposta: texto || 'Não consegui gerar uma resposta agora. Tente novamente em instantes.', emailEnviado: null, fiiAdicionado: null };
 }
 
 module.exports = { montarContextoFinanceiro, chamarAssistenteIA, geminiConfigurado };

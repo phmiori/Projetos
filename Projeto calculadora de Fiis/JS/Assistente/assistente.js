@@ -134,7 +134,7 @@ async function enviarMensagem() {
             renderizarMensagem('erro', erro.error || 'Não foi possível falar com o assistente agora.');
         } else {
             const dados = await resp.json();
-            renderizarMensagem('assistente', dados.resposta, dados.emailEnviado);
+            renderizarMensagem('assistente', dados.resposta, dados.emailEnviado, dados.fiiAdicionado);
         }
     } catch (err) {
         loadingEl.remove();
@@ -168,7 +168,7 @@ async function limparConversa() {
     `;
 }
 
-function renderizarMensagem(tipo, texto, emailEnviado) {
+function renderizarMensagem(tipo, texto, emailEnviado, fiiAdicionado) {
     const chatMensagens = document.getElementById('chatMensagens');
     const div = document.createElement('div');
 
@@ -186,6 +186,15 @@ function renderizarMensagem(tipo, texto, emailEnviado) {
             const tag = document.createElement('span');
             tag.className = 'chat-msg-email-tag';
             tag.textContent = `✓ E-mail enviado para ${emailEnviado.destinatario}`;
+            div.appendChild(document.createElement('br'));
+            div.appendChild(tag);
+        }
+
+        if (fiiAdicionado) {
+            const tag = document.createElement('span');
+            tag.className = 'chat-msg-email-tag';
+            const acao = fiiAdicionado.tipo === 'aporte' ? 'atualizado' : 'adicionado';
+            tag.textContent = `✓ ${fiiAdicionado.ticker} ${acao}: ${fiiAdicionado.cotas} cotas, preço médio R$ ${fiiAdicionado.precoMedio.toFixed(2)}`;
             div.appendChild(document.createElement('br'));
             div.appendChild(tag);
         }

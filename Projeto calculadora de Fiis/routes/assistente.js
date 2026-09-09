@@ -47,7 +47,7 @@ router.post('/chat', async (req, res) => {
             console.warn('[Assistente] Não foi possível carregar o histórico (tabela pendente de migração):', e.message);
         }
 
-        const { resposta, emailEnviado } = await chamarAssistenteIA({
+        const { resposta, emailEnviado, fiiAdicionado } = await chamarAssistenteIA({
             usuarioId: req.session.userId,
             emailUsuario: usuario?.email || null,
             historico,
@@ -61,7 +61,7 @@ router.post('/chat', async (req, res) => {
             console.warn('[Assistente] Não foi possível salvar a conversa (tabela pendente de migração):', e.message);
         }
 
-        res.json({ resposta, emailEnviado });
+        res.json({ resposta, emailEnviado, fiiAdicionado });
     } catch (err) {
         console.error('Erro no chat do assistente:', err);
         res.status(500).json({ error: 'Erro ao conversar com o assistente. Tente novamente.' });
