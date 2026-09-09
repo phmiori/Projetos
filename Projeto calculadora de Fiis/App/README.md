@@ -49,10 +49,11 @@ App/
   app.json                   config do Expo (nome, ícone, URL da API)
   src/
     api/                     chamadas para /api/... (mesmos endpoints do site)
-    components/              ListaTela.js (casca de lista com loading/erro/refresh) e CartaoItem.js
-    context/AuthContext.js   sessão de login (cookie, igual ao site)
+    components/              ListaTela, CartaoItem, BotaoFab, FormularioModal (modal de cadastro/edição reutilizável)
+    context/AuthContext.js   sessão de login (cookie, igual ao site) + editar perfil
+    hooks/useLista.js         estado comum de "buscar lista" (loading/erro/refresh)
     navigation/RootNavigator.js  menu lateral (Drawer), mesmo agrupamento Hub Financeiro/Hub Pessoal do site
-    screens/                 uma tela por módulo
+    screens/                 uma tela por módulo (financas/ tem sub-abas: Visão Geral, Transações, Contas, Categorias)
     theme/colors.js          mesma paleta de CSS/Global/global_tokens.css
     utils/formatadores.js    formatarMoeda/formatarData/formatarDataHora
 ```
@@ -61,14 +62,17 @@ App/
 
 - Login/logout de verdade (mesmo usuário e senha do site, `POST /api/auth/login`)
 - Menu lateral (Drawer) com o mesmo agrupamento Hub Financeiro / Hub Pessoal da sidebar do site
-- Todas as telas abaixo já leem os dados reais da API (view-only por enquanto — cadastrar/editar/excluir ainda só no site):
-  - **Hub Financeiro**: Visão Geral, Fundos Imobiliários, Cripto Moedas, Carros de Leilão, Casas de Leilão, Cofrinho
-  - **Hub Pessoal**: Calendário, Clima (local favorito), Finanças (resumo + faturas em aberto), Treinos & Saúde, Garagem, Notificações
-  - Configurações (perfil + sair)
+- **Cadastrar, editar e excluir** (não é só visualização) em:
+  - **Hub Financeiro**: Fundos Imobiliários (+ "Atualizar Cotações"), Cripto Moedas, Carros de Leilão, Casas de Leilão, Cofrinho
+  - **Hub Pessoal**: Calendário, Garagem, Treinos & Saúde (blocos + exercícios + registros de saúde), Finanças (Transações, Contas, Categorias)
+  - Configurações: editar perfil (nome/e-mail) e alterar senha
+- **Só visualização** (ainda): Visão Geral, Clima (local favorito), Notificações — nenhum desses tem "cadastrar" no site também (Notificações é derivada do Calendário/Faturas; Clima só tem o favorito, que se configura no site)
 
 ## O que falta
 
-- **Cadastrar/editar/excluir** em cada módulo (hoje o app só mostra os dados — criar/editar continua só pelo site)
+- **Finanças**: Cartões de Crédito (CRUD) e o fluxo de pagar fatura ainda só no site — Transações no app cobrem Débito/Pix/Dinheiro/Boleto, mas não Crédito/parcelamento (evita duplicar a lógica de fatura/competência do servidor)
 - **Assistente de IA** (chat) — não portado ainda
+- **Lista de Observação de FIIs** (watchlist) e **Backup/Export** — não portados
+- **Administração de usuários** (Configurações, só para admins) — não portado
 - Ícone e splash screen definitivos (`App/assets/icon.png` está usando o mesmo placeholder do PWA do site)
 - Publicar na Play Store (hoje só dá para instalar via Expo Go ou gerar um `.apk` manualmente com EAS Build)
