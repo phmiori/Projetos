@@ -45,23 +45,30 @@ O EAS builda na nuvem (gratuito, com fila) e devolve um link pra baixar o `.apk`
 
 ```
 App/
-  App.js                     entrada do app
+  App.js                     entrada do app (envolve tudo em GestureHandlerRootView)
   app.json                   config do Expo (nome, ícone, URL da API)
   src/
     api/                     chamadas para /api/... (mesmos endpoints do site)
+    components/              ListaTela.js (casca de lista com loading/erro/refresh) e CartaoItem.js
     context/AuthContext.js   sessão de login (cookie, igual ao site)
-    navigation/              abas do app
-    screens/                 telas (Login, Visão Geral, FIIs)
+    navigation/RootNavigator.js  menu lateral (Drawer), mesmo agrupamento Hub Financeiro/Hub Pessoal do site
+    screens/                 uma tela por módulo
     theme/colors.js          mesma paleta de CSS/Global/global_tokens.css
+    utils/formatadores.js    formatarMoeda/formatarData/formatarDataHora
 ```
 
 ## O que já funciona
 
 - Login/logout de verdade (mesmo usuário e senha do site, `POST /api/auth/login`)
-- Aba "FIIs": lista a carteira real do usuário logado (`GET /api/fii`)
+- Menu lateral (Drawer) com o mesmo agrupamento Hub Financeiro / Hub Pessoal da sidebar do site
+- Todas as telas abaixo já leem os dados reais da API (view-only por enquanto — cadastrar/editar/excluir ainda só no site):
+  - **Hub Financeiro**: Visão Geral, Fundos Imobiliários, Cripto Moedas, Carros de Leilão, Casas de Leilão, Cofrinho
+  - **Hub Pessoal**: Calendário, Clima (local favorito), Finanças (resumo + faturas em aberto), Treinos & Saúde, Garagem, Notificações
+  - Configurações (perfil + sair)
 
-## O que falta (módulo por módulo, igual ao site)
+## O que falta
 
-Cripto, Cofrinho, Finanças, Calendário, Clima, Garagem, Treinos & Saúde, Carros/Casas de
-Leilão, Notificações, Assistente de IA, Configurações — cada um vira uma tela nova em
-`src/screens/`, reaproveitando o padrão de `FiiScreen.js` (chama a API, mostra lista).
+- **Cadastrar/editar/excluir** em cada módulo (hoje o app só mostra os dados — criar/editar continua só pelo site)
+- **Assistente de IA** (chat) — não portado ainda
+- Ícone e splash screen definitivos (`App/assets/icon.png` está usando o mesmo placeholder do PWA do site)
+- Publicar na Play Store (hoje só dá para instalar via Expo Go ou gerar um `.apk` manualmente com EAS Build)

@@ -128,14 +128,17 @@
 
 ## 📱 App Mobile (React Native / Expo) — pasta `App/`
 - [x] Novo projeto Expo (SDK 57, React Native 0.86, React 19.2) em `App/`, **sem banco próprio**: fala com a mesma API REST (`server.js`) e o mesmo Postgres/Neon do site — o que é cadastrado em um aparece no outro
-- [x] Login de verdade (`POST /api/auth/login`, sessão por cookie — o fetch nativo do React Native mantém o cookie sozinho, igual a um navegador) e aba **FIIs** listando a carteira real do usuário logado (`GET /api/fii`)
+- [x] Login de verdade (`POST /api/auth/login`, sessão por cookie — o fetch nativo do React Native mantém o cookie sozinho, igual a um navegador)
 - [x] Paleta de cores espelhando `CSS/Global/global_tokens.css` (Modo Escuro)
 - [x] `app.json` já aponta para a produção no Render por padrão — funciona sem precisar rodar nada no computador
-- [x] Testado: `npm install` (499 pacotes, sem conflito) e `expo export --platform android` compilando os 835 módulos sem erro (bundle JS validado sem precisar de emulador)
 - [x] Escolha do usuário: React Native/Expo (UI nativa "de verdade", em vez de empacotar o site com Capacitor) e só Android por enquanto — ver `App/README.md` para como rodar (Expo Go) e gerar um `.apk` (EAS Build)
 - [x] Documentado em `App/README.md` o mesmo bug de `'"node"' não reconhecido` do npm/npx em pastas com espaço no caminho (já visto com `prisma`) e o workaround de chamar `node node_modules/expo/bin/cli ...` direto
+- [x] **Todos os módulos do site com uma tela de leitura no app** (view-only, cadastrar/editar continua só no site por enquanto): Visão Geral, FIIs, Cripto, Carros/Casas de Leilão, Cofrinho, Calendário, Clima, Finanças, Treinos & Saúde, Garagem, Notificações e Configurações — componentes compartilhados `ListaTela`/`CartaoItem` pra não repetir o código de loading/erro/pull-to-refresh em cada tela
+- [x] **Navegação trocada de abas pra menu lateral (Drawer)**: 13 telas não cabiam em abas — agora o menu replica o mesmo agrupamento "Hub Financeiro" / "Hub Pessoal" da sidebar do site
+- [x] **Corrigido durante a instalação**: `react-native-reanimated` mais recente (4.6) exige `react-native-worklets@0.12.x`, mas o Expo SDK 57 só suporta até `0.10.x` — fixado em `reanimated@~4.5.0` + `worklets@~0.10.4` (par compatível) pra evitar quebra silenciosa em runtime. Também precisou fixar `babel-preset-expo` como dependência direta no `package.json` (senão o npm deixa ele só aninhado dentro de `node_modules/expo/node_modules`, onde o `babel.config.js` da raiz não consegue achar)
+- [x] Testado de ponta a ponta: `npm install` (535 pacotes, sem conflito de peer dependency) e `expo export --platform android` compilando os 1382 módulos sem erro (bundle JS validado sem precisar de emulador)
 
-> ⚠️ Pendente (próximos módulos, um por vez — mesmo padrão do site): Cripto, Cofrinho, Finanças, Calendário, Clima, Garagem, Treinos & Saúde, Carros/Casas de Leilão, Notificações, Assistente de IA e Configurações ainda só existem no site, não no app.
+> ⚠️ Pendente: cadastrar/editar/excluir em cada módulo (hoje só visualização no app), Assistente de IA (chat) ainda não portado, ícone/splash definitivos (usando o placeholder do PWA), e publicar na Play Store (hoje só via Expo Go ou `.apk` manual com EAS Build).
 
 ## 🔧 Segurança, Refatoração, Testes e Melhorias Transversais
 - [x] **Segurança**: `helmet` (com CSP customizada para liberar o Chart.js via CDN), `express-rate-limit` no login (10 tentativas / 15 min), cookie de sessão `secure` condicionado a `NODE_ENV=production`, aviso no console se `SESSION_SECRET` não estiver configurado em produção
