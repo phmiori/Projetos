@@ -33,10 +33,48 @@ function LinhaModulo({ nome, valor, contagem }) {
   );
 }
 
+// Mesmas cores por módulo do site (ver JS/Index/index.js, CORES_MODULOS_HUB)
+const CORES_MODULOS = { fii: '#EEBB00', cripto: '#3B82F6', leilao: '#F97316', casasleilao: '#8B5CF6', cofrinho: '#EC4899' };
+
+/**
+ * Gráfico de barras horizontais simples (sem depender de nenhuma lib de gráfico) — mesma
+ * informação dos gráficos Chart.js do site (Alocação e Resultado por Módulo), só que em barras.
+ */
+function GraficoBarras({ titulo, itens, permiteNegativo }) {
+  const maiorValor = Math.max(1, ...itens.map((i) => Math.abs(i.valor)));
+  const temDados = itens.some((i) => i.valor !== 0);
+
+  return (
+    <View style={[estilos.card, { paddingBottom: 12 }]}>
+      <Text style={[estilos.secaoTitulo, { marginTop: 12 }]}>{titulo}</Text>
+      {!temDados ? (
+        <Text style={[estilos.linhaModuloContagem, { paddingVertical: 14 }]}>Sem dados ainda.</Text>
+      ) : (
+        itens.map((item) => {
+          const negativo = permiteNegativo && item.valor < 0;
+          const largura = `${Math.min(100, (Math.abs(item.valor) / maiorValor) * 100)}%`;
+          return (
+            <View key={item.nome} style={estilos.barraLinha2}>
+              <View style={estilos.barraCabecalho}>
+                <Text style={estilos.barraNome}>{item.nome}</Text>
+                <Text style={[estilos.barraValor, negativo && { color: colors.expense }]}>{formatarMoeda(item.valor)}</Text>
+              </View>
+              <View style={estilos.barraFundo}>
+                <View style={[estilos.barraPreenchida, { width: largura, backgroundColor: negativo ? colors.expense : item.cor }]} />
+              </View>
+            </View>
+          );
+        })
+      )}
+    </View>
+  );
+}
+
 export default function DashboardScreen() {
   const { usuario } = useAuth();
   const [kpis, setKpis] = useState(null);
   const [modulos, setModulos] = useState(null);
+  const [graficos, setGraficos] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [atualizando, setAtualizando] = useState(false);
   const [erro, setErro] = useState('');
@@ -116,6 +154,22 @@ export default function DashboardScreen() {
         casas: { valor: formatarMoeda(casasCapital), contagem: `${casasEmEstoque} em estoque · ${casasVendidos} vendido(s)` },
         carros: { valor: formatarMoeda(leilaoCapital), contagem: `${leilaoEmEstoque} em estoque · ${leilaoVendidos} vendido(s)` }
       });
+      setGraficos({
+        alocacao: [
+          { nome: 'FIIs', valor: fiiPatrimonio, cor: CORES_MODULOS.fii },
+          { nome: 'Cripto', valor: criptoPatrimonio, cor: CORES_MODULOS.cripto },
+          { nome: 'Cofrinho', valor: cofrinhoInvestido, cor: CORES_MODULOS.cofrinho },
+          { nome: 'Casas de Leilão', valor: casasCapital, cor: CORES_MODULOS.casasleilao },
+          { nome: 'Carros de Leilão', valor: leilaoCapital, cor: CORES_MODULOS.leilao }
+        ],
+        resultado: [
+          { nome: 'FIIs (renda/mês)', valor: fiiRendaMensal, cor: CORES_MODULOS.fii },
+          { nome: 'Cripto (valorização)', valor: criptoValorizacaoRS, cor: CORES_MODULOS.cripto },
+          { nome: 'Cofrinho (rendimento)', valor: cofrinhoRendimento, cor: CORES_MODULOS.cofrinho },
+          { nome: 'Casas de Leilão (lucro)', valor: casasLucro, cor: CORES_MODULOS.casasleilao },
+          { nome: 'Carros de Leilão (lucro)', valor: leilaoLucro, cor: CORES_MODULOS.leilao }
+        ]
+      });
     } catch (err) {
       setErro(err.message || 'Não foi possível carregar a visão geral.');
     } finally {
@@ -157,6 +211,13 @@ export default function DashboardScreen() {
               <LinhaModulo nome="Casas de Leilão" valor={modulos.casas.valor} contagem={modulos.casas.contagem} />
               <LinhaModulo nome="Carros de Leilão" valor={modulos.carros.valor} contagem={modulos.carros.contagem} />
             </View>
+
+            {graficos && (
+              <>
+                <GraficoBarras titulo="Alocação por Módulo" itens={graficos.alocacao} />
+                <GraficoBarras titulo="Resultado por Módulo" itens={graficos.resultado} permiteNegativo />
+              </>
+            )}
           </>
         )}
       </ScrollView>
@@ -201,5 +262,11 @@ const estilos = StyleSheet.create({
   },
   linhaModuloNome: { color: colors.textMain, fontSize: 14, fontWeight: '600', flex: 1 },
   linhaModuloValor: { color: colors.textMain, fontSize: 14, fontWeight: '700' },
-  linhaModuloContagem: { color: colors.textSub, fontSize: 11, marginTop: 2 }
+  linhaModuloContagem: { color: colors.textSub, fontSize: 11, marginTop: 2 },
+  barraLinha2: { paddingVertical: 8 },
+  barraCabecalho: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  barraNome: { color: colors.textSub, fontSize: 12 },
+  barraValor: { color: colors.textMain, fontSize: 12, fontWeight: '700' },
+  barraFundo: { height: 8, backgroundColor: colors.bgMain, borderRadius: 4, overflow: 'hidden' },
+  barraPreenchida: { height: 8, borderRadius: 4 }
 });
