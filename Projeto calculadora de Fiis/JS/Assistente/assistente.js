@@ -135,6 +135,11 @@ async function enviarMensagem() {
         } else {
             const dados = await resp.json();
             renderizarMensagem('assistente', dados.resposta, dados.emailEnviado, dados.fiiAdicionado);
+
+            // Avisa a página do módulo FII (se estiver aberta) para recarregar a tabela sozinha
+            if (dados.fiiAdicionado) {
+                window.dispatchEvent(new CustomEvent('financehub:fii-atualizado', { detail: dados.fiiAdicionado }));
+            }
         }
     } catch (err) {
         loadingEl.remove();

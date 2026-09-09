@@ -118,6 +118,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, FII_COTACOES_AUTO_MS);
 
+    // Recarrega a tabela quando o Assistente de IA adiciona/atualiza um FII pelo chat,
+    // sem precisar que o usuário dê F5 (ver JS/Assistente/assistente.js)
+    window.addEventListener('financehub:fii-atualizado', carregarCarteira);
+
     // Iniciar simulação padrão da calculadora
     executarSimulacao();
 });

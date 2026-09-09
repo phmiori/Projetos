@@ -6,6 +6,7 @@
 const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session);
 const helmet = require('helmet');
 const cron = require('node-cron');
 
@@ -45,14 +46,27 @@ if (!process.env.SESSION_SECRET && process.env.NODE_ENV === 'production') {
     console.warn('AVISO: SESSION_SECRET não definido em produção. Defina-o no .env.');
 }
 
+/**
+ * Sessões persistidas no próprio Postgres (Neon), em vez do MemoryStore padrão do
+ * express-session: o MemoryStore perde todas as sessões (derruba todo mundo logado) sempre
+ * que o processo Node reinicia — o que acontece a cada deploy e, no plano gratuito do Render,
+ * também quando o serviço hiberna por inatividade e "acorda" de novo. `createTableIfMissing`
+ * cria a tabela de sessões sozinho, sem precisar de `prisma db push` (não faz parte do schema
+ * do Prisma, é uma tabela própria do connect-pg-simple).
+ */
 app.use(session({
+    store: new pgSession({
+        conString: process.env.DATABASE_URL,
+        createTableIfMissing: true,
+        tableName: 'sessao_usuario'
+    }),
     secret: process.env.SESSION_SECRET || 'autoleilao-hub-chave-local-2026',
     resave: false,
     saveUninitialized: false,
     cookie: {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        maxAge: 8 * 60 * 60 * 1000 // 8 horas
+        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 dias — antes eram 8h, agora seguro por ficar persistido no banco
     }
 }));
 
