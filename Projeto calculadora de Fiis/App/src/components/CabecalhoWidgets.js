@@ -33,15 +33,15 @@ export default function CabecalhoWidgets() {
 const estilos = StyleSheet.create({
   container: { flexDirection: 'row', alignItems: 'center', marginRight: 12, gap: 8 },
   bolinha: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.bgSurface,
     borderColor: colors.border,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center'
   },
-  roboTexto: { fontSize: 15 },
-  climaTexto: { color: colors.textMain, fontSize: 12, fontWeight: '700' }
+  roboTexto: { fontSize: 20 },
+  climaTexto: { color: colors.textMain, fontSize: 14, fontWeight: '700' }
 });
