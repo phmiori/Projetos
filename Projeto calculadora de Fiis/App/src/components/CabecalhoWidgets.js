@@ -12,7 +12,7 @@ export default function CabecalhoWidgets() {
     let ativo = true;
     buscarClimaFavorito()
       .then((dados) => { if (ativo) setClima(dados); })
-      .catch(() => {});
+      .catch((err) => console.warn('[CabecalhoWidgets] Erro ao buscar clima favorito:', err.message));
     return () => { ativo = false; };
   }, []);
 
