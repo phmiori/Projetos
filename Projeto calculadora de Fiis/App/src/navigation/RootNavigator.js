@@ -21,6 +21,7 @@ import NotificacoesScreen from '../screens/NotificacoesScreen';
 import ConfiguracoesScreen from '../screens/ConfiguracoesScreen';
 import AssistenteScreen from '../screens/AssistenteScreen';
 import CabecalhoWidgets from '../components/CabecalhoWidgets';
+import { navigationRef } from './navigationRef';
 
 const Drawer = createDrawerNavigator();
 
@@ -97,30 +98,32 @@ function ConteudoDrawer(props) {
 
 function TelasPrincipais() {
   return (
-    <Drawer.Navigator
-      drawerContent={(props) => <ConteudoDrawer {...props} />}
-      screenOptions={{
-        headerStyle: { backgroundColor: colors.bgSurface },
-        headerTintColor: colors.textMain,
-        headerRight: () => <CabecalhoWidgets />,
-        drawerType: 'front'
-      }}
-    >
-      <Drawer.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Visão Geral' }} />
-      <Drawer.Screen name="FII" component={FiiScreen} options={{ title: 'Fundos Imobiliários' }} />
-      <Drawer.Screen name="Cripto" component={CriptoScreen} options={{ title: 'Cripto Moedas' }} />
-      <Drawer.Screen name="Leilao" component={LeilaoScreen} options={{ title: 'Carros de Leilão' }} />
-      <Drawer.Screen name="CasasLeilao" component={CasasLeilaoScreen} options={{ title: 'Casas de Leilão' }} />
-      <Drawer.Screen name="Cofrinho" component={CofrinhoScreen} options={{ title: 'Cofrinho' }} />
-      <Drawer.Screen name="Calendario" component={CalendarioScreen} options={{ title: 'Calendário' }} />
-      <Drawer.Screen name="Clima" component={ClimaScreen} options={{ title: 'Clima' }} />
-      <Drawer.Screen name="Financas" component={FinancasScreen} options={{ title: 'Finanças' }} />
-      <Drawer.Screen name="TreinosSaude" component={TreinosSaudeScreen} options={{ title: 'Treinos & Saúde' }} />
-      <Drawer.Screen name="Garagem" component={GaragemScreen} options={{ title: 'Garagem' }} />
-      <Drawer.Screen name="Notificacoes" component={NotificacoesScreen} options={{ title: 'Notificações' }} />
-      <Drawer.Screen name="Assistente" component={AssistenteScreen} options={{ headerShown: false }} />
-      <Drawer.Screen name="Configuracoes" component={ConfiguracoesScreen} options={{ title: 'Configurações' }} />
-    </Drawer.Navigator>
+    <View style={{ flex: 1 }}>
+      <Drawer.Navigator
+        drawerContent={(props) => <ConteudoDrawer {...props} />}
+        screenOptions={{
+          headerStyle: { backgroundColor: colors.bgSurface },
+          headerTintColor: colors.textMain,
+          drawerType: 'front'
+        }}
+      >
+        <Drawer.Screen name="Dashboard" component={DashboardScreen} options={{ title: 'Visão Geral' }} />
+        <Drawer.Screen name="FII" component={FiiScreen} options={{ title: 'Fundos Imobiliários' }} />
+        <Drawer.Screen name="Cripto" component={CriptoScreen} options={{ title: 'Cripto Moedas' }} />
+        <Drawer.Screen name="Leilao" component={LeilaoScreen} options={{ title: 'Carros de Leilão' }} />
+        <Drawer.Screen name="CasasLeilao" component={CasasLeilaoScreen} options={{ title: 'Casas de Leilão' }} />
+        <Drawer.Screen name="Cofrinho" component={CofrinhoScreen} options={{ title: 'Cofrinho' }} />
+        <Drawer.Screen name="Calendario" component={CalendarioScreen} options={{ title: 'Calendário' }} />
+        <Drawer.Screen name="Clima" component={ClimaScreen} options={{ title: 'Clima' }} />
+        <Drawer.Screen name="Financas" component={FinancasScreen} options={{ title: 'Finanças' }} />
+        <Drawer.Screen name="TreinosSaude" component={TreinosSaudeScreen} options={{ title: 'Treinos & Saúde' }} />
+        <Drawer.Screen name="Garagem" component={GaragemScreen} options={{ title: 'Garagem' }} />
+        <Drawer.Screen name="Notificacoes" component={NotificacoesScreen} options={{ title: 'Notificações' }} />
+        <Drawer.Screen name="Assistente" component={AssistenteScreen} options={{ headerShown: false }} />
+        <Drawer.Screen name="Configuracoes" component={ConfiguracoesScreen} options={{ title: 'Configurações' }} />
+      </Drawer.Navigator>
+      <CabecalhoWidgets />
+    </View>
   );
 }
 
@@ -136,7 +139,7 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer theme={temaEscuro}>
+    <NavigationContainer ref={navigationRef} theme={temaEscuro}>
       {usuario ? <TelasPrincipais /> : <LoginScreen />}
     </NavigationContainer>
   );

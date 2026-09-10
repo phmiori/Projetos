@@ -1,11 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import Constants from 'expo-constants';
 import { colors } from '../theme/colors';
 import { buscarClimaFavorito } from '../api/clima';
+import { navegarPara } from '../navigation/navigationRef';
+
+// Posicionado flutuando por cima da tela (não faz parte do header), no canto superior
+// esquerdo — mesmo esquema visual do desenho: bolinha do robô sozinha quando não há local
+// de clima favoritado, ou as duas em cascata diagonal quando há.
+const TOPO = (Constants.statusBarHeight || 24) + 56;
 
 export default function CabecalhoWidgets() {
-  const navigation = useNavigation();
   const [clima, setClima] = useState(null);
 
   useEffect(() => {
@@ -17,22 +22,35 @@ export default function CabecalhoWidgets() {
   }, []);
 
   return (
-    <View style={estilos.container}>
+    <View style={estilos.container} pointerEvents="box-none">
+      <TouchableOpacity style={estilos.bolinhaRobo} onPress={() => navegarPara('Assistente')}>
+        <Text style={estilos.roboTexto}>🤖</Text>
+      </TouchableOpacity>
       {clima && (
-        <TouchableOpacity style={estilos.bolinha} onPress={() => navigation.navigate('Clima')}>
+        <TouchableOpacity style={estilos.bolinhaClima} onPress={() => navegarPara('Clima')}>
           <Text style={estilos.climaTexto}>{Math.round(clima.current?.temperature_2m)}°</Text>
         </TouchableOpacity>
       )}
-      <TouchableOpacity style={estilos.bolinha} onPress={() => navigation.navigate('Assistente')}>
-        <Text style={estilos.roboTexto}>🤖</Text>
-      </TouchableOpacity>
     </View>
   );
 }
 
 const estilos = StyleSheet.create({
-  container: { flexDirection: 'row', alignItems: 'center', marginRight: 12, gap: 8 },
-  bolinha: {
+  container: { position: 'absolute', top: TOPO, left: 16, zIndex: 999, elevation: 999 },
+  bolinhaRobo: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.bgSurface,
+    borderColor: colors.border,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  bolinhaClima: {
+    position: 'absolute',
+    top: 26,
+    left: 26,
     width: 44,
     height: 44,
     borderRadius: 22,
