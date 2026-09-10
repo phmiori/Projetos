@@ -36,8 +36,11 @@ export default function CabecalhoWidgets() {
 }
 
 const estilos = StyleSheet.create({
-  container: { position: 'absolute', top: TOPO, right: 16, zIndex: 999, elevation: 999 },
+  container: { position: 'absolute', top: TOPO, right: 16, width: 84, height: 84, zIndex: 999, elevation: 999 },
   bolinhaRobo: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -50,7 +53,7 @@ const estilos = StyleSheet.create({
   bolinhaClima: {
     position: 'absolute',
     top: 40,
-    right: 40,
+    right: 0,
     width: 44,
     height: 44,
     borderRadius: 22,
