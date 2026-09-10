@@ -5,11 +5,10 @@ import { colors } from '../theme/colors';
 import { buscarClimaFavorito } from '../api/clima';
 import { navegarPara } from '../navigation/navigationRef';
 
-// Posicionado flutuando por cima da tela (não faz parte do header), no canto superior
-// direito, dentro da faixa do cabeçalho (área fixa e vazia do lado oposto ao botão do
-// menu) — bolinha do robô sozinha quando não há local de clima favoritado, ou as duas em
-// cascata diagonal quando há.
-const TOPO = (Constants.statusBarHeight || 24) + 8;
+// Posicionado flutuando POR CIMA do conteúdo da tela (não faz parte do header), no canto
+// superior direito — bolinha do robô sozinha quando não há local de clima favoritado, ou
+// as duas em cascata diagonal quando há.
+const TOPO = (Constants.statusBarHeight || 24) + 56;
 
 export default function CabecalhoWidgets() {
   const [clima, setClima] = useState(null);
