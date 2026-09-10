@@ -8,7 +8,7 @@ import { navegarPara } from '../navigation/navigationRef';
 // Posicionado flutuando POR CIMA do conteúdo da tela (não faz parte do header), no canto
 // superior direito — bolinha do robô sozinha quando não há local de clima favoritado, ou
 // as duas em cascata diagonal quando há.
-const TOPO = (Constants.statusBarHeight || 24) + 56;
+const TOPO = (Constants.statusBarHeight || 24) + 20;
 
 export default function CabecalhoWidgets() {
   const [clima, setClima] = useState(null);
