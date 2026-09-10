@@ -6,9 +6,10 @@ import { buscarClimaFavorito } from '../api/clima';
 import { navegarPara } from '../navigation/navigationRef';
 
 // Posicionado flutuando por cima da tela (não faz parte do header), no canto superior
-// esquerdo — mesmo esquema visual do desenho: bolinha do robô sozinha quando não há local
-// de clima favoritado, ou as duas em cascata diagonal quando há.
-const TOPO = (Constants.statusBarHeight || 24) + 56;
+// direito, dentro da faixa do cabeçalho (área fixa e vazia do lado oposto ao botão do
+// menu) — bolinha do robô sozinha quando não há local de clima favoritado, ou as duas em
+// cascata diagonal quando há.
+const TOPO = (Constants.statusBarHeight || 24) + 8;
 
 export default function CabecalhoWidgets() {
   const [clima, setClima] = useState(null);
@@ -36,7 +37,7 @@ export default function CabecalhoWidgets() {
 }
 
 const estilos = StyleSheet.create({
-  container: { position: 'absolute', top: TOPO, left: 16, zIndex: 999, elevation: 999 },
+  container: { position: 'absolute', top: TOPO, right: 16, zIndex: 999, elevation: 999 },
   bolinhaRobo: {
     width: 44,
     height: 44,
@@ -49,8 +50,8 @@ const estilos = StyleSheet.create({
   },
   bolinhaClima: {
     position: 'absolute',
-    top: 26,
-    left: 26,
+    top: 40,
+    right: 40,
     width: 44,
     height: 44,
     borderRadius: 22,
