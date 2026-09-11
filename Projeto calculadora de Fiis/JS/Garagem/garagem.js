@@ -9,16 +9,29 @@ const API_BASE = '/api';
 const stateGaragem = {
     veiculos: [],
     buscaAtivos: '',
+    ordenarAtivos: 'recentes',
+    viewMode: localStorage.getItem('financehub_garagem_view') || 'grid',
+    selecionados: new Set(),
     editVeiculoId: null,
     fichaVeiculoId: null,
     editManutencaoId: null
 };
+
+let chartComparativoCustos = null;
+let chartResultadoVendidos = null;
+let chartFichaCategoria = null;
+let chartFichaEvolucao = null;
+
+const CORES_GRAFICO = ['#EEBB00', '#D32F2F', '#3B82F6', '#8B5CF6', '#EC4899', '#F97316', '#6B7280', '#2E7D32'];
 
 document.addEventListener('DOMContentLoaded', () => {
     initTheme();
     initMobileNavigation();
     initSubNav();
     initBuscaAtivos();
+    initOrdenacao();
+    initViewToggle();
+    initComparador();
     initModalVeiculo();
     initModalFicha();
     initModalManutencao();
@@ -51,6 +64,10 @@ async function carregarVeiculos() {
         const resp = await fetch(`${API_BASE}/garagem/veiculos`);
         if (!resp.ok) throw new Error('Erro ao buscar veículos');
         stateGaragem.veiculos = await resp.json();
+
+        const idsAtivos = new Set(stateGaragem.veiculos.filter(v => v.status === 'Ativo').map(v => v.id));
+        stateGaragem.selecionados.forEach(id => { if (!idsAtivos.has(id)) stateGaragem.selecionados.delete(id); });
+
         renderAtivos();
         renderHistorico();
     } catch (err) {
@@ -75,6 +92,46 @@ function calcularResultado(veiculo) {
     return veiculo.valorVenda - calcularCustoTotal(veiculo);
 }
 
+function mesesEntre(dataInicial, dataFinal) {
+    const d1 = new Date(dataInicial);
+    const d2 = new Date(dataFinal);
+    return Math.max(0, (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth()));
+}
+
+function calcularMesesPosse(veiculo) {
+    const fim = veiculo.status === 'Vendido' && veiculo.dataVenda ? new Date(veiculo.dataVenda) : new Date();
+    return mesesEntre(veiculo.dataCompra, fim);
+}
+
+function calcularCustoMedioMensal(veiculo) {
+    const meses = Math.max(1, calcularMesesPosse(veiculo));
+    return calcularGastoManutencao(veiculo) / meses;
+}
+
+function calcularCustoPorKm(veiculo) {
+    if (!veiculo.quilometragem || veiculo.quilometragem <= 0) return null;
+    return calcularCustoTotal(veiculo) / veiculo.quilometragem;
+}
+
+// Selo de alerta do card: revisão vencida tem prioridade sobre tempo sem manutenção
+function calcularAlertaVeiculo(veiculo) {
+    const hoje = new Date();
+
+    if (veiculo.dataProximaRevisao && new Date(veiculo.dataProximaRevisao) < hoje) {
+        return { texto: 'Revisão vencida', classe: 'pill-expense' };
+    }
+
+    const manutencoes = veiculo.manutencoes || [];
+    const referencia = manutencoes.length ? manutencoes[0].data : veiculo.dataCompra;
+    const meses = mesesEntre(referencia, hoje);
+
+    if (meses >= 6) {
+        return { texto: `Sem manutenção há ${meses} meses`, classe: 'pill-expense' };
+    }
+
+    return null;
+}
+
 // =========================================================
 // ABA 1: MINHA GARAGEM (VEÍCULOS ATIVOS)
 // =========================================================
@@ -84,6 +141,42 @@ function initBuscaAtivos() {
         stateGaragem.buscaAtivos = e.target.value.trim().toLowerCase();
         renderAtivos();
     });
+}
+
+function initOrdenacao() {
+    document.getElementById('selectGaragemOrdenar').addEventListener('change', (e) => {
+        stateGaragem.ordenarAtivos = e.target.value;
+        renderAtivos();
+    });
+}
+
+function ordenarListaAtivos(lista, criterio) {
+    const copia = [...lista];
+    switch (criterio) {
+        case 'custo-desc': return copia.sort((a, b) => calcularCustoTotal(b) - calcularCustoTotal(a));
+        case 'custo-asc': return copia.sort((a, b) => calcularCustoTotal(a) - calcularCustoTotal(b));
+        case 'posse-desc': return copia.sort((a, b) => new Date(a.dataCompra) - new Date(b.dataCompra));
+        case 'marca': return copia.sort((a, b) => `${a.marca} ${a.modelo}`.localeCompare(`${b.marca} ${b.modelo}`));
+        default: return copia;
+    }
+}
+
+function initViewToggle() {
+    const grid = document.getElementById('garagemAtivosGrid');
+    const btnGrid = document.getElementById('btnViewGrid');
+    const btnList = document.getElementById('btnViewList');
+
+    function aplicarView(modo) {
+        stateGaragem.viewMode = modo;
+        grid.classList.toggle('view-list', modo === 'list');
+        btnGrid.classList.toggle('active', modo === 'grid');
+        btnList.classList.toggle('active', modo === 'list');
+        localStorage.setItem('financehub_garagem_view', modo);
+    }
+
+    btnGrid.addEventListener('click', () => aplicarView('grid'));
+    btnList.addEventListener('click', () => aplicarView('list'));
+    aplicarView(stateGaragem.viewMode);
 }
 
 function renderAtivos() {
@@ -101,6 +194,8 @@ function renderAtivos() {
         );
     }
 
+    ativos = ordenarListaAtivos(ativos, stateGaragem.ordenarAtivos);
+
     if (!ativos.length) {
         grid.innerHTML = stateGaragem.buscaAtivos
             ? '<div class="garagem-empty">Nenhum veículo encontrado para essa busca.</div>'
@@ -115,6 +210,8 @@ function renderAtivos() {
     }
 
     atualizarKpisAtivos(ativos);
+    renderGraficoComparativo(ativos);
+    atualizarBotaoComparar();
 }
 
 function atualizarKpisAtivos(ativos) {
@@ -125,13 +222,65 @@ function atualizarKpisAtivos(ativos) {
     document.getElementById('kpiGaragemManutencao').textContent = formatarMoeda(totalManutencao);
 }
 
+// Placeholder de foto: ícone de carro numa caixa colorida (upload de foto real ainda não implementado)
+function criarFotoPlaceholder(v) {
+    if (v.fotoUrl) {
+        return `<div class="garagem-card-photo"><img src="${escapeHtml(v.fotoUrl)}" alt="Foto de ${escapeHtml(v.marca)} ${escapeHtml(v.modelo)}"></div>`;
+    }
+    return `<div class="garagem-card-photo" title="Sem foto cadastrada">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m21 8-2 2-1.5-3.7A2 2 0 0 0 15.646 5H8.354a2 2 0 0 0-1.855 1.3L5 10 3 8"></path>
+            <rect width="18" height="8" x="3" y="10" rx="2"></rect>
+            <circle cx="7" cy="17" r="1.5"></circle>
+            <circle cx="17" cy="17" r="1.5"></circle>
+        </svg>
+    </div>`;
+}
+
+function criarBarraProgresso(v, custoTotal) {
+    if (!v.valorMercado || v.valorMercado <= 0) return '';
+    const percentual = (custoTotal / v.valorMercado) * 100;
+    const acimaDoValor = custoTotal > v.valorMercado;
+    return `
+        <div class="garagem-progress-wrap">
+            <div class="garagem-progress-labels">
+                <span>Custo vs. Valor de Mercado</span>
+                <span>${percentual.toFixed(0)}%</span>
+            </div>
+            <div class="garagem-progress-track">
+                <div class="garagem-progress-fill${acimaDoValor ? ' progress-alerta' : ''}" style="width:${Math.min(percentual, 100)}%"></div>
+            </div>
+        </div>
+    `;
+}
+
+function criarMiniTimeline(v) {
+    const recentes = (v.manutencoes || []).slice(0, 2);
+    if (!recentes.length) return '';
+    return `
+        <div class="garagem-mini-timeline">
+            <span class="garagem-mini-timeline-title">Últimas Manutenções</span>
+            ${recentes.map(m => `
+                <div class="garagem-mini-timeline-item">
+                    <span class="garagem-mini-timeline-desc">${escapeHtml(m.descricao)}</span>
+                    <span class="garagem-mini-timeline-meta">${formatarDataBR(m.data)} · ${formatarMoeda(m.valor)}</span>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
 function criarCardVeiculo(v) {
     const card = document.createElement('div');
     card.className = 'garagem-veiculo-card';
 
     const gastoManutencao = calcularGastoManutencao(v);
+    const custoTotal = calcularCustoTotal(v);
+    const alerta = calcularAlertaVeiculo(v);
+    const marcado = stateGaragem.selecionados.has(v.id);
 
     card.innerHTML = `
+        ${criarFotoPlaceholder(v)}
         <div class="garagem-card-header">
             <div>
                 <div class="garagem-card-titulo">${escapeHtml(v.marca)} ${escapeHtml(v.modelo)}${v.ano ? ` (${v.ano})` : ''}</div>
@@ -139,6 +288,8 @@ function criarCardVeiculo(v) {
             </div>
             <span class="garagem-pill pill-accent">${escapeHtml(v.status)}</span>
         </div>
+        ${alerta ? `<span class="garagem-pill ${alerta.classe}">⚠ ${escapeHtml(alerta.texto)}</span>` : ''}
+        <div class="garagem-card-body">
         <div class="garagem-card-stats">
             <div>
                 <span class="garagem-card-stat-label">Valor de Compra</span>
@@ -157,7 +308,14 @@ function criarCardVeiculo(v) {
                 <span class="garagem-card-stat-val">${(v.quilometragem !== null && v.quilometragem !== undefined) ? `${v.quilometragem} km` : '—'}</span>
             </div>
         </div>
+        ${criarBarraProgresso(v, custoTotal)}
+        ${criarMiniTimeline(v)}
+        </div>
         <div class="garagem-card-actions">
+            <div class="garagem-card-select">
+                <input type="checkbox" id="compararCk${v.id}" data-comparar-check ${marcado ? 'checked' : ''}>
+                <label for="compararCk${v.id}">Comparar</label>
+            </div>
             <button type="button" class="btn-garagem-action" data-ver-ficha>Ver Ficha</button>
             <button type="button" class="btn-garagem-action" data-editar-veiculo>Editar</button>
         </div>
@@ -165,6 +323,11 @@ function criarCardVeiculo(v) {
 
     card.querySelector('[data-ver-ficha]').addEventListener('click', () => abrirFicha(v.id));
     card.querySelector('[data-editar-veiculo]').addEventListener('click', () => abrirModalVeiculo(v));
+    card.querySelector('[data-comparar-check]').addEventListener('change', (e) => {
+        if (e.target.checked) stateGaragem.selecionados.add(v.id);
+        else stateGaragem.selecionados.delete(v.id);
+        atualizarBotaoComparar();
+    });
 
     return card;
 }
@@ -210,6 +373,7 @@ function renderHistorico() {
     }
 
     atualizarKpisHistorico(vendidos);
+    renderGraficoResultadoVendidos(vendidos);
 }
 
 function atualizarKpisHistorico(vendidos) {
@@ -219,6 +383,230 @@ function atualizarKpisHistorico(vendidos) {
     const el = document.getElementById('kpiGaragemResultado');
     el.textContent = formatarMoeda(resultadoTotal);
     el.className = resultadoTotal >= 0 ? 'kpi-value text-income' : 'kpi-value text-expense';
+}
+
+// =========================================================
+// GRÁFICOS (Chart.js)
+// =========================================================
+
+function corTextoGrafico() {
+    return document.documentElement.getAttribute('data-theme') === 'light' ? '#1C1C1E' : '#FFFFFF';
+}
+
+function renderGraficoComparativo(ativos) {
+    const card = document.getElementById('cardComparativoCustos');
+    const ctx = document.getElementById('chartComparativoCustos');
+    if (!ctx) return;
+
+    if (chartComparativoCustos) chartComparativoCustos.destroy();
+
+    if (ativos.length < 2) {
+        card.style.display = 'none';
+        return;
+    }
+    card.style.display = 'flex';
+
+    const textColor = corTextoGrafico();
+    const labels = ativos.map(v => `${v.marca} ${v.modelo}`);
+
+    chartComparativoCustos = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                { label: 'Valor de Compra', data: ativos.map(v => v.valorCompra || 0), backgroundColor: '#3B82F6', borderRadius: 4 },
+                { label: 'Manutenção', data: ativos.map(v => calcularGastoManutencao(v)), backgroundColor: '#EEBB00', borderRadius: 4 }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { stacked: true, ticks: { color: textColor }, grid: { display: false } },
+                y: { stacked: true, ticks: { color: textColor }, grid: { color: 'rgba(160,160,160,0.15)' } }
+            },
+            plugins: {
+                legend: { labels: { color: textColor, font: { weight: '600', size: 11 } } },
+                tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${formatarMoeda(ctx.raw)}` } }
+            }
+        }
+    });
+}
+
+function renderGraficoResultadoVendidos(vendidos) {
+    const card = document.getElementById('cardResultadoVendidos');
+    const ctx = document.getElementById('chartResultadoVendidos');
+    if (!ctx) return;
+
+    if (chartResultadoVendidos) chartResultadoVendidos.destroy();
+
+    if (!vendidos.length) {
+        card.style.display = 'none';
+        return;
+    }
+    card.style.display = 'flex';
+
+    const textColor = corTextoGrafico();
+    const labels = vendidos.map(v => `${v.marca} ${v.modelo}`);
+    const resultados = vendidos.map(v => calcularResultado(v) || 0);
+
+    chartResultadoVendidos = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [{
+                label: 'Resultado',
+                data: resultados,
+                backgroundColor: resultados.map(r => r >= 0 ? '#2E7D32' : '#D32F2F'),
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: (ctx) => ` ${formatarMoeda(ctx.raw)}` } }
+            },
+            scales: {
+                x: { ticks: { color: textColor }, grid: { display: false } },
+                y: { ticks: { color: textColor }, grid: { color: 'rgba(160,160,160,0.15)' } }
+            }
+        }
+    });
+}
+
+function renderGraficosFicha(veiculo) {
+    const wrap = document.getElementById('fichaGraficosWrap');
+    const manutencoes = veiculo.manutencoes || [];
+
+    if (chartFichaCategoria) chartFichaCategoria.destroy();
+    if (chartFichaEvolucao) chartFichaEvolucao.destroy();
+
+    if (!manutencoes.length) {
+        wrap.style.display = 'none';
+        return;
+    }
+    wrap.style.display = 'grid';
+
+    const textColor = corTextoGrafico();
+    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+
+    // --- Donut: gastos por categoria ---
+    const porCategoria = {};
+    manutencoes.forEach(m => { porCategoria[m.categoria] = (porCategoria[m.categoria] || 0) + (m.valor || 0); });
+
+    const ctxCategoria = document.getElementById('chartFichaCategoria');
+    chartFichaCategoria = new Chart(ctxCategoria, {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(porCategoria),
+            datasets: [{
+                data: Object.values(porCategoria),
+                backgroundColor: CORES_GRAFICO,
+                borderColor: isDark ? '#1C1C1E' : '#FFFFFF',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'right', labels: { color: textColor, font: { weight: '600', size: 10 }, boxWidth: 12 } },
+                tooltip: { callbacks: { label: (ctx) => ` ${ctx.label}: ${formatarMoeda(ctx.raw)}` } }
+            }
+        }
+    });
+
+    // --- Linha: evolução do custo acumulado (compra + manutenções em ordem cronológica) ---
+    const eventos = [{ data: veiculo.dataCompra, valor: veiculo.valorCompra || 0 }]
+        .concat(manutencoes.map(m => ({ data: m.data, valor: m.valor || 0 })))
+        .sort((a, b) => new Date(a.data) - new Date(b.data));
+
+    let acumulado = 0;
+    const pontosEvolucao = eventos.map(ev => {
+        acumulado += ev.valor;
+        return { x: formatarDataBR(ev.data), y: acumulado };
+    });
+
+    const ctxEvolucao = document.getElementById('chartFichaEvolucao');
+    chartFichaEvolucao = new Chart(ctxEvolucao, {
+        type: 'line',
+        data: {
+            labels: pontosEvolucao.map(p => p.x),
+            datasets: [{
+                label: 'Custo Acumulado',
+                data: pontosEvolucao.map(p => p.y),
+                borderColor: '#EEBB00',
+                backgroundColor: 'rgba(238, 187, 0, 0.15)',
+                fill: true,
+                tension: 0.25,
+                pointBackgroundColor: '#EEBB00'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: { callbacks: { label: (ctx) => ` ${formatarMoeda(ctx.raw)}` } }
+            },
+            scales: {
+                x: { ticks: { color: textColor }, grid: { display: false } },
+                y: { ticks: { color: textColor }, grid: { color: 'rgba(160,160,160,0.15)' } }
+            }
+        }
+    });
+}
+
+// =========================================================
+// COMPARADOR DE VEÍCULOS
+// =========================================================
+
+function initComparador() {
+    document.getElementById('btnCompararVeiculos').addEventListener('click', abrirComparador);
+    document.getElementById('modalCompararClose').addEventListener('click', fecharComparador);
+    document.getElementById('btnCompararFechar').addEventListener('click', fecharComparador);
+    document.getElementById('modalCompararOverlay').addEventListener('click', (e) => {
+        if (e.target.id === 'modalCompararOverlay') fecharComparador();
+    });
+}
+
+function atualizarBotaoComparar() {
+    const btn = document.getElementById('btnCompararVeiculos');
+    const contagem = document.getElementById('compararContagem');
+    contagem.textContent = stateGaragem.selecionados.size;
+    btn.style.display = stateGaragem.selecionados.size >= 2 ? 'inline-flex' : 'none';
+}
+
+function abrirComparador() {
+    const veiculos = [...stateGaragem.selecionados].map(id => buscarVeiculo(id)).filter(Boolean);
+    if (veiculos.length < 2) return;
+
+    const linhas = [
+        ['Veículo', v => `${v.marca} ${v.modelo}${v.ano ? ` (${v.ano})` : ''}`],
+        ['Status', v => v.status],
+        ['Data de Compra', v => formatarDataBR(v.dataCompra)],
+        ['Valor de Compra', v => formatarMoeda(v.valorCompra)],
+        ['Total em Manutenção', v => formatarMoeda(calcularGastoManutencao(v))],
+        ['Custo Total', v => formatarMoeda(calcularCustoTotal(v))],
+        ['Quilometragem', v => (v.quilometragem !== null && v.quilometragem !== undefined) ? `${v.quilometragem} km` : '—'],
+        ['Tempo de Posse', v => `${calcularMesesPosse(v)} meses`],
+        ['Custo por Km', v => { const c = calcularCustoPorKm(v); return c !== null ? formatarMoeda(c) : '—'; }]
+    ];
+
+    document.getElementById('compararTheadRow').innerHTML =
+        '<th>Métrica</th>' + veiculos.map(v => `<th>${escapeHtml(v.marca)} ${escapeHtml(v.modelo)}</th>`).join('');
+
+    document.getElementById('compararTbody').innerHTML = linhas.map(([label, fn]) => `
+        <tr><td><strong>${label}</strong></td>${veiculos.map(v => `<td>${escapeHtml(String(fn(v)))}</td>`).join('')}</tr>
+    `).join('');
+
+    document.getElementById('modalCompararOverlay').classList.add('active');
+}
+
+function fecharComparador() {
+    document.getElementById('modalCompararOverlay').classList.remove('active');
 }
 
 // =========================================================
@@ -256,6 +644,8 @@ function abrirModalVeiculo(veiculo) {
     document.getElementById('inputVeiculoKm').value = (veiculo && veiculo.quilometragem !== null && veiculo.quilometragem !== undefined) ? veiculo.quilometragem : '';
     document.getElementById('inputVeiculoDataCompra').value = veiculo ? isoParaInputDate(veiculo.dataCompra) : hojeInputDate();
     document.getElementById('inputVeiculoValorCompra').value = veiculo ? veiculo.valorCompra : '';
+    document.getElementById('inputVeiculoValorMercado').value = (veiculo && veiculo.valorMercado !== null && veiculo.valorMercado !== undefined) ? veiculo.valorMercado : '';
+    document.getElementById('inputVeiculoProximaRevisao').value = (veiculo && veiculo.dataProximaRevisao) ? isoParaInputDate(veiculo.dataProximaRevisao) : '';
     document.getElementById('inputVeiculoStatus').value = veiculo ? veiculo.status : 'Ativo';
     document.getElementById('inputVeiculoDataVenda').value = (veiculo && veiculo.dataVenda) ? isoParaInputDate(veiculo.dataVenda) : '';
     document.getElementById('inputVeiculoValorVenda').value = (veiculo && veiculo.valorVenda !== null && veiculo.valorVenda !== undefined) ? veiculo.valorVenda : '';
@@ -279,6 +669,8 @@ async function salvarVeiculo(e) {
         quilometragem: document.getElementById('inputVeiculoKm').value,
         dataCompra: document.getElementById('inputVeiculoDataCompra').value,
         valorCompra: document.getElementById('inputVeiculoValorCompra').value,
+        valorMercado: document.getElementById('inputVeiculoValorMercado').value,
+        dataProximaRevisao: document.getElementById('inputVeiculoProximaRevisao').value || null,
         status: document.getElementById('inputVeiculoStatus').value,
         dataVenda: document.getElementById('inputVeiculoDataVenda').value || null,
         valorVenda: document.getElementById('inputVeiculoValorVenda').value,
@@ -329,6 +721,7 @@ function initModalFicha() {
     document.getElementById('btnNovaManutencao').addEventListener('click', () => {
         abrirModalManutencao(null, stateGaragem.fichaVeiculoId);
     });
+    document.getElementById('btnFichaImprimir').addEventListener('click', () => window.print());
 }
 
 function abrirFicha(veiculoId) {
@@ -359,6 +752,9 @@ function renderFicha() {
     const infoGrid = document.getElementById('fichaInfoGrid');
     infoGrid.innerHTML = '';
 
+    const custoPorKm = calcularCustoPorKm(veiculo);
+    const alerta = calcularAlertaVeiculo(veiculo);
+
     const itens = [
         ['Status', veiculo.status],
         ['Cor', veiculo.cor || '—'],
@@ -366,8 +762,15 @@ function renderFicha() {
         ['Data de Compra', formatarDataBR(veiculo.dataCompra)],
         ['Valor de Compra', formatarMoeda(veiculo.valorCompra)],
         ['Total em Manutenção', formatarMoeda(gastoManutencao)],
-        ['Custo Total', formatarMoeda(custoTotal)]
+        ['Custo Total', formatarMoeda(custoTotal)],
+        ['Tempo de Posse', `${calcularMesesPosse(veiculo)} meses`],
+        ['Custo Médio Mensal (Manutenção)', formatarMoeda(calcularCustoMedioMensal(veiculo))]
     ];
+
+    if (custoPorKm !== null) itens.push(['Custo por Km (aprox.)', formatarMoeda(custoPorKm)]);
+    if (veiculo.valorMercado) itens.push(['Valor de Mercado Estimado', formatarMoeda(veiculo.valorMercado)]);
+    if (veiculo.dataProximaRevisao) itens.push(['Próxima Revisão', formatarDataBR(veiculo.dataProximaRevisao)]);
+    if (alerta) itens.push(['Alerta', alerta.texto]);
 
     if (veiculo.status === 'Vendido') {
         itens.push(['Data de Venda', veiculo.dataVenda ? formatarDataBR(veiculo.dataVenda) : '—']);
@@ -391,6 +794,7 @@ function renderFicha() {
     }
 
     renderManutencoesFicha(veiculo);
+    renderGraficosFicha(veiculo);
 }
 
 function renderManutencoesFicha(veiculo) {
