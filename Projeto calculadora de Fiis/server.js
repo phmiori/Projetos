@@ -6,6 +6,7 @@
 const express = require('express');
 const cors = require('cors');
 const session = require('express-session');
+const pgSession = require('connect-pg-simple')(session);
 const helmet = require('helmet');
 const cron = require('node-cron');
 
@@ -14,6 +15,7 @@ const { mailTransporter, verificarAlertasPrecoFII, snapshotHistoricoTodosFiis } 
 const { verificarAlertasPrecoCripto } = require('./lib/cripto-alerts');
 const { gerarTransacoesRecorrentesPendentes } = require('./lib/financas-shared');
 const { pushConfigurado, enviarPushNotificacoesPendentes } = require('./lib/push-shared');
+const { geminiConfigurado } = require('./lib/assistente-shared');
 const { garantirColunasAlertaFII, garantirColunasAlertaCripto, garantirColunaRole, seedUsuarios } = require('./lib/bootstrap');
 
 const app = express();
@@ -44,14 +46,27 @@ if (!process.env.SESSION_SECRET && process.env.NODE_ENV === 'production') {
     console.warn('AVISO: SESSION_SECRET não definido em produção. Defina-o no .env.');
 }
 
+/**
+ * Sessões persistidas no próprio Postgres (Neon), em vez do MemoryStore padrão do
+ * express-session: o MemoryStore perde todas as sessões (derruba todo mundo logado) sempre
+ * que o processo Node reinicia — o que acontece a cada deploy e, no plano gratuito do Render,
+ * também quando o serviço hiberna por inatividade e "acorda" de novo. `createTableIfMissing`
+ * cria a tabela de sessões sozinho, sem precisar de `prisma db push` (não faz parte do schema
+ * do Prisma, é uma tabela própria do connect-pg-simple).
+ */
 app.use(session({
+    store: new pgSession({
+        conString: process.env.DATABASE_URL,
+        createTableIfMissing: true,
+        tableName: 'sessao_usuario'
+    }),
     secret: process.env.SESSION_SECRET || 'autoleilao-hub-chave-local-2026',
     resave: false,
     saveUninitialized: false,
     cookie: {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        maxAge: 8 * 60 * 60 * 1000 // 8 horas
+        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 dias — antes eram 8h, agora seguro por ficar persistido no banco
     }
 }));
 
@@ -76,6 +91,7 @@ app.use('/api/treinos', requireAuth, require('./routes/treinos'));
 app.use('/api/saude', requireAuth, require('./routes/saude'));
 app.use('/api/garagem', requireAuth, require('./routes/garagem'));
 app.use('/api/backup', requireAuth, require('./routes/backup'));
+app.use('/api/assistente', requireAuth, require('./routes/assistente'));
 
 // Redirecionamento da raiz para a página inicial
 app.get('/', (req, res) => {
@@ -125,6 +141,7 @@ app.listen(PORT, async () => {
     console.log(`====================================================`);
     console.log(mailTransporter ? ' Alertas de preço por e-mail: ativos (SMTP configurado)' : ' Alertas de preço por e-mail: DESATIVADOS (defina SMTP_USER e SMTP_PASS no .env)');
     console.log(pushConfigurado ? ' Notificações push: ativas (VAPID configurado)' : ' Notificações push: DESATIVADAS (defina VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY no .env)');
+    console.log(geminiConfigurado ? ' Assistente de IA: ativo (GEMINI_API_KEY configurado)' : ' Assistente de IA: DESATIVADO (defina GEMINI_API_KEY no .env)');
     console.log(`====================================================`);
     await garantirColunasAlertaFII();
     await garantirColunasAlertaCripto();

@@ -14,6 +14,8 @@
     <link rel="stylesheet" href="../../CSS/Global/global_tokens.css">
     <link rel="stylesheet" href="../../CSS/Index/index.css">
     <link rel="stylesheet" href="../../CSS/Notificacao/notificacao.css">
+    <link rel="stylesheet" href="../../CSS/Global/confirm-dialog.css">
+    <link rel="stylesheet" href="../../CSS/Assistente/assistente.css">
     <link rel="stylesheet" href="../../CSS/Clima/clima.css">
     <link rel="stylesheet" href="../../CSS/Clima/clima-header-widget.css">
 
@@ -22,6 +24,12 @@
 
     <!-- Script do Sino de Notificações (compartilhado por todos os módulos) -->
     <script src="../../JS/Notificacao/notificacao.js" defer></script>
+
+    <!-- Modal de Confirmação Componentizado (compartilhado por todos os módulos) -->
+    <script src="../../JS/Global/confirm-dialog.js" defer></script>
+
+    <!-- Script do Assistente de IA (janela flutuante, compartilhado por todos os módulos) -->
+    <script src="../../JS/Assistente/assistente.js" defer></script>
 
     <!-- Widget de Clima Favorito no Cabeçalho (compartilhado por todos os módulos) -->
     <script src="../../JS/Clima/clima-codigos.js" defer></script>
@@ -89,6 +97,18 @@
                         </svg>
                     </span>
                 </span>
+            </button>
+
+            <!-- Botão do Assistente de IA (janela flutuante, compartilhado por todos os módulos) -->
+            <button class="assistente-ia-btn" id="btnAssistenteIA" type="button" aria-label="Abrir Assistente de IA">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 8V4H8"></path>
+                    <rect width="16" height="12" x="4" y="8" rx="2"></rect>
+                    <path d="M2 14h2"></path>
+                    <path d="M20 14h2"></path>
+                    <path d="M15 13v2"></path>
+                    <path d="M9 13v2"></path>
+                </svg>
             </button>
 
             <!-- Sino de Notificações (compartilhado por todos os módulos) -->
@@ -423,6 +443,49 @@
 
             </div>
         </main>
+    </div>
+
+    <!-- Janela Flutuante do Assistente de IA (compartilhada por todos os módulos) -->
+    <div class="assistente-float-panel" id="assistenteFloatPanel">
+        <header class="assistente-float-header" id="assistenteFloatHeader">
+            <span class="assistente-float-title">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 8V4H8"></path>
+                    <rect width="16" height="12" x="4" y="8" rx="2"></rect>
+                    <path d="M2 14h2"></path>
+                    <path d="M20 14h2"></path>
+                    <path d="M15 13v2"></path>
+                    <path d="M9 13v2"></path>
+                </svg>
+                Assistente IA
+            </span>
+            <div class="assistente-float-actions">
+                <button type="button" class="assistente-float-icon-btn" id="btnAssistenteLimpar" aria-label="Limpar conversa" title="Limpar conversa">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path></svg>
+                </button>
+                <button type="button" class="assistente-float-icon-btn" id="btnAssistenteFechar" aria-label="Fechar assistente" title="Fechar">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+            </div>
+        </header>
+
+        <div class="assistente-float-messages" id="chatMensagens">
+            <div class="chat-empty-state" id="chatEmptyState">
+                <p><strong>Pergunte algo para começar:</strong></p>
+                <ul>
+                    <li>"Como está minha carteira de FIIs hoje?"</li>
+                    <li>"Onde eu poderia investir meu próximo aporte?"</li>
+                    <li>"Manda um resumo do meu patrimônio pro meu e-mail"</li>
+                </ul>
+            </div>
+        </div>
+
+        <form class="assistente-float-input-row" id="chatForm">
+            <textarea class="chat-textarea" id="chatInput" placeholder="Digite sua pergunta..." rows="1" required></textarea>
+            <button type="submit" class="chat-send-btn" id="btnEnviarChat" aria-label="Enviar">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+        </form>
     </div>
 
 </body>

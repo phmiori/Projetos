@@ -695,7 +695,7 @@ async function salvarVeiculo(e) {
 
 async function excluirVeiculo() {
     if (!stateGaragem.editVeiculoId) return;
-    if (!confirm('Excluir este veículo e todo o seu histórico de manutenções?')) return;
+    if (!(await confirmarAcao('Excluir este veículo e todo o seu histórico de manutenções?', { perigo: true }))) return;
 
     try {
         const resp = await fetch(`${API_BASE}/garagem/veiculos/${stateGaragem.editVeiculoId}`, { method: 'DELETE' });
@@ -900,7 +900,7 @@ async function salvarManutencao(e) {
 
 async function excluirManutencao() {
     if (!stateGaragem.editManutencaoId) return;
-    if (!confirm('Deseja realmente excluir esta manutenção?')) return;
+    if (!(await confirmarAcao('Deseja realmente excluir esta manutenção?', { perigo: true }))) return;
 
     try {
         const resp = await fetch(`${API_BASE}/garagem/manutencoes/${stateGaragem.editManutencaoId}`, { method: 'DELETE' });

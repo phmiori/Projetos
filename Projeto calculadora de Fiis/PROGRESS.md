@@ -111,6 +111,55 @@
 - [x] Novas rotas protegidas por `requireAdmin` em `server.js`: `GET/POST /api/auth/usuarios`, `PUT /api/auth/usuarios/:id` e `PUT /api/auth/usuarios/:id/senha`
 - [x] Proteções: um administrador não pode remover o próprio cargo de admin, e o sistema impede que o último administrador restante seja rebaixado
 
+## 🔐 Sessão de Login Persistida no Banco (não perde mais o login)
+- [x] **Causa raiz do "pede login toda hora"**: as sessões ficavam só na memória do processo Node (`MemoryStore`, padrão do `express-session`) — qualquer reinício do servidor derrubava todo mundo logado, e o plano gratuito do Render hiberna o serviço por inatividade e reinicia o processo a cada novo acesso, então praticamente todo retorno ao site pedia login de novo
+- [x] **Corrigido**: `server.js` agora usa `connect-pg-simple` para guardar as sessões numa tabela própria (`sessao_usuario`) no mesmo Postgres/Neon já usado pelo resto do app — sobrevive a reinícios/hibernação do servidor. A tabela é criada sozinha na primeira sessão salva (`createTableIfMissing`), não depende de `prisma db push` (não faz parte do `schema.prisma`, é gerenciada pelo próprio pacote)
+- [x] Tempo de sessão aumentado de 8 horas para 30 dias (seguro agora que fica persistida no banco em vez de memória)
+- [x] Testado localmente contra o banco Neon: gravação, leitura e expiração de sessão na tabela `sessao_usuario` funcionando corretamente
+- [x] Nova dependência: `connect-pg-simple` (`package.json`)
+
+## 💬 Modal de Confirmação Componentizado (substitui o `confirm()` nativo em todo o app)
+- [x] Novo componente global: `CSS/Global/confirm-dialog.css` + `JS/Global/confirm-dialog.js`, injetado dinamicamente no DOM (sem precisar de markup fixo em cada página) — função `confirmarAcao(mensagem, opcoes)`, retorna uma Promise, com a identidade visual do FinanceHub (Modo Claro/Escuro automático)
+- [x] Suporta o caso simples de 2 botões (Cancelar/Confirmar, com variante `perigo` em vermelho para ações destrutivas) e também decisões de múltiplos caminhos via `botoes: [...]` customizados (ex.: excluir evento recorrente "esta e as futuras" / "somente esta" / "cancelar")
+- [x] Fecha por clique no botão, no backdrop ou tecla Esc
+- [x] Substituídos **todos os 25 usos** de `window.confirm()` do app (FII, Cripto, Cofrinho, Financas, Calendário, Garagem, Carros/Casas de Leilão, Treinos & Saúde, Notificação, Configurações e Assistente de IA) por `await confirmarAcao(...)`
+- [x] Testado no navegador: diálogo de 2 botões, diálogo de 3 botões (recorrência) e fechamento por Esc — todos resolvendo o valor correto
+- [x] Incluído (CSS + JS) no cabeçalho de todos os módulos, junto com o Assistente de IA
+
+## 📱 App Mobile (React Native / Expo) — pasta `App/`
+- [x] Novo projeto Expo (SDK 57, React Native 0.86, React 19.2) em `App/`, **sem banco próprio**: fala com a mesma API REST (`server.js`) e o mesmo Postgres/Neon do site — o que é cadastrado em um aparece no outro
+- [x] Login de verdade (`POST /api/auth/login`, sessão por cookie — o fetch nativo do React Native mantém o cookie sozinho, igual a um navegador)
+- [x] Paleta de cores espelhando `CSS/Global/global_tokens.css` (Modo Escuro)
+- [x] `app.json` já aponta para a produção no Render por padrão — funciona sem precisar rodar nada no computador
+- [x] Escolha do usuário: React Native/Expo (UI nativa "de verdade", em vez de empacotar o site com Capacitor) e só Android por enquanto — ver `App/README.md` para como rodar (Expo Go) e gerar um `.apk` (EAS Build)
+- [x] Documentado em `App/README.md` o mesmo bug de `'"node"' não reconhecido` do npm/npx em pastas com espaço no caminho (já visto com `prisma`) e o workaround de chamar `node node_modules/expo/bin/cli ...` direto
+- [x] **Todos os módulos do site com uma tela de leitura no app** (view-only, cadastrar/editar continua só no site por enquanto): Visão Geral, FIIs, Cripto, Carros/Casas de Leilão, Cofrinho, Calendário, Clima, Finanças, Treinos & Saúde, Garagem, Notificações e Configurações — componentes compartilhados `ListaTela`/`CartaoItem` pra não repetir o código de loading/erro/pull-to-refresh em cada tela
+- [x] **Navegação trocada de abas pra menu lateral (Drawer)**: 13 telas não cabiam em abas — agora o menu replica o mesmo agrupamento "Hub Financeiro" / "Hub Pessoal" da sidebar do site
+- [x] **Corrigido durante a instalação**: `react-native-reanimated` mais recente (4.6) exige `react-native-worklets@0.12.x`, mas o Expo SDK 57 só suporta até `0.10.x` — fixado em `reanimated@~4.5.0` + `worklets@~0.10.4` (par compatível) pra evitar quebra silenciosa em runtime. Também precisou fixar `babel-preset-expo` como dependência direta no `package.json` (senão o npm deixa ele só aninhado dentro de `node_modules/expo/node_modules`, onde o `babel.config.js` da raiz não consegue achar)
+- [x] Testado de ponta a ponta: `npm install` (535 pacotes, sem conflito de peer dependency) e `expo export --platform android` compilando os 1382 módulos sem erro (bundle JS validado sem precisar de emulador)
+
+- [x] **CRUD completo (criar/editar/excluir) em 9 módulos**: FIIs (+ Atualizar Cotações), Cripto, Cofrinho, Garagem, Carros/Casas de Leilão, Calendário, Finanças (Transações/Contas/Categorias), Treinos & Saúde (Blocos + Exercícios aninhados + Registros de Saúde) e Configurações (editar perfil + trocar senha) — modal de formulário componentizado (`FormularioModal` com campos de texto/select/switch/data reutilizáveis) e exclusão com confirmação nativa (`Alert.alert`)
+- [x] Cálculos financeiros (total de aquisição, custo total, lucro, ROI de Carros/Casas de Leilão) continuam sendo feitos no servidor (`lib/calc.js`) — o app só envia os campos brutos, sem duplicar a fórmula
+
+- [x] **Visão Geral real**: os mesmos 4 KPIs globais do site (calculado no app, buscando FII/Cripto/Cofrinho/Casas/Carros/Finanças em paralelo — ver sessão anterior) + configuração de "Negócios do Hub Financeiro" (mostrar/ocultar) em Configurações, com o Drawer respeitando a preferência
+- [x] **Cartões de Crédito** (Finanças): CRUD completo + ver fatura aberta de cada cartão com botão "Marcar como Paga" (mesma pergunta do site sobre lançar a despesa em débito)
+- [x] **Lista de Observação de FIIs**: segunda aba na tela de FIIs, cadastra ticker + preço de alerta (mesmo `/api/fii/watchlist` do site)
+- [x] **Administração de Usuários** (Configurações, só pra quem é admin): listar/criar/editar/excluir usuário e redefinir senha
+- [x] **Baixar Meus Dados**: exporta o backup (`/api/backup/export`) e abre o menu de compartilhar do Android (`expo-file-system` + `expo-sharing`)
+
+- [x] **Assistente de IA (chat)**: nova tela no menu lateral, mesmos endpoints `/api/assistente/*` do site — histórico, sugestões com dados reais, envio de e-mail e adicionar FII pelo chat (com a tag de confirmação na mensagem). FIIs recarrega a carteira ao ganhar foco (`useFocusEffect`) pra refletir na hora um FII adicionado pelo assistente em outra tela.
+
+- [x] **Parcelamento no cartão de crédito** (Transações): campo Cartão + Quantidade de Parcelas exibido só na criação (mesma limitação do backend, que só parcela via `POST`), reaproveitando `cartaoId`/`parcelaTotal` já existentes na API
+- [x] **Gastos detalhados de Carros/Casas de Leilão**: modal compartilhado `GastosModal` (listar + adicionar, sem edição — o backend só tem `POST/DELETE`), aberto pelo botão "Ver Gastos Detalhados" em cada veículo/imóvel
+- [x] **Gráficos da Visão Geral**: componente `GraficoBarras` (barras horizontais só com `View`, sem lib nova) mostrando Alocação por Módulo e Resultado por Módulo, com as mesmas cores dos módulos do site
+- [x] **Notificações Push nativas**: botão "Ativar Notificações Push" em Configurações — pede permissão, gera o token via `expo-notifications`/`expo-device` e registra no backend (novo modelo `PushTokenExpo`, rotas `POST/DELETE /api/notificacoes/push-expo/inscrever`). O job de notificações pendentes (`lib/push-shared.js`) agora envia tanto por Web Push (site) quanto pela API de push do Expo (app), para o mesmo usuário. **Limitação conhecida do Expo Go**: push remoto não funciona dentro do Expo Go no Android desde o SDK 53 — só funciona num app instalado via EAS development/production build; dentro do Expo Go o botão mostra um aviso explicando isso
+
+> ⚠️ Pendente: ícone/splash definitivos (usando o placeholder do PWA) e publicar na Play Store (hoje só via Expo Go ou `.apk` manual com EAS Build).
+>
+> ⚠️ Migração pendente: `npm run prisma:push` ainda não foi rodado para a nova tabela `PushTokenExpo` (schema já atualizado em `SQL/schema.prisma`).
+
+- [x] **Correção crítica de compatibilidade com o Expo Go**: o app abria no celular mas quebrava com `hitSlop cannot be cast from ReadableNativeArray to ReadableNativeMap` — causa real era `react-native-gesture-handler` na versão 3.x, quando o Expo Go do SDK 57 (instalado via Play Store) só é compatível com a série 2.32.x (o Expo Go traz versões nativas fixas dessas bibliotecas; usar uma versão JS diferente da nativa quebra o bridge). Corrigido rodando `expo install` (que consulta a tabela oficial de compatibilidade do SDK) para os pacotes nativos: `react-native-gesture-handler@~2.32.0`, `react-native-reanimated@4.5.1`, `react-native-screens@~4.26.0`, `react-native-safe-area-context@~5.7.0`, `react-native-worklets@0.10.1`. Reinstalado e testado com `expo export` de novo (1315 módulos, sem erro)
+
 ## 🔧 Segurança, Refatoração, Testes e Melhorias Transversais
 - [x] **Segurança**: `helmet` (com CSP customizada para liberar o Chart.js via CDN), `express-rate-limit` no login (10 tentativas / 15 min), cookie de sessão `secure` condicionado a `NODE_ENV=production`, aviso no console se `SESSION_SECRET` não estiver configurado em produção
 - [x] **Correção de doc**: `README.md` e `ARCHITECTURE.md` atualizados para refletir a stack real (Node/Express + Prisma/PostgreSQL), que havia divergido do texto original (SQLite/PHP)
@@ -147,4 +196,17 @@
 - [x] **Corrigido**: rodado `npm run prisma:push --accept-data-loss` (com autorização do usuário, que confirmou que os 3 registros da tabela órfã `GastoCasa` podiam ser descartados) — banco local/produção (mesmo Neon) sincronizado com o schema atual
 - [x] **Testado de ponta a ponta** (via API, com limpeza dos dados de teste ao final): criação de Conta Bancária, Categoria, Transação recorrente (confirmado que a próxima ocorrência é gerada automaticamente), Evento recorrente (3 ocorrências semanais geradas corretamente), FII, Cripto, Cofrinho, Veículo de Garagem, Veículo de Leilão, Imóvel de Leilão, Bloco de Treino, Registro de Saúde, chave pública de Push, Dashboard e Backup/Export — todos funcionando
 - [x] **Corrigido `.claude/launch.json`**: `runtimeExecutable` apontava para `npm`, que não está no PATH do ambiente de execução de comandos deste projeto — trocado para o caminho completo do `node.exe` com os mesmos argumentos, para o preview local conseguir iniciar o servidor
+
+## 🤖 Assistente de IA (janela flutuante no cabeçalho, todos os módulos)
+- [x] Backend dedicado: `lib/assistente-shared.js` + `routes/assistente.js` — chat com o assistente, histórico persistido no modelo `MensagemAssistente` (Prisma), API REST própria (`GET/DELETE /api/assistente/historico`, `POST /api/assistente/chat`)
+- [x] **IA gratuita (Google Gemini)**: `lib/assistente-shared.js` chama a API do Gemini (`gemini-3.6-flash`) via `fetch`, sem SDK novo — chave gratuita configurada em `GEMINI_API_KEY` no `.env` (instruções em `.env.example`); sem a chave, o chat responde avisando que a IA não foi configurada
+- [x] **Contexto financeiro real**: antes de cada resposta, o backend monta um resumo da carteira de FIIs, Cripto, Cofrinho e do Patrimônio Líquido Total (mesma fórmula do KPI da Visão Geral) e envia como contexto ao Gemini, para sugestões de investimento personalizadas (sempre com aviso de que não é recomendação profissional)
+- [x] **Envio de e-mail pelo chat**: o assistente usa Function Calling do Gemini (ferramenta `enviar_email`) para redigir e enviar e-mails de verdade quando o usuário pede diretamente na conversa (ex.: "manda um resumo pro meu e-mail") — reaproveita o mesmo transportador SMTP (`mailTransporter`, `lib/fii-alerts.js`) dos alertas de preço, enviando por padrão para o e-mail cadastrado do usuário em Configurações
+- [x] **Adicionar FII pelo chat**: nova ferramenta `adicionar_fii` (mesmo mecanismo de Function Calling) — ex.: "adicione 1234 cotas de SNAG11 a 9,73, último rendimento 0,12". Se o ticker já existir na carteira, soma as cotas e recalcula o preço médio ponderado (mesma fórmula do modal "Novo Aporte" de `JS/FII/fii.js`); se não existir, cria uma posição nova. Confirmação (ticker, cotas totais, preço médio) aparece como tag na mensagem, igual à de e-mail enviado
+- [x] **Correção**: a segunda chamada ao Gemini (só para gerar o texto de confirmação em linguagem natural, depois de já ter enviado o e-mail ou gravado o FII no banco) podia falhar e derrubar a rota inteira com erro 500 — escondendo do usuário que a ação já tinha sido executada com sucesso. Agora cada ferramenta monta uma resposta padrão antes dessa segunda chamada e usa ela como fallback se a chamada falhar
+- [x] **Atualização automática da tela**: quando o assistente adiciona/atualiza um FII, dispara um evento (`financehub:fii-atualizado`) que a página do módulo FII escuta para recarregar a tabela sozinha, sem precisar de F5 (só funciona se a aba do FII já estiver aberta ao mesmo tempo que o chat)
+- [x] **UX em janela flutuante (não é mais página própria)**: por pedido do usuário, o Assistente saiu do sidebar do Hub Pessoal e virou um botão de robô no cabeçalho (`CSS/Assistente/assistente.css`, `JS/Assistente/assistente.js`), presente em todos os módulos — ao clicar, abre uma janelinha de chat flutuante e arrastável (`position: fixed` + Pointer Events, mantida dentro dos limites da tela), sem navegar para outra página. `HTML/Assistente/assistente.html` (a página dedicada da versão anterior) foi removida
+- [x] Testado o abrir/arrastar/fechar da janela flutuante em ambiente local (harness descartável fora do controle de versão)
+
+> ✅ Migração aplicada e testada em produção (Render/Neon) nesta sessão: tabela `MensagemAssistente` criada com sucesso via `node.exe node_modules/prisma/build/index.js db push` (workaround usado porque `npm`/`node` não estavam no PATH do terminal do usuário — resolvido depois ajustando o PATH do Windows). `GEMINI_API_KEY` configurada e testada em produção.
 

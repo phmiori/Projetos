@@ -126,7 +126,7 @@ async function excluirNotificacao(id) {
 
 async function excluirTodasNotificacoes() {
     if (!ultimasNotificacoes.length) return;
-    if (!confirm('Apagar todas as notificações?')) return;
+    if (!(await confirmarAcao('Apagar todas as notificações?', { perigo: true }))) return;
 
     try {
         const resp = await fetch(NOTIF_API, { method: 'DELETE' });

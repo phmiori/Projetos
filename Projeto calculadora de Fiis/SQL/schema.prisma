@@ -97,10 +97,29 @@ model Usuario {
   notificacoesDispensadas NotificacaoDispensada[]
   fiiWatchlist    FiiWatchlist[]
   pushSubscriptions PushSubscription[]
+  pushTokensExpo    PushTokenExpo[]
   pushNotificacoesEnviadas PushNotificacaoEnviada[]
+  mensagensAssistente MensagemAssistente[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+/**
+ * Histórico de conversa do Assistente de IA (módulo Assistente): cada linha é uma mensagem,
+ * do usuário ou da IA, usada para manter contexto entre perguntas e para reexibir a conversa
+ * ao reabrir o módulo. `papel` é 'usuario' ou 'assistente'.
+ */
+model MensagemAssistente {
+  id        Int      @id @default(autoincrement())
+
+  usuarioId Int
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  papel     String
+  conteudo  String
+
+  createdAt DateTime @default(now())
 }
 
 model ModuloOculto {
@@ -169,6 +188,23 @@ model PushSubscription {
   endpoint  String   @unique
   p256dh    String
   auth      String
+
+  createdAt DateTime @default(now())
+}
+
+/**
+ * Token de push do Expo (app mobile React Native, pasta App/) — mesma ideia do
+ * PushSubscription (Web Push do navegador), mas pro app nativo, que usa o serviço de push do
+ * Expo (https://exp.host) em vez de VAPID/Web Push. Reaproveitado pelo mesmo cron de
+ * lib/push-shared.js que já envia Web Push.
+ */
+model PushTokenExpo {
+  id        Int      @id @default(autoincrement())
+
+  usuarioId Int
+  usuario   Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+
+  token     String   @unique
 
   createdAt DateTime @default(now())
 }

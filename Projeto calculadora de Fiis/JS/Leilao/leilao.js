@@ -644,7 +644,7 @@ async function confirmarExclusao(id) {
     const veiculo = state.veiculos.find(v => String(v.id) === String(id));
     if (!veiculo) return;
 
-    const confirmou = confirm(`Tem certeza que deseja excluir o veículo "${veiculo.marca} ${veiculo.modelo}"?`);
+    const confirmou = await confirmarAcao(`Tem certeza que deseja excluir o veículo "${veiculo.marca} ${veiculo.modelo}"?`, { perigo: true });
     if (!confirmou) return;
 
     try {
@@ -1001,7 +1001,7 @@ function vincularEventosExclusaoGasto(veiculoId) {
             const gastoId = btn.getAttribute('data-gasto-id');
             if (!gastoId) return;
 
-            if (!confirm('Deseja realmente remover este lançamento de gasto?')) return;
+            if (!(await confirmarAcao('Deseja realmente remover este lançamento de gasto?', { perigo: true }))) return;
 
             try {
                 if (state.modoApi) {

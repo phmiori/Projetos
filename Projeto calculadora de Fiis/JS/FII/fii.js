@@ -118,6 +118,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }, FII_COTACOES_AUTO_MS);
 
+    // Recarrega a tabela quando o Assistente de IA adiciona/atualiza um FII pelo chat,
+    // sem precisar que o usuário dê F5 (ver JS/Assistente/assistente.js)
+    window.addEventListener('financehub:fii-atualizado', carregarCarteira);
+
     // Iniciar simulação padrão da calculadora
     executarSimulacao();
 });
@@ -436,7 +440,7 @@ async function excluirWatchlistItem(id) {
     const item = stateFII.watchlist.find(i => String(i.id) === String(id));
     if (!item) return;
 
-    if (!confirm(`Remover o alerta de ${item.ticker} da lista de observação?`)) return;
+    if (!(await confirmarAcao(`Remover o alerta de ${item.ticker} da lista de observação?`, { perigo: true }))) return;
 
     try {
         const response = await fetch(`${API_BASE}/fii/watchlist/${id}`, { method: 'DELETE' });
@@ -1230,7 +1234,7 @@ async function excluirFII(id) {
     const item = stateFII.investimentos.find(i => String(i.id) === String(id));
     if (!item) return;
 
-    if (!confirm(`Tem certeza que deseja remover ${item.ticker} da sua carteira?`)) return;
+    if (!(await confirmarAcao(`Tem certeza que deseja remover ${item.ticker} da sua carteira?`, { perigo: true }))) return;
 
     try {
         const response = await fetch(`${API_BASE}/fii/${id}`, { method: 'DELETE' });

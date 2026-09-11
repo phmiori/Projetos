@@ -915,7 +915,7 @@ async function excluirCripto(id) {
     const item = stateCripto.investimentos.find(i => String(i.id) === String(id));
     if (!item) return;
 
-    if (!confirm(`Tem certeza que deseja remover ${item.ticker} da sua carteira?`)) return;
+    if (!(await confirmarAcao(`Tem certeza que deseja remover ${item.ticker} da sua carteira?`, { perigo: true }))) return;
 
     try {
         const response = await fetch(`${API_BASE}/cripto/${id}`, { method: 'DELETE' });
