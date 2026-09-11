@@ -236,14 +236,17 @@ model VeiculoGaragem {
 
   marca           String
   modelo          String
-  ano             Int
+  ano             Int       // Ano do Modelo (ex.: 2015 em "2014/2015")
+  anoFabricacao   Int?      // Ano de Fabricação (ex.: 2014 em "2014/2015"); quando ausente, exibe só o ano do modelo
   placa           String?
   cor             String?
-  quilometragem   Float?
+  quilometragem   Float?    // Quilometragem atual (última conhecida)
+  quilometragemCompra Float? // Quilometragem no momento da compra
+  quilometragemVenda  Float? // Quilometragem no momento da venda
 
   fotoUrl            String?   // Reservado para foto do veículo (upload ainda não implementado na interface)
   valorMercado       Float?    // Valor estimado de mercado (ex.: FIPE), usado para comparar com o custo total acumulado
-  dataProximaRevisao DateTime? // Usado para o selo de alerta de revisão pendente no card
+  dataProximaRevisao DateTime? // Definida na Ficha do Veículo (após o cadastro); usada para o selo de alerta de revisão pendente
 
   dataCompra      DateTime
   valorCompra     Float     @default(0)
