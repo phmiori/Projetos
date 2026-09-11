@@ -205,6 +205,10 @@ model VeiculoGaragem {
   cor             String?
   quilometragem   Float?
 
+  fotoUrl            String?   // Reservado para foto do veículo (upload ainda não implementado na interface)
+  valorMercado       Float?    // Valor estimado de mercado (ex.: FIPE), usado para comparar com o custo total acumulado
+  dataProximaRevisao DateTime? // Usado para o selo de alerta de revisão pendente no card
+
   dataCompra      DateTime
   valorCompra     Float     @default(0)
 

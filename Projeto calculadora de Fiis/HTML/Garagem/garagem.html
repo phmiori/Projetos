@@ -27,6 +27,9 @@
     <script src="../../JS/Clima/clima-codigos.js" defer></script>
     <script src="../../JS/Clima/clima-header-widget.js" defer></script>
 
+    <!-- Chart.js para os Gráficos de Manutenção, Comparativo e Histórico -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <!-- Script do Módulo Garagem -->
     <script src="../../JS/Garagem/garagem.js" defer></script>
 </head>
@@ -415,6 +418,28 @@
 
                     <div class="garagem-toolbar">
                         <input type="text" id="inputGaragemBusca" class="input-missao garagem-search-input" placeholder="Buscar por marca, modelo ou placa...">
+
+                        <select id="selectGaragemOrdenar" class="input-missao garagem-ordenar-select" aria-label="Ordenar veículos">
+                            <option value="recentes">Mais recentes</option>
+                            <option value="custo-desc">Maior custo total</option>
+                            <option value="custo-asc">Menor custo total</option>
+                            <option value="posse-desc">Mais tempo de posse</option>
+                            <option value="marca">Marca (A-Z)</option>
+                        </select>
+
+                        <div class="garagem-view-toggle" role="group" aria-label="Alternar visualização">
+                            <button type="button" class="garagem-view-btn active" id="btnViewGrid" title="Visualização em grade" aria-label="Visualização em grade">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect></svg>
+                            </button>
+                            <button type="button" class="garagem-view-btn" id="btnViewList" title="Visualização em lista" aria-label="Visualização em lista">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+                            </button>
+                        </div>
+
+                        <button type="button" class="btn-garagem-action" id="btnCompararVeiculos" style="display:none;">
+                            Comparar Selecionados (<span id="compararContagem">0</span>)
+                        </button>
+
                         <button type="button" class="btn-primary-action" id="btnNovoVeiculoGaragem">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -422,6 +447,16 @@
                             </svg>
                             <span>Novo Veículo</span>
                         </button>
+                    </div>
+
+                    <div class="chart-card" id="cardComparativoCustos" style="display:none;">
+                        <div class="chart-card-header">
+                            <span class="chart-card-title">Comparativo de Custos entre Veículos</span>
+                            <span class="chart-card-subtitle">Custo total acumulado (compra + manutenção) de cada veículo ativo</span>
+                        </div>
+                        <div class="chart-canvas-wrap">
+                            <canvas id="chartComparativoCustos"></canvas>
+                        </div>
                     </div>
 
                     <div class="garagem-veiculos-grid" id="garagemAtivosGrid">
@@ -466,6 +501,16 @@
                                 <div class="kpi-status-tag tag-income">Venda menos custo total (compra + manutenção)</div>
                             </div>
                         </article>
+                    </div>
+
+                    <div class="chart-card" id="cardResultadoVendidos" style="display:none;">
+                        <div class="chart-card-header">
+                            <span class="chart-card-title">Resultado por Veículo Vendido</span>
+                            <span class="chart-card-subtitle">Lucro (verde) ou prejuízo (vermelho) de cada venda</span>
+                        </div>
+                        <div class="chart-canvas-wrap">
+                            <canvas id="chartResultadoVendidos"></canvas>
+                        </div>
                     </div>
 
                     <section class="garagem-table-panel">
@@ -545,6 +590,16 @@
                             <label for="inputVeiculoValorCompra">Valor de Compra (R$) *</label>
                             <input type="number" id="inputVeiculoValorCompra" class="input-missao" min="0" step="0.01" placeholder="Ex: 85000" required>
                         </div>
+                        <div class="input-field">
+                            <label for="inputVeiculoValorMercado">Valor de Mercado Estimado (R$)</label>
+                            <input type="number" id="inputVeiculoValorMercado" class="input-missao" min="0" step="0.01" placeholder="Ex: 95000 (ex.: tabela FIPE)">
+                            <span class="input-hint">Usado para comparar com o custo total já investido no card</span>
+                        </div>
+                        <div class="input-field">
+                            <label for="inputVeiculoProximaRevisao">Próxima Revisão (Data)</label>
+                            <input type="date" id="inputVeiculoProximaRevisao" class="input-missao">
+                            <span class="input-hint">Gera um selo de alerta no card quando a data vencer</span>
+                        </div>
                         <div class="input-field" style="grid-column: 1 / -1;">
                             <label for="inputVeiculoStatus">Status</label>
                             <select id="inputVeiculoStatus" class="input-missao">
@@ -597,6 +652,27 @@
                     <!-- Preenchido via JS -->
                 </div>
 
+                <div class="garagem-ficha-graficos" id="fichaGraficosWrap" style="display:none;">
+                    <div class="chart-card">
+                        <div class="chart-card-header">
+                            <span class="chart-card-title">Gastos por Categoria</span>
+                            <span class="chart-card-subtitle">Distribuição das manutenções deste veículo</span>
+                        </div>
+                        <div class="chart-canvas-wrap chart-canvas-wrap-small">
+                            <canvas id="chartFichaCategoria"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <div class="chart-card-header">
+                            <span class="chart-card-title">Evolução do Custo Acumulado</span>
+                            <span class="chart-card-subtitle">Compra + manutenções somadas ao longo do tempo</span>
+                        </div>
+                        <div class="chart-canvas-wrap chart-canvas-wrap-small">
+                            <canvas id="chartFichaEvolucao"></canvas>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="garagem-ficha-manutencao-header">
                     <h3 class="garagem-section-title">Histórico de Manutenções</h3>
                     <button type="button" class="btn-primary-action" id="btnNovaManutencao">
@@ -629,7 +705,39 @@
             </div>
 
             <footer class="modal-footer">
+                <button type="button" class="btn-garagem-action" id="btnFichaImprimir">Imprimir / Exportar PDF</button>
+                <div class="modal-footer-spacer"></div>
                 <button type="button" class="btn-cancel" id="btnFichaFechar">Fechar</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL: COMPARAR VEÍCULOS -->
+    <!-- ========================================================= -->
+    <div class="modal-overlay" id="modalCompararOverlay">
+        <div class="modal-dialog modal-dialog-wide">
+            <header class="modal-header">
+                <div>
+                    <h2 class="modal-title">Comparar Veículos</h2>
+                    <p class="modal-subtitle">Lado a lado: custo, quilometragem e tempo de posse</p>
+                </div>
+                <button class="modal-close-btn" id="modalCompararClose" aria-label="Fechar">&times;</button>
+            </header>
+
+            <div class="form-sections-wrapper">
+                <div class="garagem-table-scroll-wrap">
+                    <table class="garagem-table" id="tabelaComparativo">
+                        <thead>
+                            <tr id="compararTheadRow"></tr>
+                        </thead>
+                        <tbody id="compararTbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <footer class="modal-footer">
+                <button type="button" class="btn-cancel" id="btnCompararFechar">Fechar</button>
             </footer>
         </div>
     </div>

@@ -43,7 +43,7 @@ router.get('/veiculos', async (req, res) => {
  */
 router.post('/veiculos', async (req, res) => {
     try {
-        const { marca, modelo, ano, placa, cor, quilometragem, dataCompra, valorCompra, status, dataVenda, valorVenda, observacoes } = req.body;
+        const { marca, modelo, ano, placa, cor, quilometragem, dataCompra, valorCompra, status, dataVenda, valorVenda, observacoes, valorMercado, dataProximaRevisao } = req.body;
 
         if (!marca || !modelo || !dataCompra) {
             return res.status(400).json({ error: 'Marca, modelo e data de compra são obrigatórios.' });
@@ -63,7 +63,9 @@ router.post('/veiculos', async (req, res) => {
                 status: status ? String(status).trim() : 'Ativo',
                 dataVenda: dataVenda ? new Date(dataVenda) : null,
                 valorVenda: valorVenda !== undefined && valorVenda !== '' ? Number(valorVenda) : null,
-                observacoes: observacoes ? String(observacoes).trim() : null
+                observacoes: observacoes ? String(observacoes).trim() : null,
+                valorMercado: valorMercado !== undefined && valorMercado !== '' ? Number(valorMercado) : null,
+                dataProximaRevisao: dataProximaRevisao ? new Date(dataProximaRevisao) : null
             },
             include: { manutencoes: true }
         });
@@ -82,7 +84,7 @@ router.post('/veiculos', async (req, res) => {
 router.put('/veiculos/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
-        const { marca, modelo, ano, placa, cor, quilometragem, dataCompra, valorCompra, status, dataVenda, valorVenda, observacoes } = req.body;
+        const { marca, modelo, ano, placa, cor, quilometragem, dataCompra, valorCompra, status, dataVenda, valorVenda, observacoes, valorMercado, dataProximaRevisao } = req.body;
 
         const existente = await prisma.veiculoGaragem.findFirst({ where: { id, usuarioId: req.session.userId } });
         if (!existente) return res.status(404).json({ error: 'Veículo não encontrado' });
@@ -101,7 +103,9 @@ router.put('/veiculos/:id', async (req, res) => {
                 status: status ? String(status).trim() : existente.status,
                 dataVenda: dataVenda !== undefined ? (dataVenda ? new Date(dataVenda) : null) : existente.dataVenda,
                 valorVenda: valorVenda !== undefined ? (valorVenda !== '' ? Number(valorVenda) : null) : existente.valorVenda,
-                observacoes: observacoes !== undefined ? (observacoes ? String(observacoes).trim() : null) : existente.observacoes
+                observacoes: observacoes !== undefined ? (observacoes ? String(observacoes).trim() : null) : existente.observacoes,
+                valorMercado: valorMercado !== undefined ? (valorMercado !== '' ? Number(valorMercado) : null) : existente.valorMercado,
+                dataProximaRevisao: dataProximaRevisao !== undefined ? (dataProximaRevisao ? new Date(dataProximaRevisao) : null) : existente.dataProximaRevisao
             },
             include: { manutencoes: { orderBy: { data: 'desc' } } }
         });
