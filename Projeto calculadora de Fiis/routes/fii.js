@@ -292,4 +292,125 @@ router.get('/:id/historico', async (req, res) => {
     }
 });
 
+/**
+ * ROTA: Listar Dividendos Recebidos de um FII da Carteira
+ * GET /api/fii/:id/dividendos
+ */
+router.get('/:id/dividendos', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const investimento = await prisma.investimentoFII.findFirst({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (!investimento) return res.status(404).json({ error: 'FII não encontrado' });
+
+        const dividendos = await prisma.dividendoFii.findMany({
+            where: { investimentoId: id },
+            orderBy: { data: 'desc' }
+        });
+        res.json(dividendos);
+    } catch (err) {
+        console.error('Erro ao buscar dividendos recebidos do FII:', err);
+        res.status(500).json({ error: 'Erro ao buscar dividendos recebidos' });
+    }
+});
+
+/**
+ * ROTA: Registrar Dividendo Recebido de um FII da Carteira
+ * POST /api/fii/:id/dividendos
+ * Body: { data, valorTotal, contaId? } — contaId é opcional: se informado, o valor também é
+ * lançado como Receita "Pago" na conta bancária, contabilizando como já recebido de verdade.
+ * Sempre atualiza `ultimoDividendo` do FII (usado na projeção de renda mensal) com o valor
+ * por cota deste recebimento.
+ */
+router.post('/:id/dividendos', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const { data, valorTotal, contaId } = req.body;
+
+        if (!data || valorTotal === undefined || valorTotal === null || valorTotal === '') {
+            return res.status(400).json({ error: 'Data e valor recebido são obrigatórios.' });
+        }
+
+        const valorTotalNum = Number(valorTotal);
+        if (!valorTotalNum || valorTotalNum <= 0) {
+            return res.status(400).json({ error: 'Valor recebido deve ser maior que zero.' });
+        }
+
+        const investimento = await prisma.investimentoFII.findFirst({
+            where: { id, usuarioId: req.session.userId }
+        });
+        if (!investimento) return res.status(404).json({ error: 'FII não encontrado na carteira' });
+
+        const valorPorCota = investimento.cotas > 0 ? valorTotalNum / investimento.cotas : 0;
+
+        let transacaoId = null;
+        if (contaId) {
+            const conta = await prisma.contaBancaria.findFirst({
+                where: { id: parseInt(contaId, 10), usuarioId: req.session.userId }
+            });
+            if (!conta) return res.status(404).json({ error: 'Conta bancária não encontrada' });
+
+            const transacao = await prisma.transacao.create({
+                data: {
+                    usuarioId: req.session.userId,
+                    tipo: 'Receita',
+                    descricao: `Dividendos ${investimento.ticker}`,
+                    valor: valorTotalNum,
+                    data: new Date(data),
+                    status: 'Pago',
+                    contaId: conta.id
+                }
+            });
+            transacaoId = transacao.id;
+        }
+
+        const [dividendo] = await Promise.all([
+            prisma.dividendoFii.create({
+                data: {
+                    investimentoId: id,
+                    data: new Date(data),
+                    valorTotal: valorTotalNum,
+                    valorPorCota,
+                    transacaoId
+                }
+            }),
+            prisma.investimentoFII.update({
+                where: { id },
+                data: { ultimoDividendo: valorPorCota }
+            })
+        ]);
+
+        res.status(201).json(dividendo);
+    } catch (err) {
+        console.error('Erro ao registrar dividendo recebido:', err);
+        res.status(500).json({ error: 'Erro ao registrar dividendo recebido' });
+    }
+});
+
+/**
+ * ROTA: Excluir Registro de Dividendo Recebido
+ * DELETE /api/fii/dividendos/:id
+ * Também remove a Transacao de receita vinculada, se houver (desfaz o lançamento no saldo).
+ */
+router.delete('/dividendos/:id', async (req, res) => {
+    try {
+        const id = parseInt(req.params.id, 10);
+        const dividendo = await prisma.dividendoFii.findFirst({
+            where: { id, investimento: { usuarioId: req.session.userId } }
+        });
+        if (!dividendo) return res.status(404).json({ error: 'Registro de dividendo não encontrado' });
+
+        await prisma.dividendoFii.delete({ where: { id } });
+        if (dividendo.transacaoId) {
+            await prisma.transacao.deleteMany({ where: { id: dividendo.transacaoId, usuarioId: req.session.userId } });
+        }
+
+        res.json({ success: true, message: 'Registro de dividendo removido com sucesso' });
+    } catch (err) {
+        console.error('Erro ao excluir dividendo recebido:', err);
+        res.status(500).json({ error: 'Erro ao excluir registro de dividendo' });
+    }
+});
+
 module.exports = router;
