@@ -562,6 +562,17 @@
     max-width: 900px;
 }
 
+/* Os modais de formulário (Veículo/Manutenção) colocam <form> entre .modal-dialog e o
+   .form-sections-wrapper. Sem isto, o <form> (um bloco comum, não flex) cresce para caber
+   todo o conteúdo e empurra o rodapé com os botões para fora da tela — o flex:1/min-height:0
+   do .form-sections-wrapper não tem efeito nenhum um nível acima, no <form> em si. */
+.modal-dialog > form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
 @keyframes modalFadeIn {
     from { opacity: 0; transform: translateY(12px) scale(0.98); }
     to { opacity: 1; transform: translateY(0) scale(1); }
@@ -615,6 +626,28 @@
        o conteúdo estoura o modal e o rodapé com os botões de salvar fica cortado da tela. */
     flex: 1 1 auto;
     min-height: 0;
+
+    /* Torna a barra de rolagem sempre visível quando o conteúdo é maior que o modal
+       (em vez de depender do padrão do SO/navegador, que às vezes só aparece no hover). */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+}
+
+.form-sections-wrapper::-webkit-scrollbar {
+    width: 8px;
+}
+
+.form-sections-wrapper::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.form-sections-wrapper::-webkit-scrollbar-thumb {
+    background-color: var(--border-color);
+    border-radius: 999px;
+}
+
+.form-sections-wrapper::-webkit-scrollbar-thumb:hover {
+    background-color: var(--accent-color);
 }
 
 .form-fields-grid {
