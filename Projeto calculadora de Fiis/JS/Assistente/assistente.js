@@ -134,11 +134,11 @@ async function enviarMensagem() {
             renderizarMensagem('erro', erro.error || 'Não foi possível falar com o assistente agora.');
         } else {
             const dados = await resp.json();
-            renderizarMensagem('assistente', dados.resposta, dados.emailEnviado, dados.fiiAdicionado);
+            renderizarMensagem('assistente', dados.resposta, dados.acao);
 
             // Avisa a página do módulo FII (se estiver aberta) para recarregar a tabela sozinha
-            if (dados.fiiAdicionado) {
-                window.dispatchEvent(new CustomEvent('financehub:fii-atualizado', { detail: dados.fiiAdicionado }));
+            if (dados.acao && (dados.acao.tipo === 'fii' || dados.acao.tipo === 'dividendo_fii')) {
+                window.dispatchEvent(new CustomEvent('financehub:fii-atualizado', { detail: dados.acao }));
             }
         }
     } catch (err) {
@@ -173,7 +173,7 @@ async function limparConversa() {
     `;
 }
 
-function renderizarMensagem(tipo, texto, emailEnviado, fiiAdicionado) {
+function renderizarMensagem(tipo, texto, acao) {
     const chatMensagens = document.getElementById('chatMensagens');
     const div = document.createElement('div');
 
@@ -187,19 +187,10 @@ function renderizarMensagem(tipo, texto, emailEnviado, fiiAdicionado) {
         div.className = 'chat-msg chat-msg-assistente';
         div.textContent = texto;
 
-        if (emailEnviado) {
+        if (acao) {
             const tag = document.createElement('span');
             tag.className = 'chat-msg-email-tag';
-            tag.textContent = `✓ E-mail enviado para ${emailEnviado.destinatario}`;
-            div.appendChild(document.createElement('br'));
-            div.appendChild(tag);
-        }
-
-        if (fiiAdicionado) {
-            const tag = document.createElement('span');
-            tag.className = 'chat-msg-email-tag';
-            const acao = fiiAdicionado.tipo === 'aporte' ? 'atualizado' : 'adicionado';
-            tag.textContent = `✓ ${fiiAdicionado.ticker} ${acao}: ${fiiAdicionado.cotas} cotas, preço médio R$ ${fiiAdicionado.precoMedio.toFixed(2)}`;
+            tag.textContent = acao.tag;
             div.appendChild(document.createElement('br'));
             div.appendChild(tag);
         }

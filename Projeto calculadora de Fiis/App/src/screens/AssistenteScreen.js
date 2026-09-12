@@ -6,21 +6,14 @@ import {
 import { colors } from '../theme/colors';
 import { buscarHistoricoAssistente, enviarMensagemAssistente, limparHistoricoAssistente } from '../api/assistente';
 
-function Bolha({ papel, texto, erro, emailEnviado, fiiAdicionado }) {
+function Bolha({ papel, texto, erro, acao }) {
   const doUsuario = papel === 'usuario';
   return (
     <View style={[estilos.bolha, doUsuario ? estilos.bolhaUsuario : estilos.bolhaAssistente, erro && estilos.bolhaErro]}>
       <Text style={[estilos.bolhaTexto, doUsuario && { color: colors.accentText }]}>{texto}</Text>
-      {emailEnviado && (
+      {acao && (
         <View style={estilos.tag}>
-          <Text style={estilos.tagTexto}>✓ E-mail enviado para {emailEnviado.destinatario}</Text>
-        </View>
-      )}
-      {fiiAdicionado && (
-        <View style={estilos.tag}>
-          <Text style={estilos.tagTexto}>
-            ✓ {fiiAdicionado.ticker} {fiiAdicionado.tipo === 'aporte' ? 'atualizado' : 'adicionado'}: {fiiAdicionado.cotas} cotas
-          </Text>
+          <Text style={estilos.tagTexto}>{acao.tag}</Text>
         </View>
       )}
     </View>
@@ -65,8 +58,7 @@ export default function AssistenteScreen() {
       setMensagens((atual) => [...atual, {
         papel: 'assistente',
         texto: dados.resposta,
-        emailEnviado: dados.emailEnviado,
-        fiiAdicionado: dados.fiiAdicionado
+        acao: dados.acao
       }]);
     } catch (err) {
       setMensagens((atual) => [...atual, { papel: 'assistente', texto: err.message || 'Não foi possível falar com o assistente agora.', erro: true }]);
@@ -116,7 +108,7 @@ export default function AssistenteScreen() {
                 <Text style={estilos.vazioExemplo}>"Manda um resumo do meu patrimônio pro meu e-mail"</Text>
               </View>
             )}
-            {mensagens.map((m, i) => <Bolha key={i} papel={m.papel} texto={m.texto} erro={m.erro} emailEnviado={m.emailEnviado} fiiAdicionado={m.fiiAdicionado} />)}
+            {mensagens.map((m, i) => <Bolha key={i} papel={m.papel} texto={m.texto} erro={m.erro} acao={m.acao} />)}
             {enviando && (
               <View style={[estilos.bolha, estilos.bolhaAssistente]}>
                 <ActivityIndicator color={colors.textSub} size="small" />
