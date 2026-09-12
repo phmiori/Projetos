@@ -457,6 +457,8 @@ model Transacao {
   parcelaAtual        Int?
   parcelaTotal        Int?
 
+  dividendoFii        DividendoFii?
+
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
 }
@@ -607,9 +609,33 @@ model InvestimentoFII {
   alertaDisparado     Boolean  @default(false) // evita reenviar o alerta enquanto o preço não se recuperar acima do limite
 
   historicoPrecos   HistoricoPrecoFii[]
+  dividendos        DividendoFii[]
 
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+}
+
+/**
+ * Registro de um dividendo/rendimento efetivamente recebido (data + valor), diferente do
+ * campo `ultimoDividendo` (só usado pra projetar a renda mensal). Ao ser criado, atualiza
+ * `ultimoDividendo` do FII com o valor por cota e, se uma conta bancária for informada, gera
+ * uma Transacao de Receita vinculada (ver POST /api/fii/:id/dividendos), contabilizando o
+ * valor recebido no saldo real do módulo Finanças.
+ */
+model DividendoFii {
+  id             Int             @id @default(autoincrement())
+
+  investimentoId Int
+  investimento   InvestimentoFII @relation(fields: [investimentoId], references: [id], onDelete: Cascade)
+
+  data           DateTime
+  valorTotal     Float
+  valorPorCota   Float
+
+  transacaoId    Int?            @unique
+  transacao      Transacao?      @relation(fields: [transacaoId], references: [id], onDelete: SetNull)
+
+  createdAt      DateTime        @default(now())
 }
 
 /**

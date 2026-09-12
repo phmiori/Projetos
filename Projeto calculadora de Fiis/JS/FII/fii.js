@@ -17,7 +17,8 @@ const stateFII = {
     subAbaAtiva: 'fiiSubPortfolio',
     radarFiltro: 'all',
     radarBusca: '',
-    simulacaoDados: []
+    simulacaoDados: [],
+    dividendoFiiId: null
 };
 
 // Dados pré-configurados do Radar Funds Explorer
@@ -404,6 +405,132 @@ function fecharModalHistoricoFii() {
     document.body.style.overflow = '';
 }
 
+let contasBancariasCacheFii = null;
+
+async function carregarContasBancariasFii() {
+    if (contasBancariasCacheFii) return contasBancariasCacheFii;
+    try {
+        const resp = await fetch(`${API_BASE}/financas/contas`);
+        if (!resp.ok) throw new Error('Falha ao buscar contas');
+        contasBancariasCacheFii = await resp.json();
+    } catch (err) {
+        console.warn('[FII] Não foi possível carregar contas bancárias.', err.message);
+        contasBancariasCacheFii = [];
+    }
+    return contasBancariasCacheFii;
+}
+
+async function abrirModalDividendoFii(id, ticker) {
+    stateFII.dividendoFiiId = id;
+    document.getElementById('modalDividendoFiiTitle').textContent = `Dividendos Recebidos: ${ticker}`;
+    document.getElementById('dividendoFiiForm').reset();
+    document.getElementById('inputDividendoData').value = new Date().toISOString().slice(0, 10);
+
+    const selectConta = document.getElementById('selectDividendoConta');
+    const contas = await carregarContasBancariasFii();
+    selectConta.innerHTML = '<option value="">Não lançar em nenhuma conta</option>' +
+        contas.map(c => `<option value="${c.id}">${escapeHTML(c.nome)}</option>`).join('');
+
+    document.getElementById('modalDividendoFiiOverlay').classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    await carregarDividendosFii(id);
+}
+
+function fecharModalDividendoFii() {
+    document.getElementById('modalDividendoFiiOverlay').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+async function carregarDividendosFii(id) {
+    const vazio = document.getElementById('dividendoFiiVazio');
+    const tbody = document.getElementById('tbodyDividendosFii');
+    const totalEl = document.getElementById('dividendoFiiTotalRecebido');
+
+    try {
+        const resp = await fetch(`${API_BASE}/fii/${id}/dividendos`);
+        if (!resp.ok) throw new Error('Falha ao buscar dividendos');
+        const dividendos = await resp.json();
+
+        if (!dividendos.length) {
+            vazio.style.display = 'flex';
+            tbody.innerHTML = '';
+            totalEl.textContent = '';
+            return;
+        }
+        vazio.style.display = 'none';
+
+        const total = dividendos.reduce((s, d) => s + d.valorTotal, 0);
+        totalEl.innerHTML = `· Total recebido: <strong style="color: var(--color-income);">${formatarMoeda(total)}</strong>`;
+
+        tbody.innerHTML = dividendos.map(d => `
+            <tr>
+                <td>${new Date(d.data).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</td>
+                <td><strong style="color: var(--color-income);">${formatarMoeda(d.valorTotal)}</strong></td>
+                <td>${formatarMoeda(d.valorPorCota)}</td>
+                <td>${d.transacaoId ? '✓ Lançado' : '<span style="color: var(--text-sub);">—</span>'}</td>
+                <td>
+                    <div class="table-action-btns">
+                        <button type="button" class="btn-fii-action delete" onclick="excluirDividendoFii('${d.id}')" title="Excluir registro">🗑️</button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    } catch (err) {
+        console.warn('[FII] Não foi possível carregar dividendos recebidos.', err.message);
+        vazio.style.display = 'flex';
+        tbody.innerHTML = '';
+        totalEl.textContent = '';
+    }
+}
+
+async function salvarDividendoFii(e) {
+    e.preventDefault();
+
+    const id = stateFII.dividendoFiiId;
+    const data = document.getElementById('inputDividendoData').value;
+    const valorTotal = parseFloat(document.getElementById('inputDividendoValor').value);
+    const contaId = document.getElementById('selectDividendoConta').value || null;
+
+    if (!data || !valorTotal || valorTotal <= 0) {
+        alert('Preencha a data e um valor recebido válido.');
+        return;
+    }
+
+    try {
+        const resp = await fetch(`${API_BASE}/fii/${id}/dividendos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ data, valorTotal, contaId })
+        });
+        if (!resp.ok) throw new Error('Falha ao registrar dividendo');
+
+        document.getElementById('dividendoFiiForm').reset();
+        document.getElementById('inputDividendoData').value = new Date().toISOString().slice(0, 10);
+
+        await carregarDividendosFii(id);
+        await carregarCarteira();
+    } catch (err) {
+        console.error('Erro ao registrar dividendo:', err);
+        alert('Erro ao registrar o dividendo recebido.');
+    }
+}
+
+async function excluirDividendoFii(id) {
+    if (!(await confirmarAcao('Excluir este registro de dividendo? Se ele tiver sido lançado em uma conta, a receita correspondente também será removida.', { perigo: true }))) return;
+
+    try {
+        const resp = await fetch(`${API_BASE}/fii/dividendos/${id}`, { method: 'DELETE' });
+        if (!resp.ok) throw new Error('Falha ao excluir');
+
+        await carregarDividendosFii(stateFII.dividendoFiiId);
+        await carregarCarteira();
+    } catch (err) {
+        console.error('Erro ao excluir dividendo:', err);
+        alert('Erro ao excluir o registro de dividendo.');
+    }
+}
+
 async function salvarWatchlistItem(e) {
     e.preventDefault();
 
@@ -591,6 +718,16 @@ function initEventListeners() {
         });
     }
 
+    // Modal de Dividendos Recebidos
+    const modalDividendoFiiClose = document.getElementById('modalDividendoFiiClose');
+    const modalDividendoFiiOverlay = document.getElementById('modalDividendoFiiOverlay');
+    if (modalDividendoFiiClose) modalDividendoFiiClose.addEventListener('click', fecharModalDividendoFii);
+    if (modalDividendoFiiOverlay) {
+        modalDividendoFiiOverlay.addEventListener('click', (e) => {
+            if (e.target === modalDividendoFiiOverlay) fecharModalDividendoFii();
+        });
+    }
+
     // Formulários
     const fiiForm = document.getElementById('fiiForm');
     if (fiiForm) fiiForm.addEventListener('submit', salvarFII);
@@ -600,6 +737,9 @@ function initEventListeners() {
 
     const watchlistForm = document.getElementById('watchlistForm');
     if (watchlistForm) watchlistForm.addEventListener('submit', salvarWatchlistItem);
+
+    const dividendoFiiForm = document.getElementById('dividendoFiiForm');
+    if (dividendoFiiForm) dividendoFiiForm.addEventListener('submit', salvarDividendoFii);
 
     // Formulário da Calculadora
     const calcForm = document.getElementById('calcForm');
@@ -790,6 +930,9 @@ function renderizarCarteira() {
                             </button>
                             <button class="btn-fii-action" onclick="abrirModalHistoricoFii('${item.id}', '${escapeHTML(item.ticker)}')" title="Ver histórico de preço">
                                 📈
+                            </button>
+                            <button class="btn-fii-action" onclick="abrirModalDividendoFii('${item.id}', '${escapeHTML(item.ticker)}')" title="Registrar dividendo recebido">
+                                💰
                             </button>
                             <button class="btn-fii-action" onclick="abrirModalFII('${item.id}')" title="Editar FII">
                                 ✏️
