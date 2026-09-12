@@ -109,8 +109,26 @@ function calcularCustoMedioMensal(veiculo) {
 }
 
 function calcularCustoPorKm(veiculo) {
+    const kmFinal = veiculo.quilometragemVenda ?? veiculo.quilometragem;
+    if (veiculo.quilometragemCompra !== null && veiculo.quilometragemCompra !== undefined && kmFinal !== null && kmFinal !== undefined && kmFinal > veiculo.quilometragemCompra) {
+        return calcularCustoTotal(veiculo) / (kmFinal - veiculo.quilometragemCompra);
+    }
     if (!veiculo.quilometragem || veiculo.quilometragem <= 0) return null;
     return calcularCustoTotal(veiculo) / veiculo.quilometragem;
+}
+
+// Exibe "2014/2015" quando há ano de fabricação diferente do ano do modelo, senão só o ano do modelo
+function formatarAno(veiculo) {
+    if (veiculo.anoFabricacao && veiculo.anoFabricacao !== veiculo.ano) {
+        return `${veiculo.anoFabricacao}/${veiculo.ano}`;
+    }
+    return veiculo.ano ? String(veiculo.ano) : '';
+}
+
+// Sufixo pronto para título/nome do veículo: " (2014/2015)" ou "" se não houver ano
+function anoSufixo(veiculo) {
+    const ano = formatarAno(veiculo);
+    return ano ? ` (${ano})` : '';
 }
 
 // Selo de alerta do card: revisão vencida tem prioridade sobre tempo sem manutenção
@@ -283,7 +301,7 @@ function criarCardVeiculo(v) {
         ${criarFotoPlaceholder(v)}
         <div class="garagem-card-header">
             <div>
-                <div class="garagem-card-titulo">${escapeHtml(v.marca)} ${escapeHtml(v.modelo)}${v.ano ? ` (${v.ano})` : ''}</div>
+                <div class="garagem-card-titulo">${escapeHtml(v.marca)} ${escapeHtml(v.modelo)}${anoSufixo(v)}</div>
                 ${v.placa ? `<div class="garagem-card-placa">${escapeHtml(v.placa)}</div>` : ''}
             </div>
             <span class="garagem-pill pill-accent">${escapeHtml(v.status)}</span>
@@ -351,7 +369,7 @@ function renderHistorico() {
             const tr = document.createElement('tr');
 
             tr.innerHTML = `
-                <td>${escapeHtml(v.marca)} ${escapeHtml(v.modelo)}${v.ano ? ` (${v.ano})` : ''}</td>
+                <td>${escapeHtml(v.marca)} ${escapeHtml(v.modelo)}${anoSufixo(v)}</td>
                 <td>${formatarDataBR(v.dataCompra)}</td>
                 <td>${formatarMoeda(v.valorCompra)}</td>
                 <td>${v.dataVenda ? formatarDataBR(v.dataVenda) : '—'}</td>
@@ -584,13 +602,14 @@ function abrirComparador() {
     if (veiculos.length < 2) return;
 
     const linhas = [
-        ['Veículo', v => `${v.marca} ${v.modelo}${v.ano ? ` (${v.ano})` : ''}`],
+        ['Veículo', v => `${v.marca} ${v.modelo}${anoSufixo(v)}`],
         ['Status', v => v.status],
         ['Data de Compra', v => formatarDataBR(v.dataCompra)],
         ['Valor de Compra', v => formatarMoeda(v.valorCompra)],
         ['Total em Manutenção', v => formatarMoeda(calcularGastoManutencao(v))],
         ['Custo Total', v => formatarMoeda(calcularCustoTotal(v))],
-        ['Quilometragem', v => (v.quilometragem !== null && v.quilometragem !== undefined) ? `${v.quilometragem} km` : '—'],
+        ['Quilometragem Atual', v => (v.quilometragem !== null && v.quilometragem !== undefined) ? `${v.quilometragem} km` : '—'],
+        ['Quilometragem na Compra', v => (v.quilometragemCompra !== null && v.quilometragemCompra !== undefined) ? `${v.quilometragemCompra} km` : '—'],
         ['Tempo de Posse', v => `${calcularMesesPosse(v)} meses`],
         ['Custo por Km', v => { const c = calcularCustoPorKm(v); return c !== null ? formatarMoeda(c) : '—'; }]
     ];
@@ -629,6 +648,7 @@ function atualizarCamposVenda() {
     const vendido = document.getElementById('inputVeiculoStatus').value === 'Vendido';
     document.getElementById('campoVeiculoDataVenda').style.display = vendido ? 'flex' : 'none';
     document.getElementById('campoVeiculoValorVenda').style.display = vendido ? 'flex' : 'none';
+    document.getElementById('campoVeiculoKmVenda').style.display = vendido ? 'flex' : 'none';
 }
 
 function abrirModalVeiculo(veiculo) {
@@ -638,14 +658,16 @@ function abrirModalVeiculo(veiculo) {
     document.getElementById('formVeiculoId').value = veiculo ? veiculo.id : '';
     document.getElementById('inputVeiculoMarca').value = veiculo ? veiculo.marca : '';
     document.getElementById('inputVeiculoModelo').value = veiculo ? veiculo.modelo : '';
+    document.getElementById('inputVeiculoAnoFabricacao').value = (veiculo && veiculo.anoFabricacao !== null && veiculo.anoFabricacao !== undefined) ? veiculo.anoFabricacao : '';
     document.getElementById('inputVeiculoAno').value = veiculo ? veiculo.ano : '';
     document.getElementById('inputVeiculoPlaca').value = veiculo ? (veiculo.placa || '') : '';
     document.getElementById('inputVeiculoCor').value = veiculo ? (veiculo.cor || '') : '';
     document.getElementById('inputVeiculoKm').value = (veiculo && veiculo.quilometragem !== null && veiculo.quilometragem !== undefined) ? veiculo.quilometragem : '';
+    document.getElementById('inputVeiculoKmCompra').value = (veiculo && veiculo.quilometragemCompra !== null && veiculo.quilometragemCompra !== undefined) ? veiculo.quilometragemCompra : '';
+    document.getElementById('inputVeiculoKmVenda').value = (veiculo && veiculo.quilometragemVenda !== null && veiculo.quilometragemVenda !== undefined) ? veiculo.quilometragemVenda : '';
     document.getElementById('inputVeiculoDataCompra').value = veiculo ? isoParaInputDate(veiculo.dataCompra) : hojeInputDate();
     document.getElementById('inputVeiculoValorCompra').value = veiculo ? veiculo.valorCompra : '';
     document.getElementById('inputVeiculoValorMercado').value = (veiculo && veiculo.valorMercado !== null && veiculo.valorMercado !== undefined) ? veiculo.valorMercado : '';
-    document.getElementById('inputVeiculoProximaRevisao').value = (veiculo && veiculo.dataProximaRevisao) ? isoParaInputDate(veiculo.dataProximaRevisao) : '';
     document.getElementById('inputVeiculoStatus').value = veiculo ? veiculo.status : 'Ativo';
     document.getElementById('inputVeiculoDataVenda').value = (veiculo && veiculo.dataVenda) ? isoParaInputDate(veiculo.dataVenda) : '';
     document.getElementById('inputVeiculoValorVenda').value = (veiculo && veiculo.valorVenda !== null && veiculo.valorVenda !== undefined) ? veiculo.valorVenda : '';
@@ -664,13 +686,15 @@ async function salvarVeiculo(e) {
         marca: document.getElementById('inputVeiculoMarca').value.trim(),
         modelo: document.getElementById('inputVeiculoModelo').value.trim(),
         ano: document.getElementById('inputVeiculoAno').value,
+        anoFabricacao: document.getElementById('inputVeiculoAnoFabricacao').value,
         placa: document.getElementById('inputVeiculoPlaca').value.trim(),
         cor: document.getElementById('inputVeiculoCor').value.trim(),
         quilometragem: document.getElementById('inputVeiculoKm').value,
+        quilometragemCompra: document.getElementById('inputVeiculoKmCompra').value,
+        quilometragemVenda: document.getElementById('inputVeiculoKmVenda').value,
         dataCompra: document.getElementById('inputVeiculoDataCompra').value,
         valorCompra: document.getElementById('inputVeiculoValorCompra').value,
         valorMercado: document.getElementById('inputVeiculoValorMercado').value,
-        dataProximaRevisao: document.getElementById('inputVeiculoProximaRevisao').value || null,
         status: document.getElementById('inputVeiculoStatus').value,
         dataVenda: document.getElementById('inputVeiculoDataVenda').value || null,
         valorVenda: document.getElementById('inputVeiculoValorVenda').value,
@@ -722,6 +746,7 @@ function initModalFicha() {
         abrirModalManutencao(null, stateGaragem.fichaVeiculoId);
     });
     document.getElementById('btnFichaImprimir').addEventListener('click', () => window.print());
+    document.getElementById('btnSalvarProximaRevisao').addEventListener('click', salvarProximaRevisao);
 }
 
 function abrirFicha(veiculoId) {
@@ -742,7 +767,7 @@ function renderFicha() {
         return;
     }
 
-    document.getElementById('fichaTitulo').textContent = `${veiculo.marca} ${veiculo.modelo}${veiculo.ano ? ` (${veiculo.ano})` : ''}`;
+    document.getElementById('fichaTitulo').textContent = `${veiculo.marca} ${veiculo.modelo}${anoSufixo(veiculo)}`;
     document.getElementById('fichaSubtitulo').textContent = veiculo.placa ? `Placa ${veiculo.placa}` : 'Sem placa cadastrada';
 
     const gastoManutencao = calcularGastoManutencao(veiculo);
@@ -758,7 +783,8 @@ function renderFicha() {
     const itens = [
         ['Status', veiculo.status],
         ['Cor', veiculo.cor || '—'],
-        ['Quilometragem', (veiculo.quilometragem !== null && veiculo.quilometragem !== undefined) ? `${veiculo.quilometragem} km` : '—'],
+        ['Quilometragem Atual', (veiculo.quilometragem !== null && veiculo.quilometragem !== undefined) ? `${veiculo.quilometragem} km` : '—'],
+        ['Quilometragem na Compra', (veiculo.quilometragemCompra !== null && veiculo.quilometragemCompra !== undefined) ? `${veiculo.quilometragemCompra} km` : '—'],
         ['Data de Compra', formatarDataBR(veiculo.dataCompra)],
         ['Valor de Compra', formatarMoeda(veiculo.valorCompra)],
         ['Total em Manutenção', formatarMoeda(gastoManutencao)],
@@ -769,12 +795,12 @@ function renderFicha() {
 
     if (custoPorKm !== null) itens.push(['Custo por Km (aprox.)', formatarMoeda(custoPorKm)]);
     if (veiculo.valorMercado) itens.push(['Valor de Mercado Estimado', formatarMoeda(veiculo.valorMercado)]);
-    if (veiculo.dataProximaRevisao) itens.push(['Próxima Revisão', formatarDataBR(veiculo.dataProximaRevisao)]);
     if (alerta) itens.push(['Alerta', alerta.texto]);
 
     if (veiculo.status === 'Vendido') {
         itens.push(['Data de Venda', veiculo.dataVenda ? formatarDataBR(veiculo.dataVenda) : '—']);
         itens.push(['Valor de Venda', (veiculo.valorVenda !== null && veiculo.valorVenda !== undefined) ? formatarMoeda(veiculo.valorVenda) : '—']);
+        itens.push(['Quilometragem na Venda', (veiculo.quilometragemVenda !== null && veiculo.quilometragemVenda !== undefined) ? `${veiculo.quilometragemVenda} km` : '—']);
         itens.push(['Resultado', resultado !== null ? formatarMoeda(resultado) : '—']);
     }
 
@@ -793,8 +819,34 @@ function renderFicha() {
         infoGrid.appendChild(obsItem);
     }
 
+    document.getElementById('inputFichaProximaRevisao').value = isoParaInputDate(veiculo.dataProximaRevisao);
+    document.getElementById('fichaRevisaoFeedback').textContent = '';
+
     renderManutencoesFicha(veiculo);
     renderGraficosFicha(veiculo);
+}
+
+async function salvarProximaRevisao() {
+    const veiculo = buscarVeiculo(stateGaragem.fichaVeiculoId);
+    if (!veiculo) return;
+
+    const feedback = document.getElementById('fichaRevisaoFeedback');
+    const dataProximaRevisao = document.getElementById('inputFichaProximaRevisao').value || null;
+
+    try {
+        const resp = await fetch(`${API_BASE}/garagem/veiculos/${veiculo.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dataProximaRevisao })
+        });
+        if (!resp.ok) throw new Error('Falha ao salvar');
+
+        await carregarVeiculos();
+        renderFicha();
+        document.getElementById('fichaRevisaoFeedback').textContent = 'Salvo!';
+    } catch (err) {
+        feedback.textContent = `Não foi possível salvar. ${err.message}`;
+    }
 }
 
 function renderManutencoesFicha(veiculo) {

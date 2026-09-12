@@ -479,6 +479,30 @@
     color: var(--text-main);
 }
 
+.garagem-ficha-revisao-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 16px;
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-button);
+}
+
+.garagem-ficha-revisao-row label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-sub);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.garagem-ficha-revisao-row .input-missao {
+    width: auto;
+    flex: 0 0 auto;
+}
+
 .garagem-ficha-manutencao-header {
     display: flex;
     align-items: center;
@@ -587,6 +611,10 @@
     gap: 18px;
     overflow-y: auto;
     background-color: var(--bg-surface);
+    /* Sem isto, um flex item com overflow-y:auto não encolhe (min-height padrão é "auto"),
+       o conteúdo estoura o modal e o rodapé com os botões de salvar fica cortado da tela. */
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 .form-fields-grid {

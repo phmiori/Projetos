@@ -43,7 +43,7 @@ router.get('/veiculos', async (req, res) => {
  */
 router.post('/veiculos', async (req, res) => {
     try {
-        const { marca, modelo, ano, placa, cor, quilometragem, dataCompra, valorCompra, status, dataVenda, valorVenda, observacoes, valorMercado, dataProximaRevisao } = req.body;
+        const { marca, modelo, ano, anoFabricacao, placa, cor, quilometragem, quilometragemCompra, quilometragemVenda, dataCompra, valorCompra, status, dataVenda, valorVenda, observacoes, valorMercado, dataProximaRevisao } = req.body;
 
         if (!marca || !modelo || !dataCompra) {
             return res.status(400).json({ error: 'Marca, modelo e data de compra são obrigatórios.' });
@@ -55,9 +55,12 @@ router.post('/veiculos', async (req, res) => {
                 marca: String(marca).trim(),
                 modelo: String(modelo).trim(),
                 ano: parseInt(ano, 10) || new Date().getFullYear(),
+                anoFabricacao: anoFabricacao !== undefined && anoFabricacao !== '' ? parseInt(anoFabricacao, 10) : null,
                 placa: placa ? String(placa).trim().toUpperCase() : null,
                 cor: cor ? String(cor).trim() : null,
                 quilometragem: quilometragem !== undefined && quilometragem !== '' ? Number(quilometragem) : null,
+                quilometragemCompra: quilometragemCompra !== undefined && quilometragemCompra !== '' ? Number(quilometragemCompra) : null,
+                quilometragemVenda: quilometragemVenda !== undefined && quilometragemVenda !== '' ? Number(quilometragemVenda) : null,
                 dataCompra: new Date(dataCompra),
                 valorCompra: Number(valorCompra) || 0,
                 status: status ? String(status).trim() : 'Ativo',
@@ -84,7 +87,7 @@ router.post('/veiculos', async (req, res) => {
 router.put('/veiculos/:id', async (req, res) => {
     try {
         const id = parseInt(req.params.id, 10);
-        const { marca, modelo, ano, placa, cor, quilometragem, dataCompra, valorCompra, status, dataVenda, valorVenda, observacoes, valorMercado, dataProximaRevisao } = req.body;
+        const { marca, modelo, ano, anoFabricacao, placa, cor, quilometragem, quilometragemCompra, quilometragemVenda, dataCompra, valorCompra, status, dataVenda, valorVenda, observacoes, valorMercado, dataProximaRevisao } = req.body;
 
         const existente = await prisma.veiculoGaragem.findFirst({ where: { id, usuarioId: req.session.userId } });
         if (!existente) return res.status(404).json({ error: 'Veículo não encontrado' });
@@ -95,9 +98,12 @@ router.put('/veiculos/:id', async (req, res) => {
                 marca: marca ? String(marca).trim() : existente.marca,
                 modelo: modelo ? String(modelo).trim() : existente.modelo,
                 ano: ano !== undefined ? (parseInt(ano, 10) || existente.ano) : existente.ano,
+                anoFabricacao: anoFabricacao !== undefined ? (anoFabricacao !== '' ? parseInt(anoFabricacao, 10) : null) : existente.anoFabricacao,
                 placa: placa !== undefined ? (placa ? String(placa).trim().toUpperCase() : null) : existente.placa,
                 cor: cor !== undefined ? (cor ? String(cor).trim() : null) : existente.cor,
                 quilometragem: quilometragem !== undefined ? (quilometragem !== '' ? Number(quilometragem) : null) : existente.quilometragem,
+                quilometragemCompra: quilometragemCompra !== undefined ? (quilometragemCompra !== '' ? Number(quilometragemCompra) : null) : existente.quilometragemCompra,
+                quilometragemVenda: quilometragemVenda !== undefined ? (quilometragemVenda !== '' ? Number(quilometragemVenda) : null) : existente.quilometragemVenda,
                 dataCompra: dataCompra ? new Date(dataCompra) : existente.dataCompra,
                 valorCompra: valorCompra !== undefined ? Number(valorCompra) || 0 : existente.valorCompra,
                 status: status ? String(status).trim() : existente.status,
