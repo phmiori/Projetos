@@ -13,6 +13,7 @@
     <!-- Tokens Globais e CSS Modular do Leilão -->
     <link rel="stylesheet" href="../../CSS/Global/global_tokens.css">
     <link rel="stylesheet" href="../../CSS/Leilao/leilao.css">
+    <link rel="stylesheet" href="../../CSS/Leilao/radar.css">
     <link rel="stylesheet" href="../../CSS/Notificacao/notificacao.css">
     <link rel="stylesheet" href="../../CSS/Global/confirm-dialog.css">
     <link rel="stylesheet" href="../../CSS/Assistente/assistente.css">
@@ -36,6 +37,7 @@
 
     <!-- Script do Módulo Leilão -->
     <script src="../../JS/Leilao/leilao.js" defer></script>
+    <script src="../../JS/Leilao/radar.js" defer></script>
 </head>
 <body class="auth-pending">
 
@@ -369,6 +371,20 @@
                     </div>
                 </section>
 
+                <!-- Sub-navegação: Meus Veículos x Radar de Oportunidades -->
+                <div class="sub-nav-container" role="tablist" aria-label="Seções de Carros de Leilão">
+                    <button type="button" class="sub-nav-btn active" data-subtarget="leilaoSubVeiculos" role="tab">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"></path><circle cx="7" cy="17" r="2"></circle><circle cx="17" cy="17" r="2"></circle></svg>
+                        <span>Meus Veículos</span>
+                    </button>
+                    <button type="button" class="sub-nav-btn" data-subtarget="leilaoSubRadar" role="tab">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
+                        <span>Radar de Oportunidades</span>
+                    </button>
+                </div>
+
+                <div class="leilao-subview active" id="leilaoSubVeiculos">
+
                 <!-- KPIs Financeiros Rápidos -->
                 <section class="kpi-section" aria-label="Resumo Financeiro de Leilão">
                     <div class="kpi-grid">
@@ -485,8 +501,125 @@
                     </div>
                 </section>
 
+                </div><!-- /leilaoSubVeiculos -->
+
+                <!-- Radar de Oportunidades: carros de leilão judicial do BuscaAii que valem a pena -->
+                <div class="leilao-subview" id="leilaoSubRadar">
+                    <section class="radar-topo">
+                        <div>
+                            <h2 class="section-title">Radar de Oportunidades</h2>
+                            <p class="section-subtitle" id="radarAtualizado">Carros de leilão judicial do BuscaAii comparados com a FIPE</p>
+                        </div>
+                        <div class="radar-acoes">
+                            <select id="radarEditais" class="input-missao" title="Quantas páginas/editais de leiloeiro ler (os melhores primeiro)">
+                                <option value="0">Sem ler editais</option>
+                                <option value="20">Ler 20 editais</option>
+                                <option value="40" selected>Ler 40 editais</option>
+                                <option value="80">Ler 80 editais</option>
+                            </select>
+                            <button type="button" class="btn-missao-primary" id="radarBtnAtualizar">Atualizar análise</button>
+                            <button type="button" class="radar-btn-secundario" id="radarBtnCsv">Exportar CSV</button>
+                            <button type="button" class="radar-btn-secundario" id="radarBtnConfig">Parâmetros</button>
+                        </div>
+                    </section>
+
+                    <div class="radar-aviso" id="radarAviso" hidden></div>
+
+                    <section class="radar-progresso" id="radarProgresso" hidden>
+                        <div class="radar-progresso-topo">
+                            <strong id="radarEtapa">Iniciando...</strong>
+                            <span class="section-subtitle" id="radarContador"></span>
+                            <button type="button" class="radar-btn-secundario" id="radarBtnLog">Ver detalhes</button>
+                        </div>
+                        <div class="radar-barra" id="radarBarra"><div></div></div>
+                        <pre class="radar-log" id="radarLog" hidden></pre>
+                    </section>
+
+                    <section class="radar-kpis" id="radarKpis" aria-label="Resumo do Radar"></section>
+
+                    <section class="filter-toolbar radar-filtros">
+                        <input type="text" id="radarBusca" class="input-missao" placeholder="Buscar modelo, cidade, leiloeiro...">
+                        <select id="radarUF" class="input-missao" aria-label="Estado"><option value="">Todos os estados</option></select>
+                        <input type="number" id="radarLanceMax" class="input-missao" min="0" step="1000" placeholder="Lance até (R$)" aria-label="Lance máximo">
+                        <select id="radarPrazo" class="input-missao" aria-label="Encerra em">
+                            <option value="">Qualquer data</option>
+                            <option value="2">Encerra em até 2 dias</option>
+                            <option value="7">Até 7 dias</option>
+                            <option value="15">Até 15 dias</option>
+                            <option value="30">Até 30 dias</option>
+                        </select>
+                        <select id="radarOrdem" class="input-missao" aria-label="Ordenar por">
+                            <option value="margem">Maior margem</option>
+                            <option value="lucro">Maior lucro (R$)</option>
+                            <option value="desconto">Maior desconto s/ FIPE</option>
+                            <option value="encerra">Encerra primeiro</option>
+                            <option value="lance">Menor lance</option>
+                        </select>
+                        <label class="radar-check"><input type="checkbox" id="radarFunciona"> Só os que funcionam</label>
+                        <label class="radar-check"><input type="checkbox" id="radarSemAlienacao"> Sem alienação fiduciária</label>
+                    </section>
+
+                    <div class="section-header">
+                        <span class="section-subtitle" id="radarContagem"></span>
+                    </div>
+                    <div class="vehicles-grid" id="radarGrid"></div>
+                    <div class="radar-mais"><button type="button" class="radar-btn-secundario" id="radarBtnMais" hidden>Mostrar mais</button></div>
+                </div><!-- /leilaoSubRadar -->
+
             </div>
         </main>
+    </div>
+
+    <!-- MODAL: Detalhes de um carro do Radar -->
+    <div class="modal-overlay" id="radarDetalhesOverlay">
+        <div class="modal-dialog">
+            <header class="modal-header">
+                <div>
+                    <h2 class="modal-title" id="radarDetalhesTitulo">Detalhes do lote</h2>
+                    <p class="modal-subtitle" id="radarDetalhesSub"></p>
+                </div>
+                <button class="modal-close-btn" id="radarDetalhesFechar" aria-label="Fechar modal">&times;</button>
+            </header>
+            <div class="radar-detalhes-corpo" id="radarDetalhesCorpo"></div>
+        </div>
+    </div>
+
+    <!-- MODAL: Parâmetros do cálculo do Radar -->
+    <div class="modal-overlay" id="radarConfigOverlay">
+        <div class="modal-dialog">
+            <header class="modal-header">
+                <div>
+                    <h2 class="modal-title">Parâmetros do Radar</h2>
+                    <p class="modal-subtitle">Ao salvar, os vereditos são recalculados na hora, sem baixar tudo de novo.</p>
+                </div>
+                <button class="modal-close-btn" id="radarConfigFechar" aria-label="Fechar modal">&times;</button>
+            </header>
+            <form class="radar-config-form" id="radarConfigForm">
+                <div class="radar-config-grid">
+                    <div class="input-field"><label for="rcMargem">Margem mínima "vale a pena" (%)</label><input type="number" id="rcMargem" class="input-missao" step="1"></div>
+                    <div class="input-field"><label for="rcComissao">Comissão do leiloeiro (%)</label><input type="number" id="rcComissao" class="input-missao" step="0.5"></div>
+                    <div class="input-field"><label for="rcDoc">Documentação / transferência (R$)</label><input type="number" id="rcDoc" class="input-missao" step="100"></div>
+                    <div class="input-field"><label for="rcRemocao">Remoção / guincho (R$)</label><input type="number" id="rcRemocao" class="input-missao" step="100"></div>
+                    <div class="input-field"><label for="rcDesagio">Venda abaixo da FIPE (%)</label><input type="number" id="rcDesagio" class="input-missao" step="1"></div>
+                    <div class="input-field"><label for="rcSuspeito">Lance abaixo de X% da FIPE vira "Talvez"</label><input type="number" id="rcSuspeito" class="input-missao" step="1"></div>
+                    <div class="input-field"><label for="rcRBom">Reparo estado bom (% FIPE)</label><input type="number" id="rcRBom" class="input-missao" step="1"></div>
+                    <div class="input-field"><label for="rcRReg">Reparo estado regular (% FIPE)</label><input type="number" id="rcRReg" class="input-missao" step="1"></div>
+                    <div class="input-field"><label for="rcRDesc">Reparo estado desconhecido (% FIPE)</label><input type="number" id="rcRDesc" class="input-missao" step="1"></div>
+                    <div class="input-field"><label for="rcRRuim">Reparo estado ruim (% FIPE)</label><input type="number" id="rcRRuim" class="input-missao" step="1"></div>
+                    <div class="input-field"><label for="rcNaoFunc">Reparo extra se não funciona (% FIPE)</label><input type="number" id="rcNaoFunc" class="input-missao" step="1"></div>
+                </div>
+                <label class="radar-check"><input type="checkbox" id="rcSinistro"> Descartar carros com sinistro, colisão, monta ou enchente citados no edital</label>
+                <label class="radar-check"><input type="checkbox" id="rcSemFoto"> Descartar lotes sem foto ou só com foto ilustrativa/genérica</label>
+                <fieldset class="radar-config-tipos">
+                    <legend>Tipos de veículo (vale na próxima atualização)</legend>
+                    <div id="rcTipos"></div>
+                </fieldset>
+                <footer class="radar-config-rodape">
+                    <button type="button" class="radar-btn-secundario" id="radarConfigCancelar">Cancelar</button>
+                    <button type="submit" class="btn-missao-primary" id="radarConfigSalvar">Salvar parâmetros</button>
+                </footer>
+            </form>
+        </div>
     </div>
 
     <!-- MODAL: Cadastro e Edição de Veículo -->
@@ -553,6 +686,7 @@
                                     <option value="Frota / Locadora">Frota / Locadora</option>
                                     <option value="Pessoa Física / Particular">Pessoa Física / Particular</option>
                                     <option value="Órgão Público / Detran">Órgão Público / Detran</option>
+                                    <option value="Leilão Judicial">Leilão Judicial</option>
                                     <option value="Outro">Outro</option>
                                 </select>
                             </div>

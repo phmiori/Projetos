@@ -1,0 +1,6 @@
+# login do BuscaAii e dados baixados: nunca versionar
+.env
+config.json
+cache/
+relatorios/
+__pycache__/

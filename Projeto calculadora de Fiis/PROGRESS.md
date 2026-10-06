@@ -210,3 +210,15 @@
 
 > ✅ Migração aplicada e testada em produção (Render/Neon) nesta sessão: tabela `MensagemAssistente` criada com sucesso via `node.exe node_modules/prisma/build/index.js db push` (workaround usado porque `npm`/`node` não estavam no PATH do terminal do usuário — resolvido depois ajustando o PATH do Windows). `GEMINI_API_KEY` configurada e testada em produção.
 
+
+## 🎯 Radar de Oportunidades (sub-aba dentro de Carros de Leilão)
+- [x] Página `HTML/Leilao/leilao.html` ganhou sub-navegação em abas (mesmo padrão visual da Garagem): **Meus Veículos** (conteúdo de antes, intacto) e **Radar de Oportunidades** (`#radar` na URL abre direto nessa aba). CSS em `CSS/Leilao/radar.css` (só tokens do tema) e JS em `JS/Leilao/radar.js`
+- [x] Port para Node do Analisador de Leilões em Python (`Projetos/Analisador de Leiloes`): `lib/radar-analise.js` (regras puras: estado/funcionamento/débitos/sub-rogação do edital, sinistro com negação "não consta sinistro", foto genérica ou repetida, cálculo de lucro e veredito) e `lib/radar-shared.js` (login no BuscaAii via Supabase, download só dos carros de leilão **judicial**, FIPE parallelum com cache, leitura da página do leiloeiro e do edital em PDF com `pdf-parse`, execução em segundo plano com progresso)
+- [x] Rotas `routes/radar.js` (`GET /api/radar/estado`, `GET /api/radar/resultados`, `POST /api/radar/analisar`, `PUT /api/radar/config`), protegidas por `requireAuth`
+- [x] Persistência na tabela chave-valor `RadarLeilao` (modelo no `schema.prisma`; também criada sozinha ao subir o servidor por `garantirTabelaRadar`, igual ao `bootstrap.js`): último resultado, parâmetros e cache da API FIPE (não perde no Render quando o serviço hiberna)
+- [x] Regras: descarta sucata, não localizado, perda total, só lataria, **sinistro/colisão/monta/enchente** e lotes **sem foto real** (ambas desligáveis em Parâmetros); lance abaixo de 35% da FIPE vira "Talvez" (lance simbólico de pregão); recorte do edital PDF limitado ao próprio lote (não herda "sucata"/"sem chave" do lote vizinho)
+- [x] Tela: KPIs clicáveis por veredito, filtros (busca, UF, lance máximo, prazo, só que funcionam, sem alienação fiduciária), ordenação, modal com a conta completa e trechos do edital, exportação CSV e botão **Cadastrar em Meus Veículos** (abre o cadastro já preenchido; nova origem "Leilão Judicial")
+- [x] Cron diário às 06:00 roda a análise (completa as consultas FIPE que ficaram pendentes pelo limite diário de ~1000/dia)
+- [x] CSP do helmet: `img-src` liberado para `https:` (fotos hospedadas nos sites dos leiloeiros)
+- [x] Testes `tests/radar-analise.test.js` (sinistro, edital, foto, veredito). Paridade conferida: os 1.604 carros da última análise do Python dão o mesmo veredito no Node
+- [ ] Configurar `BUSCAAII_EMAIL` e `BUSCAAII_SENHA` no `.env` local e no Environment do Render (opcional: `FIPE_TOKEN`)

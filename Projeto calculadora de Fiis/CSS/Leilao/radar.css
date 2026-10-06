@@ -1,0 +1,250 @@
+/* CSS/Leilao/radar.css */
+/* Sub-abas da página de Carros de Leilão e o Radar de Oportunidades (carros de leilão judicial do BuscaAii) */
+
+/* ========================================================= */
+/* SUB-NAVEGAÇÃO EM ABAS (mesmo visual da Garagem) */
+/* ========================================================= */
+.sub-nav-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    padding: 6px;
+    flex-wrap: wrap;
+}
+
+.sub-nav-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: transparent;
+    color: var(--text-sub);
+    border: 1px solid transparent;
+    border-radius: var(--radius-button);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.sub-nav-btn:hover { color: var(--text-main); background-color: var(--bg-main); }
+
+.sub-nav-btn.active {
+    background-color: var(--accent-color);
+    color: var(--accent-text);
+    border-color: var(--accent-color);
+}
+
+.leilao-subview { display: none; flex-direction: column; gap: 24px; }
+.leilao-subview.active { display: flex; }
+
+/* ========================================================= */
+/* RADAR: TOPO, AVISOS E PROGRESSO */
+/* ========================================================= */
+.radar-topo {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.radar-acoes { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.radar-acoes .input-missao { width: auto; }
+
+.radar-btn-secundario {
+    background-color: var(--bg-surface);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-button);
+    padding: 10px 16px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: var(--transition-fast);
+}
+
+.radar-btn-secundario:hover { border-color: var(--accent-color); }
+.radar-btn-secundario[hidden], .radar-aviso[hidden], .radar-progresso[hidden], .radar-log[hidden] { display: none; }
+
+.radar-aviso {
+    border: 1px solid var(--accent-color);
+    background-color: color-mix(in srgb, var(--accent-color) 12%, transparent);
+    color: var(--text-main);
+    border-radius: var(--radius-suth);
+    padding: 12px 16px;
+    font-size: 0.9rem;
+}
+
+.radar-aviso.erro {
+    border-color: var(--color-expense);
+    background-color: color-mix(in srgb, var(--color-expense) 14%, transparent);
+}
+
+.radar-progresso {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    padding: 14px 16px;
+}
+
+.radar-progresso-topo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.radar-progresso-topo strong { flex: 1; color: var(--text-main); }
+
+.radar-barra { height: 8px; background-color: var(--bg-main); border-radius: 99px; overflow: hidden; margin-top: 10px; }
+.radar-barra > div { height: 100%; width: 0; background-color: var(--accent-color); transition: width 0.4s; }
+.radar-barra.indeterminada > div { width: 35%; animation: radarDeslizar 1.2s infinite ease-in-out; }
+@keyframes radarDeslizar { from { margin-left: -35%; } to { margin-left: 100%; } }
+
+.radar-log {
+    margin-top: 10px;
+    max-height: 180px;
+    overflow: auto;
+    background-color: var(--bg-main);
+    color: var(--text-sub);
+    border-radius: var(--radius-button);
+    padding: 10px;
+    font-size: 0.75rem;
+    white-space: pre-wrap;
+}
+
+/* ========================================================= */
+/* RADAR: KPIs (clicáveis, funcionam como filtro de veredito) */
+/* ========================================================= */
+.radar-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+
+.radar-kpi {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    padding: 14px 16px;
+    cursor: pointer;
+    text-align: left;
+    color: var(--text-sub);
+    transition: var(--transition-fast);
+}
+
+.radar-kpi.selecionado { border-color: var(--accent-color); box-shadow: 0 0 0 1px var(--accent-color); }
+.radar-kpi-valor { display: block; font-size: 1.6rem; font-weight: 800; color: var(--text-main); }
+.radar-kpi.ok .radar-kpi-valor { color: var(--color-income); }
+.radar-kpi.talvez .radar-kpi-valor { color: var(--accent-color); }
+.radar-kpi.ruim .radar-kpi-valor { color: var(--color-expense); }
+.radar-kpi-rotulo { font-size: 0.8rem; font-weight: 600; }
+
+/* ========================================================= */
+/* RADAR: FILTROS */
+/* ========================================================= */
+.radar-filtros {
+    justify-content: flex-start;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-suth);
+    padding: 12px;
+}
+
+.radar-filtros .input-missao { width: auto; flex: 0 1 180px; }
+.radar-filtros #radarBusca { flex: 1 1 240px; }
+.radar-check { display: inline-flex; align-items: center; gap: 6px; color: var(--text-sub); font-size: 0.85rem; cursor: pointer; }
+
+/* ========================================================= */
+/* RADAR: CARDS */
+/* ========================================================= */
+.radar-card { cursor: pointer; }
+
+.radar-foto { position: relative; aspect-ratio: 16 / 9; background-color: var(--bg-main); }
+.radar-foto img { width: 100%; height: 100%; object-fit: cover; display: block; position: relative; z-index: 1; }
+.radar-foto .radar-badge { z-index: 2; }
+.radar-sem-foto { position: absolute; inset: 0; display: grid; place-items: center; color: var(--text-sub); font-size: 0.8rem; }
+.radar-foto .radar-badge { position: absolute; top: 8px; left: 8px; }
+.radar-foto .radar-prazo { position: absolute; top: 8px; right: 8px; left: auto; }
+
+.radar-badge {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 99px;
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    color: var(--text-sub);
+}
+
+.radar-badge.ok { color: var(--color-income); border-color: var(--color-income); }
+.radar-badge.talvez { color: var(--accent-color); border-color: var(--accent-color); }
+.radar-badge.ruim { color: var(--color-expense); border-color: var(--color-expense); }
+
+.radar-card-corpo { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.radar-local { font-size: 0.8rem; color: var(--text-sub); }
+
+.radar-numeros { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; }
+.radar-numeros small { display: block; font-size: 0.72rem; color: var(--text-sub); }
+.radar-numeros strong { color: var(--text-main); font-size: 0.95rem; }
+.radar-positivo { color: var(--color-income) !important; }
+.radar-negativo { color: var(--color-expense) !important; }
+
+.radar-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: auto; }
+.radar-chip.ok { color: var(--color-income); }
+.radar-chip.talvez { color: var(--accent-color); }
+.radar-chip.ruim { color: var(--color-expense); }
+
+.radar-mais { display: flex; justify-content: center; }
+.radar-vazio { grid-column: 1 / -1; }
+
+/* ========================================================= */
+/* RADAR: MODAL DE DETALHES E DE PARÂMETROS */
+/* ========================================================= */
+.radar-detalhes-corpo { padding: 20px 24px 28px; overflow-y: auto; display: flex; flex-direction: column; gap: 18px; }
+.radar-detalhes-corpo h3 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-sub); margin-bottom: 8px; }
+.radar-detalhes-foto { width: 100%; max-height: 300px; object-fit: cover; border-radius: var(--radius-suth); }
+.radar-detalhes-acoes { display: flex; flex-wrap: wrap; gap: 10px; }
+.radar-detalhes-acoes a { text-decoration: none; display: inline-flex; align-items: center; }
+
+.radar-conta { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.radar-conta td { padding: 6px 0; border-bottom: 1px dashed var(--border-color); color: var(--text-main); }
+.radar-conta td:last-child { text-align: right; font-weight: 700; white-space: nowrap; padding-left: 12px; }
+.radar-conta tr.total td { border-bottom: none; border-top: 2px solid var(--border-color); font-weight: 800; padding-top: 9px; }
+
+.radar-lista { padding-left: 18px; font-size: 0.9rem; }
+.radar-lista li { margin: 3px 0; }
+.radar-lista.ruim { color: var(--color-expense); }
+.radar-lista.talvez { color: var(--accent-color); }
+
+.radar-dados { display: grid; grid-template-columns: 180px 1fr; gap: 6px 12px; font-size: 0.88rem; color: var(--text-main); }
+.radar-dados dt { color: var(--text-sub); }
+
+.radar-texto {
+    background-color: var(--bg-main);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-button);
+    padding: 12px;
+    font-size: 0.85rem;
+    color: var(--text-main);
+    white-space: pre-wrap;
+    max-height: 280px;
+    overflow: auto;
+}
+
+.radar-nota { font-size: 0.8rem; color: var(--text-sub); }
+
+.radar-config-form { padding: 20px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.radar-config-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 16px; }
+.radar-config-tipos { border: 1px solid var(--border-color); border-radius: var(--radius-suth); padding: 10px 14px; color: var(--text-sub); }
+.radar-config-tipos legend { padding: 0 6px; font-weight: 700; font-size: 0.85rem; }
+.radar-config-tipos #rcTipos { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.radar-config-rodape { display: flex; justify-content: flex-end; gap: 10px; }
+
+/* ========================================================= */
+/* RESPONSIVIDADE */
+/* ========================================================= */
+@media (max-width: 768px) {
+    .radar-dados { grid-template-columns: 1fr; }
+    .radar-filtros .input-missao { flex: 1 1 100%; }
+}
+
+@media (max-width: 480px) {
+    .radar-acoes, .radar-acoes > * { width: 100%; }
+    .sub-nav-btn { flex: 1 1 100%; justify-content: center; }
+}
