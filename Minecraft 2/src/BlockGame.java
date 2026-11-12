@@ -1396,7 +1396,12 @@ public class BlockGame {
                         + "$f.Title = 'Escolha uma foto para o chat'; "
                         + "$f.Filter = 'Imagens|*.png;*.jpg;*.jpeg;*.gif;*.bmp|Todos os arquivos|*.*'; "
                         + "if ($f.ShowDialog($o) -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($f.FileName) }";
-                Process pr = new ProcessBuilder("powershell", "-NoProfile", "-STA", "-NonInteractive", "-Command", script).start();
+                // caminho completo: o PATH de quem abriu o jogo pode não incluir a pasta do PowerShell
+                String root = System.getenv("SystemRoot");
+                if (root == null) root = System.getenv("windir");
+                java.io.File ps = root == null ? null : new java.io.File(root, "System32\\WindowsPowerShell\\v1.0\\powershell.exe");
+                String exe = ps != null && ps.isFile() ? ps.getPath() : "powershell";
+                Process pr = new ProcessBuilder(exe, "-NoProfile", "-STA", "-NonInteractive", "-Command", script).start();
                 java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
                 byte[] buf = new byte[1024];
                 int n;
