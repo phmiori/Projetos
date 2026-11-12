@@ -1,18 +1,30 @@
 /** Criatura do mundo: animais pacíficos e monstros noturnos. */
 final class Mob extends Entity {
-    static final int PIG = 0, SHEEP = 1, CHICKEN = 2, ZOMBIE = 3, SPIDER = 4, FISH = 5;
-    static final String[] NAMES = { "Porco", "Ovelha", "Galinha", "Morto-vivo", "Aranha", "Peixe" };
-    private static final double[][] SIZE = { { 0.42, 0.95 }, { 0.42, 1.2 }, { 0.2, 0.75 }, { 0.3, 1.95 }, { 0.6, 0.8 }, { 0.2, 0.35 } };
-    private static final double[] MAX_HP = { 10, 8, 4, 20, 16, 3 };
-    private static final double[] SPEED = { 1.5, 1.3, 1.6, 2.7, 3.6, 1.5 };
+    static final int PIG = 0, SHEEP = 1, CHICKEN = 2, ZOMBIE = 3, SPIDER = 4, FISH = 5, COW = 6, CREEPER = 7, SKELETON = 8;
+    static final int TYPES = 9;
+    static final String[] NAMES = { "Porco", "Ovelha", "Galinha", "Morto-vivo", "Aranha", "Peixe", "Vaca", "Creeper", "Esqueleto" };
+    private static final double[][] SIZE = { { 0.42, 0.95 }, { 0.42, 1.2 }, { 0.2, 0.75 }, { 0.3, 1.95 }, { 0.6, 0.8 }, { 0.2, 0.35 },
+            { 0.45, 1.35 }, { 0.3, 1.7 }, { 0.3, 1.95 } };
+    private static final double[] MAX_HP = { 10, 8, 4, 20, 16, 3, 10, 20, 20 };
+    private static final double[] SPEED = { 1.5, 1.3, 1.6, 2.7, 3.6, 1.5, 1.3, 2.4, 2.3 };
+    /** Creeper: quanto tempo o pavio queima antes de explodir, e a força da explosão. */
+    static final double FUSE_TIME = 1.5, CREEPER_POWER = 3.2;
 
     final int type;
     private static int nextId = 1;
     int id = nextId++; // identifica a criatura na rede
     double health, yaw, hurt, walk, aiTimer, dirX, dirZ, attackCd, flee, burn;
     double idleSound = 2 + Math.random() * 8; // segundos até o próximo som da criatura
-    static final String[] SOUNDS = { "porco", "ovelha", "galinha", "morto_vivo", "aranha", null };
+    static final String[] SOUNDS = { "porco", "ovelha", "galinha", "morto_vivo", "aranha", null, "vaca", null, "esqueleto" };
     boolean wantsAttack; // encostou no jogador e pode atacar neste quadro
+    double fuse;          // creeper: há quanto tempo o pavio está aceso (0 = apagado)
+    boolean fuseStarted;  // creeper: acabou de acender (para tocar o som uma vez)
+    boolean exploding;    // creeper: o pavio acabou; quem cuida das criaturas faz a explosão
+    /** Esqueleto: tempo puxando o arco até soltar, e a força/dano da flecha. */
+    static final double AIM_TIME = 1.1, ARROW_SPEED = 24, ARROW_DAMAGE = 3;
+    double aim;           // esqueleto: há quanto tempo está mirando (0 = arco abaixado)
+    boolean wantsShoot;   // esqueleto: soltou a flecha neste quadro
+    private double shotCd;
 
     Mob(int type, double x, double y, double z) {
         super(SIZE[type][0], SIZE[type][1]);
@@ -22,7 +34,7 @@ final class Mob extends Entity {
         yaw = Math.random() * Math.PI * 2;
     }
 
-    boolean hostile() { return type == ZOMBIE || type == SPIDER; }
+    boolean hostile() { return type == ZOMBIE || type == SPIDER || type == CREEPER || type == SKELETON; }
 
     double attackDamage() { return type == ZOMBIE ? 3 : 2; }
 
@@ -39,11 +51,49 @@ final class Mob extends Entity {
         double dist = Math.sqrt(px * px + pz * pz);
         double tx = 0, tz = 0, speed = SPEED[type];
 
-        if (hostile() && canTarget && dist < 18 && Math.abs(py) < 8) {
+        fuseStarted = false;
+        if (type == CREEPER) {
+            // chega perto, para e acende o pavio; se o jogador fugir a tempo, o pavio apaga
+            boolean close = canTarget && dist < 3 && Math.abs(py) < 3;
+            if (close) {
+                if (fuse == 0) fuseStarted = true;
+                fuse += dt;
+                if (fuse >= FUSE_TIME) exploding = true;
+            } else if (fuse > 0 && dist > 5) {
+                fuse = Math.max(0, fuse - dt * 2);
+            } else if (fuse > 0) {
+                fuse += dt;
+                if (fuse >= FUSE_TIME) exploding = true;
+            }
+        }
+        boolean face = false; // olhar para o alvo em vez de para onde anda
+        wantsShoot = false;
+        boolean hunting = type == SKELETON && canTarget && dist < 22 && Math.abs(py) < 10;
+        if (!hunting) aim = 0;
+        if (hunting) {
+            // esqueleto: mantém distância (5 a 11 blocos), anda de lado e só atira com o alvo à vista
+            double ux = px / Math.max(dist, 0.01), uz = pz / Math.max(dist, 0.01);
+            boolean sees = dist < 16 && w.lineOfSight(x, y + 1.5, z, p.x, p.y + 1.1, p.z);
+            if (aiTimer <= 0) { aiTimer = 1 + r.nextDouble() * 2; dirX = r.nextInt(3) - 1; dirZ = 0; }
+            if (!sees || dist > 11) { tx = ux; tz = uz; }          // sem visão ou longe: chega mais perto
+            else if (dist < 5) { tx = -ux; tz = -uz; }             // perto demais: recua
+            else if (aim < 0.5) { tx = -uz * dirX * 0.5; tz = ux * dirX * 0.5; } // anda de lado; para ao puxar o arco
+            shotCd -= dt;
+            if (sees) {
+                face = true;
+                if (shotCd <= 0) aim += dt;
+                if (aim >= AIM_TIME) { wantsShoot = true; aim = 0; shotCd = 0.8 + r.nextDouble(); }
+            } else {
+                aim = Math.max(0, aim - dt * 2);
+            }
+        } else if (type == CREEPER && fuse > 0) {
+            tx = tz = 0; // parado enquanto incha
+            yaw = Math.atan2(px, pz);
+        } else if (hostile() && canTarget && dist < 18 && Math.abs(py) < 8) {
             tx = px / Math.max(dist, 0.01);
             tz = pz / Math.max(dist, 0.01);
             double reach = type == SPIDER ? 1.5 : 1.3;
-            if (dist < reach && Math.abs(py) < 1.7) {
+            if (type != CREEPER && dist < reach && Math.abs(py) < 1.7) { // o creeper não bate: explode
                 tx = tz = 0;
                 if (attackCd <= 0) { wantsAttack = true; attackCd = 1.0; }
             }
@@ -66,8 +116,8 @@ final class Mob extends Entity {
             speed *= 0.6;
         }
 
-        if (tx != 0 || tz != 0) {
-            double target = Math.atan2(tx, tz), diff = Math.atan2(Math.sin(target - yaw), Math.cos(target - yaw));
+        if (face || tx != 0 || tz != 0) {
+            double target = face ? Math.atan2(px, pz) : Math.atan2(tx, tz), diff = Math.atan2(Math.sin(target - yaw), Math.cos(target - yaw));
             yaw += diff * Math.min(1, dt * 8);
         }
         double k = Math.min(1, dt * (onGround || inWater ? 8 : 2));
@@ -156,15 +206,31 @@ final class Mob extends Entity {
     /** Itens que a criatura deixa ao morrer: pares {item, quantidade}. */
     int[] drops(java.util.Random r) {
         switch (type) {
-            case PIG: return new int[] { Items.RAW_MEAT, 1 + r.nextInt(2) };
-            case SHEEP: return new int[] { Block.WOOL, 1, Items.RAW_MEAT, 1 };
-            case CHICKEN: return new int[] { Items.RAW_MEAT, 1 };
+            case PIG: return new int[] { Items.RAW_PORK, 1 + r.nextInt(2) };
+            case SHEEP: return new int[] { Block.WOOL, 1, Items.RAW_MUTTON, 1 + r.nextInt(2) };
+            case CHICKEN: return pairs(Items.RAW_CHICKEN, 1, Items.FEATHER, r.nextInt(3));
+            case SPIDER: return pairs(Items.STRING, r.nextInt(3), Items.COAL, r.nextInt(4) == 0 ? 1 : 0);
+            case SKELETON: return pairs(Items.BONE, r.nextInt(3), Items.ARROW, r.nextInt(2) == 0 ? 1 + r.nextInt(2) : 0);
             case FISH: return new int[] { Items.RAW_FISH, 1 };
+            case COW: { // bife e, às vezes, couro (para a armadura)
+                int leather = r.nextInt(3);
+                return leather == 0 ? new int[] { Items.RAW_MEAT, 1 + r.nextInt(3) } : new int[] { Items.RAW_MEAT, 1 + r.nextInt(3), Items.LEATHER, leather };
+            }
+            case CREEPER: { int n = r.nextInt(3); return n == 0 ? new int[0] : new int[] { Items.GUNPOWDER, n }; }
             default:
                 if (r.nextDouble() < 0.06) return new int[] { Items.IRON_INGOT, 1 };
                 if (r.nextDouble() < 0.4) return new int[] { Items.COAL, 1 + r.nextInt(2) };
                 return new int[0];
         }
+    }
+
+    /** Monta a lista {item, quantidade, ...} deixando de fora o que saiu com quantidade zero. */
+    private static int[] pairs(int... p) {
+        int n = 0;
+        for (int i = 0; i < p.length; i += 2) if (p[i + 1] > 0) n += 2;
+        int[] out = new int[n];
+        for (int i = 0, o = 0; i < p.length; i += 2) if (p[i + 1] > 0) { out[o++] = p[i]; out[o++] = p[i + 1]; }
+        return out;
     }
 
     // ------------------------------------------------------------------ modelo
@@ -188,12 +254,61 @@ final class Mob extends Entity {
         return new Box(cx, cy, cz, sx, sy, sz, c, phase, false);
     }
 
+    private static Box[] join(Box[] a, Box[] b) {
+        Box[] out = java.util.Arrays.copyOf(a, a.length + b.length);
+        System.arraycopy(b, 0, out, a.length, b.length);
+        return out;
+    }
+
     private static Box eye(double cx, double cy, double cz, double s, int c) {
         return new Box(cx, cy, cz, s, s * 0.7, 0.02, c, 0, true);
     }
 
-    private static final Box[][] MODELS = new Box[6][];
+    private static final Box[][] MODELS = new Box[TYPES][];
+    /** Esqueleto mirando: braços erguidos, arco à frente e a flecha encaixada. */
+    private static final Box[] SKELETON_AIM;
     static {
+        int bone = 0xDCDCD0, boneD = 0xA9A99C, bowC = 0x7A5630;
+        Box[] body = {
+                leg(-0.1, 0.4, 0, 0.11, 0.8, 0.11, bone, 1), leg(0.1, 0.4, 0, 0.11, 0.8, 0.11, bone, 2),
+                b(0, 0.84, 0, 0.34, 0.08, 0.16, boneD),
+                b(0, 1.15, 0, 0.08, 0.6, 0.08, bone),
+                b(0, 1.02, 0.01, 0.34, 0.06, 0.18, boneD), b(0, 1.16, 0.01, 0.38, 0.06, 0.2, bone), b(0, 1.3, 0.01, 0.38, 0.06, 0.2, boneD),
+                b(0, 1.44, 0, 0.5, 0.08, 0.16, bone),
+                b(0, 1.74, 0, 0.44, 0.44, 0.44, bone),
+                eye(-0.1, 1.78, 0.225, 0.1, 0x181818), eye(0.1, 1.78, 0.225, 0.1, 0x181818),
+                b(0, 1.62, 0.225, 0.2, 0.05, 0.02, 0x303030) };
+        Box[] idle = {
+                leg(-0.29, 1.12, 0, 0.09, 0.66, 0.09, bone, 2), leg(0.29, 1.12, 0, 0.09, 0.66, 0.09, bone, 1),
+                b(-0.29, 0.95, 0.12, 0.04, 0.62, 0.05, bowC) };
+        Box[] aiming = {
+                b(-0.29, 1.4, 0.3, 0.09, 0.09, 0.62, bone), b(0.29, 1.4, 0.12, 0.09, 0.09, 0.3, bone),
+                b(-0.29, 1.4, 0.62, 0.04, 0.74, 0.05, bowC),
+                b(-0.2, 1.4, 0.42, 0.025, 0.025, 0.62, 0xC8C8C0) };
+        MODELS[SKELETON] = join(body, idle);
+        SKELETON_AIM = join(body, aiming);
+        int cow = 0x5A3C28, cowD = 0x3E2A1C, patch = 0xECE8E0, muzzle = 0xD8C4B4;
+        MODELS[COW] = new Box[] {
+                leg(-0.22, 0.3, 0.38, 0.22, 0.6, 0.22, cowD, 1), leg(0.22, 0.3, 0.38, 0.22, 0.6, 0.22, cowD, 2),
+                leg(-0.22, 0.3, -0.38, 0.22, 0.6, 0.22, cowD, 2), leg(0.22, 0.3, -0.38, 0.22, 0.6, 0.22, cowD, 1),
+                b(0, 0.92, 0, 0.72, 0.64, 1.2, cow),
+                b(0.15, 1.0, -0.1, 0.74, 0.36, 0.44, patch), b(-0.2, 0.86, 0.3, 0.74, 0.3, 0.3, patch),
+                b(0, 1.12, 0.74, 0.5, 0.5, 0.42, cow),
+                b(0, 1.0, 0.97, 0.34, 0.2, 0.06, muzzle),
+                b(-0.3, 1.38, 0.72, 0.1, 0.14, 0.1, 0xE8E0D0), b(0.3, 1.38, 0.72, 0.1, 0.14, 0.1, 0xE8E0D0),
+                b(0, 0.58, -0.3, 0.3, 0.1, 0.3, 0xE8B0B0),
+                eye(-0.14, 1.2, 0.955, 0.08, 0x202020), eye(0.14, 1.2, 0.955, 0.08, 0x202020) };
+        int cr = 0x4EB04A, crD = 0x3A8A38, crL = 0x74C86E, crFace = 0x101410;
+        MODELS[CREEPER] = new Box[] {
+                leg(-0.15, 0.18, 0.2, 0.26, 0.36, 0.26, crD, 1), leg(0.15, 0.18, 0.2, 0.26, 0.36, 0.26, crD, 2),
+                leg(-0.15, 0.18, -0.2, 0.26, 0.36, 0.26, crD, 2), leg(0.15, 0.18, -0.2, 0.26, 0.36, 0.26, crD, 1),
+                b(0, 0.78, 0, 0.5, 0.86, 0.3, cr),
+                b(0.1, 0.9, 0.005, 0.2, 0.2, 0.3, crL), b(-0.14, 0.6, 0.005, 0.16, 0.16, 0.3, crD),
+                b(0, 1.46, 0, 0.5, 0.5, 0.5, cr),
+                b(-0.12, 1.62, 0.005, 0.2, 0.14, 0.5, crL),
+                eye(-0.12, 1.54, 0.255, 0.13, crFace), eye(0.12, 1.54, 0.255, 0.13, crFace),
+                b(0, 1.36, 0.255, 0.12, 0.2, 0.02, crFace),
+                b(-0.1, 1.3, 0.255, 0.08, 0.14, 0.02, crFace), b(0.1, 1.3, 0.255, 0.08, 0.14, 0.02, crFace) };
         int pink = 0xF0A6B0, pinkD = 0xD27C8A;
         MODELS[PIG] = new Box[] {
                 leg(-0.2, 0.18, 0.3, 0.22, 0.36, 0.22, pinkD, 1), leg(0.2, 0.18, 0.3, 0.22, 0.36, 0.22, pinkD, 2),
@@ -259,14 +374,17 @@ final class Mob extends Entity {
         double cy = Math.cos(yaw), sy = Math.sin(yaw);
         double swing = Math.sin(walk * 5.5) * Math.min(1, Math.sqrt(vx * vx + vz * vz) / 1.5);
         boolean red = hurt > 0;
-        for (Box bx : MODELS[type]) {
+        // creeper com o pavio aceso: pisca de branco e incha
+        boolean flash = fuse > 0 && ((int) (fuse * 9)) % 2 == 0;
+        double swell = fuse > 0 ? 1 + 0.18 * Math.min(1, fuse / FUSE_TIME) : 1;
+        for (Box bx : type == SKELETON && aim > 0.05 ? SKELETON_AIM : MODELS[type]) {
             double ox = 0, oz = 0;
             double angle = bx.leg == 0 ? 0 : (bx.leg == 1 ? 1 : -1) * swing * 0.7;
             boolean spiderLeg = type == SPIDER && bx.leg != 0;
             if (spiderLeg) { oz = Math.sin(walk * 7 + bx.cz * 9) * 0.12 * Math.min(1, swing * 3 + 0.05); angle = 0; }
-            double hx = bx.sx / 2, hy = bx.sy / 2, hz = bx.sz / 2;
+            double hx = bx.sx / 2 * swell, hy = bx.sy / 2, hz = bx.sz / 2 * swell;
             // 8 cantos da caixa, com a perna girando em volta do topo
-            double[][] c = new double[8][3];
+            double[][] c = CORNERS;
             for (int i = 0; i < 8; i++) {
                 double lx = (i & 1) == 0 ? -hx : hx, ly = (i & 2) == 0 ? -hy : hy, lz = (i & 4) == 0 ? -hz : hz;
                 if (angle != 0) {
@@ -280,15 +398,12 @@ final class Mob extends Entity {
                 c[i][1] = y + my;
                 c[i][2] = z - mx * sy + mz * cy;
             }
-            int[][] faces = { { 1, 3, 7, 5 }, { 0, 4, 6, 2 }, { 2, 6, 7, 3 }, { 0, 1, 5, 4 }, { 4, 5, 7, 6 }, { 0, 2, 3, 1 } };
-            double[] shade = { 0.8, 0.8, 1.0, 0.55, 0.7, 0.7 };
             for (int f = 0; f < 6; f++) {
-                double l = bx.glow ? 1.0 : shade[f] * light;
+                double l = bx.glow ? 1.0 : FACE_SHADE[f] * light;
                 double r = ((bx.color >> 16) & 255) / 255.0 * l, g = ((bx.color >> 8) & 255) / 255.0 * l, b = (bx.color & 255) / 255.0 * l;
                 if (red) { r = r * 0.5 + 0.5 * l; g *= 0.45; b *= 0.45; }
-                int[] q = faces[f];
-                int[] tri = { q[0], q[1], q[2], q[2], q[3], q[0] };
-                for (int t : tri) {
+                if (flash) { r = r * 0.35 + 0.65; g = g * 0.35 + 0.65; b = b * 0.35 + 0.65; }
+                for (int t : FACE_TRIS[f]) {
                     out[o++] = (float) c[t][0]; out[o++] = (float) c[t][1]; out[o++] = (float) c[t][2];
                     out[o++] = (float) r; out[o++] = (float) g; out[o++] = (float) b;
                 }
@@ -298,6 +413,12 @@ final class Mob extends Entity {
     }
 
     int modelFloats() {
-        return MODELS[type].length * 36 * 6;
+        return Math.max(MODELS[type].length, type == SKELETON ? SKELETON_AIM.length : 0) * 36 * 6;
     }
+
+    // tabelas fixas do desenho (criadas uma vez, para não gerar lixo a cada quadro; só a thread do jogo usa)
+    private static final double[][] CORNERS = new double[8][3];
+    private static final double[] FACE_SHADE = { 0.8, 0.8, 1.0, 0.55, 0.7, 0.7 };
+    private static final int[][] FACE_TRIS = { { 1, 3, 7, 7, 5, 1 }, { 0, 4, 6, 6, 2, 0 }, { 2, 6, 7, 7, 3, 2 },
+            { 0, 1, 5, 5, 4, 0 }, { 4, 5, 7, 7, 6, 4 }, { 0, 2, 3, 3, 1, 0 } };
 }

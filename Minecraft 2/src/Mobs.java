@@ -15,8 +15,27 @@ final class Mobs {
     /** Ataques dos monstros neste quadro: {jogador atingido, dano, x, z de onde veio}. */
     final List<Object[]> hits = new ArrayList<>();
 
+    /** Creepers que explodiram neste quadro: {x, y, z, força}. */
+    final List<double[]> explosions = new ArrayList<>();
+
+    /** Flechas que os esqueletos soltaram neste quadro: {id da criatura, x, y, z, vx, vy, vz}. */
+    final List<double[]> shots = new ArrayList<>();
+
     void clear() {
         list.clear();
+    }
+
+    /** Uma explosão machuca e empurra as criaturas em volta. */
+    void blast(double x, double y, double z, double power) {
+        for (Mob m : list) {
+            double dx = m.x - x, dy = m.y + m.h / 2 - y, dz = m.z - z;
+            double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (dist > power * 2) continue;
+            double k = 1 - dist / (power * 2);
+            m.damage(k * power * 5);
+            double l = Math.max(0.3, dist);
+            m.vx += dx / l * k * 10; m.vz += dz / l * k * 10; m.vy += 4 + k * 5;
+        }
     }
 
     /** Dano total que o jogador p levou neste quadro (e de onde veio o último golpe). */
@@ -33,12 +52,21 @@ final class Mobs {
      */
     void update(double dt, World w, List<Player> players, Player listener, boolean survival) {
         hits.clear();
+        explosions.clear();
+        shots.clear();
         if (players.isEmpty()) return;
         double daylight = w.daylight();
         for (Iterator<Mob> it = list.iterator(); it.hasNext(); ) {
             Mob m = it.next();
             Player p = nearest(players, m.x, m.z);
             m.update(dt, w, p, survival && p.health > 0, rnd);
+            if (m.fuseStarted) Sounds.playAt("pavio", m.x, m.y + 1, m.z, listener, 0.9);
+            if (m.exploding) {
+                explosions.add(new double[] { m.x, m.y + 0.8, m.z, Mob.CREEPER_POWER });
+                it.remove();
+                continue;
+            }
+            if (m.wantsShoot) shots.add(shot(m, p));
             if (m.wantsAttack) {
                 hits.add(new Object[] { p, m.attackDamage(), m.x, m.z });
                 Sounds.playAt(Mob.SOUNDS[m.type], m.x, m.y + 1, m.z, listener, 0.9);
@@ -51,7 +79,7 @@ final class Mobs {
             double dx = m.x - p.x, dz = m.z - p.z;
             double dist = Math.sqrt(dx * dx + dz * dz);
             // monstros queimam/somem sob o sol
-            if (m.hostile() && daylight > 0.75 && w.skyLight((int) Math.floor(m.x), (int) Math.floor(m.y + 1), (int) Math.floor(m.z)) >= 14) {
+            if (m.hostile() && m.type != Mob.CREEPER && daylight > 0.75 && w.skyLight((int) Math.floor(m.x), (int) Math.floor(m.y + 1), (int) Math.floor(m.z)) >= 14) {
                 m.burn += dt;
                 if (m.burn > 4) { it.remove(); continue; }
             }
@@ -68,6 +96,18 @@ final class Mobs {
         if (passive < 12 * n && rnd.nextDouble() < 0.45) spawnPassive(w, p);
         if (fish < 10 * n && rnd.nextDouble() < 0.5) spawnFish(w, p);
         if (hostile < 10 * n) spawnHostile(w, p, daylight);
+    }
+
+    /** Flecha do esqueleto m em direção ao jogador p: arco calculado para a distância, com um pouco de erro. */
+    private double[] shot(Mob m, Player p) {
+        double sx = m.x, sy = m.y + 1.45, sz = m.z;
+        double dx = p.x - sx, dy = p.y + 1.0 - sy, dz = p.z - sz;
+        double flat = Math.max(0.5, Math.sqrt(dx * dx + dz * dz));
+        double t = flat / Mob.ARROW_SPEED;
+        double e = 0.07;
+        double vx = dx / t * (1 + (rnd.nextDouble() - 0.5) * e), vz = dz / t * (1 + (rnd.nextDouble() - 0.5) * e);
+        double vy = (dy / t + 0.5 * Arrows.GRAVITY * t) * (1 + (rnd.nextDouble() - 0.5) * e) + 0.4;
+        return new double[] { m.id, sx + dx / flat * 0.45, sy, sz + dz / flat * 0.45, vx, vy, vz };
     }
 
     private static Player nearest(List<Player> players, double x, double z) {
@@ -91,7 +131,7 @@ final class Mobs {
         if (x < 2 || z < 2 || x >= World.SX - 2 || z >= World.SZ - 2) return;
         int top = w.grassTop(x, z);
         if (top < 0 || w.get(x, top, z) != Block.GRASS) return;
-        int type = rnd.nextInt(3); // porco, ovelha ou galinha
+        int type = new int[] { Mob.PIG, Mob.SHEEP, Mob.CHICKEN, Mob.COW }[rnd.nextInt(4)];
         int n = 1 + rnd.nextInt(3);
         for (int i = 0; i < n; i++) {
             double mx = x + 0.5 + rnd.nextDouble() * 2 - 1, mz = z + 0.5 + rnd.nextDouble() * 2 - 1;
@@ -133,7 +173,8 @@ final class Mobs {
                 int sky = w.skyLight(x, y, z), blk = w.blockLightAt(x, y, z);
                 double light = Math.max(sky / 15.0 * daylight, blk / 15.0);
                 if (light > 0.3) continue;
-                Mob m = new Mob(rnd.nextDouble() < 0.65 ? Mob.ZOMBIE : Mob.SPIDER, x + 0.5, y + 0.01, z + 0.5);
+                double roll = rnd.nextDouble();
+                Mob m = new Mob(roll < 0.38 ? Mob.ZOMBIE : roll < 0.62 ? Mob.SKELETON : roll < 0.82 ? Mob.SPIDER : Mob.CREEPER, x + 0.5, y + 0.01, z + 0.5);
                 if (m.collides(m.x, m.y, m.z, w)) continue;
                 list.add(m);
                 return;

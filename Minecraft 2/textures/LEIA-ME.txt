@@ -16,7 +16,7 @@ As 4 células dos cantos não são usadas (podem ficar transparentes).
 Veja _modelo_faces.png: é um guia com o nome de cada face.
 Uma imagem quadrada também funciona: a mesma textura vai para as 6 faces.
 
-Arquivos: grama, terra, pedra, pedregulho, areia, tronco, folhas, tabuas, tijolos, neve, agua, minerio_carvao, minerio_ferro, minerio_ouro, minerio_cristal, cascalho, arenito, vidro, tocha, bancada, fornalha, tronco_betula, folhas_betula, cacto, grama_alta, flor_amarela, flor_vermelha, gelo, lava, la, tijolos_pedra, bloco_ferro, bloco_ouro, rocha_mae, porta_baixo, porta_cima
+Arquivos: grama, terra, pedra, pedregulho, areia, tronco, folhas, tabuas, tijolos, neve, agua, minerio_carvao, minerio_ferro, minerio_ouro, minerio_cristal, cascalho, arenito, vidro, tocha, bancada, fornalha, tronco_betula, folhas_betula, cacto, grama_alta, flor_amarela, flor_vermelha, gelo, lava, la, tijolos_pedra, bloco_ferro, bloco_ouro, rocha_mae, porta_baixo, porta_cima, dinamite, cama, muda, muda_betula, bau, terra_arada, trigo_1, trigo_2, trigo_3
 Escadas e lajes usam a textura do material (tabuas, pedregulho, tijolos_pedra, tijolos, arenito).
 A porta tem duas: porta_baixo e porta_cima (a janela é transparente).
 

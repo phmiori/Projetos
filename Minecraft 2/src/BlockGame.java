@@ -103,6 +103,21 @@ public class BlockGame {
     private double toastTimer;
     private int cursorId, cursorCount, cursorWear; // item "preso" no mouse dentro do inventário
     private final Mobs mobs = new Mobs();
+    private final Drops drops = new Drops();
+    private final Particles particles = new Particles();
+    /** Dinamites acesas: {x, y, z do bloco, segundos que faltam, 1 se o bloco ainda está lá}. */
+    private final List<double[]> primed = new ArrayList<>();
+    private static final double TNT_POWER = 4.2;
+    /** Versão do jogo (aparece no título da janela). A da rede fica em Net.VERSION. */
+    static final String GAME_VERSION = "Update 5";
+    /** Flechas no mundo, e há quanto tempo o jogador segura o disparo do arco (BOW_FULL = força máxima). */
+    private final Arrows arrows = new Arrows();
+    private double bowCharge;
+    private static final double BOW_FULL = 1.0;
+    /** Baús do mundo ("x,y,z" -> conteúdo) e o que está aberto na tela (null = inventário comum). */
+    private final java.util.Map<String, Inventory> chests = new java.util.HashMap<>();
+    private Inventory chest;
+    private String chestKey;
     private final Random rnd = new Random();
     private double eatCd, hazardCd, starveTimer, hitSoundCd, stepAcc;
     private boolean wasInWater;
@@ -149,7 +164,8 @@ public class BlockGame {
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
         glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
         glfwWindowHint(GLFW_SAMPLES, 4); // bordas suavizadas
-        window = glfwCreateWindow(1280, 720, "Mundo de Blocos", NULL, NULL);
+        if (NO_INPUT) { glfwWindowHint(GLFW_FOCUS_ON_SHOW, GLFW_FALSE); glfwWindowHint(GLFW_FOCUSED, GLFW_FALSE); }
+        window = glfwCreateWindow(1280, 720, "Mundo de Blocos — " + GAME_VERSION, NULL, NULL);
         if (window == NULL)
             throw new IllegalStateException("Não foi possível criar a janela OpenGL 3.3. Atualize o driver da placa de vídeo.");
         glfwSetWindowSizeLimits(window, 1000, 640, GLFW_DONT_CARE, GLFW_DONT_CARE);
@@ -178,6 +194,7 @@ public class BlockGame {
 
     private void installCallbacks() {
         glfwSetKeyCallback(window, (w, key, scancode, action, mods) -> {
+            if (NO_INPUT) return;
             int k = vk(key);
             if (action == GLFW_PRESS) {
                 if (k >= 0 && state == State.PLAYING && !chatOpen) keys[k] = true;
@@ -193,7 +210,7 @@ public class BlockGame {
         glfwSetMouseButtonCallback(window, (w, button, action, mods) -> {
             int b = button == GLFW_MOUSE_BUTTON_LEFT ? 1 : button == GLFW_MOUSE_BUTTON_RIGHT ? 3
                     : button == GLFW_MOUSE_BUTTON_MIDDLE ? 2 : 0;
-            if (b == 0) return;
+            if (b == 0 || NO_INPUT) return;
             if (action == GLFW_PRESS) onMouse(ui.mouseX, ui.mouseY, b, (mods & GLFW_MOD_SHIFT) != 0);
             else if (action == GLFW_RELEASE) {
                 if (b == 1) lHeld = false;
@@ -201,6 +218,7 @@ public class BlockGame {
             }
         });
         glfwSetCursorPosCallback(window, (w, x, y) -> {
+            if (NO_INPUT) return;
             if (captured) {
                 if (firstMouse) { firstMouse = false; }
                 else { mdx += x - lastMouseX; mdy += y - lastMouseY; }
@@ -214,7 +232,7 @@ public class BlockGame {
         glfwSetScrollCallback(window, (w, dx, dy) -> { if (dy != 0) onWheel(dy > 0 ? -1 : 1); });
         glfwSetWindowFocusCallback(window, (w, f) -> {
             focused = f;
-            if (!f && state == State.PLAYING) pause();
+            if (!f && state == State.PLAYING && !BENCH) pause();
         });
         glfwSetFramebufferSizeCallback(window, (w, width, height) -> { fbW = width; fbH = height; });
         glfwSetWindowSizeCallback(window, (w, width, height) -> { winW = width; winH = height; });
@@ -245,7 +263,22 @@ public class BlockGame {
     // =====================================================================
     // laço principal
     // =====================================================================
+    /** -Dbench=1: sem limite de quadros nem VSync, e o FPS vai para o console (para medir otimizações). */
+    private static final boolean BENCH = System.getProperty("bench") != null;
+    /** Teste automático das flechas: ignora teclado e mouse de verdade e não toma o foco nem o cursor. */
+    private static final boolean NO_INPUT = BENCH && System.getProperty("bench.arrows") != null;
+
     void run() {
+        if (BENCH) {
+            glfwSwapInterval(0);
+            settings.viewDist = Integer.getInteger("bench.view", settings.viewDist);
+            if (System.getProperty("bench.world") != null && !worlds.isEmpty()) loadWorld(worlds.get(0));
+            if (System.getProperty("bench.join") != null) { // teste de rede: entra sozinho no anfitrião
+                fIp.append(System.getProperty("bench.join"));
+                fJoinName.append("Teste");
+                joinGame();
+            }
+        }
         long last = System.nanoTime();
         double acc = 0;
         int frames = 0;
@@ -258,13 +291,18 @@ public class BlockGame {
                 update(Math.min(dt, 0.05));
                 if (!running) break;
                 renderFrame();
+                benchWorkNs += System.nanoTime() - now;
             } catch (Exception e) {
                 e.printStackTrace();
                 toast("Erro: " + e.getMessage());
             }
             frames++;
             acc += dt;
-            if (acc >= 0.5) { fps = frames / acc; frames = 0; acc = 0; }
+            if (acc >= 0.5) {
+                fps = frames / acc; frames = 0; acc = 0;
+                if (BENCH) System.out.printf(java.util.Locale.ROOT, "fps %.1f  trabalho %.2f ms/quadro%n", fps, (benchWorkNs - benchSwapNs) / 1e6 / Math.max(1, fps * 0.5));
+                benchWorkNs = benchSwapNs = 0;
+            }
             limitFrameRate(now);
         }
     }
@@ -274,6 +312,7 @@ public class BlockGame {
      * Com VSync ligado, a própria troca de quadros já espera o monitor.
      */
     private void limitFrameRate(long frameStart) {
+        if (BENCH) return;
         int limit;
         if (!focused) limit = 15;                    // janela em segundo plano
         else if (state == State.PLAYING) limit = settings.fpsLimit();
@@ -298,6 +337,8 @@ public class BlockGame {
 
         toastTimer -= dt;
         hurtFlash = Math.max(0, hurtFlash - dt);
+        if (BENCH && System.getProperty("bench.arrows") != null && world != null && player != null && !warming && state != State.LOADING)
+            benchArrows(dt);
         slotNameTimer -= dt;
 
         switch (state) {
@@ -345,12 +386,35 @@ public class BlockGame {
         // relógio do mundo: um dia inteiro dura World.DAY_LENGTH segundos
         world.time += dt;
         if (world.time >= World.DAY_LENGTH) { world.time -= World.DAY_LENGTH; info.day++; }
-        if (toHost != null) return;
+        if (toHost != null) { // amigo: só o voo das flechas, para o desenho
+            arrows.update(dt, world, false, arrowHooks);
+            return;
+        }
         List<Player> everyone = new ArrayList<>();
         everyone.add(player);
         for (Remote r : remotes.values()) if (r.hasState) everyone.add(r.body);
         mobs.update(dt, world, everyone, player, !creative);
         world.tickFluids(dt);
+        world.tickFalling(dt);
+        world.tickGrowth(dt, player.x, player.z, rnd);
+        for (double[] e : mobs.explosions) explodeAt(e[0], e[1], e[2], e[3]);
+        for (double[] s : mobs.shots) { // flechas dos esqueletos
+            benchShots++;
+            spawnArrow(Arrows.OWNER_MOB, (int) s[0], s[1], s[2], s[3], s[4], s[5], s[6], Mob.ARROW_DAMAGE, false);
+        }
+        arrows.update(dt, world, true, arrowHooks);
+        collectArrows();
+        // folhas que apodreceram longe do tronco: às vezes deixam uma muda, uma maçã ou um graveto
+        for (int[] ev : world.events) {
+            if (ev[0] != World.EV_LEAF_DECAY) continue;
+            particles.blockBits(ev[4], ev[1], ev[2], ev[3], 4);
+            if (creative) continue;
+            double roll = rnd.nextDouble();
+            if (roll < 0.06) drops.spawn(ev[4] == Block.BIRCH_LEAVES ? Block.BIRCH_SAPLING : Block.SAPLING, ev[1], ev[2], ev[3]);
+            else if (roll < 0.08 && ev[4] == Block.LEAVES) drops.spawn(Items.APPLE, ev[1], ev[2], ev[3]);
+            else if (roll < 0.11) drops.spawn(Items.STICK, ev[1], ev[2], ev[3]);
+        }
+        world.events.clear();
         // golpes de monstros em amigos: avisa cada um
         for (Object[] h : mobs.hits)
             for (Remote r : remotes.values())
@@ -372,7 +436,11 @@ public class BlockGame {
                 keys[KeyEvent.VK_W], keys[KeyEvent.VK_S], keys[KeyEvent.VK_A], keys[KeyEvent.VK_D],
                 keys[KeyEvent.VK_SPACE], keys[KeyEvent.VK_SHIFT], keys[KeyEvent.VK_CONTROL], world);
 
+        if (BENCH && !benchTested && time > 4 && System.getProperty("bench.test") != null) { benchTested = true; benchTest(); }
         footsteps(dt);
+        drops.update(dt, world, player, inv);
+        particles.update(dt, world);
+        tickPrimed(dt);
         if (creative) {
             player.health = Player.MAX_HEALTH;
             player.air = Player.MAX_AIR;
@@ -398,8 +466,15 @@ public class BlockGame {
         swing = Math.max(0, swing - dt);
         int held = inv.empty(slot) ? 0 : inv.id[slot];
 
+        if (held != Items.BOW) bowCharge = 0;
+        // arco: segurar o botão esquerdo puxa a corda; soltar dispara
+        if (held == Items.BOW) {
+            tickBow(dt, lx, ly, lz);
+            breakProgress = 0;
+            breakY = -1;
+        }
         // bater numa criatura
-        if (target != null && (lPending || (lHeld && coolL <= 0)) && toHost != null) {
+        else if (target != null && (lPending || (lHeld && coolL <= 0)) && toHost != null) {
             // amigo: quem calcula o golpe é o anfitrião (ele manda os itens de volta)
             double kx = target.x - player.x, kz = target.z - player.z, kl = Math.max(0.01, Math.sqrt(kx * kx + kz * kz));
             toHost.send(new Net.Out(Net.HIT_MOB).i(target.id).f(Items.damage(held)).f(kx / kl).f(kz / kl));
@@ -421,12 +496,7 @@ public class BlockGame {
                 if (!creative && inv.useTool(slot)) toast("Sua ferramenta quebrou!");
                 if (target.health <= 0) {
                     int[] d = target.drops(rnd);
-                    StringBuilder got = new StringBuilder();
-                    for (int k = 0; k < d.length; k += 2) {
-                        inv.add(d[k], d[k + 1]);
-                        got.append(k > 0 ? ", " : "").append("+").append(d[k + 1]).append(' ').append(Items.name(d[k]));
-                    }
-                    if (got.length() > 0) toast(Mob.NAMES[target.type] + ": " + got);
+                    for (int k = 0; k < d.length; k += 2) drops.scatter(d[k], d[k + 1], 0, target.x, target.y + 0.4, target.z);
                 }
             }
             coolL = 0.45;
@@ -438,8 +508,10 @@ public class BlockGame {
             if (sel != null && (lPending || (lHeld && coolL <= 0)) && Block.hardness(world.get(sel[0], sel[1], sel[2])) >= 0) {
                 int broken = world.get(sel[0], sel[1], sel[2]);
                 Sounds.playAt(breakSound(broken), sel[0] + 0.5, sel[1] + 0.5, sel[2] + 0.5, player, 0.9);
+                particles.blockBits(broken, sel[0], sel[1], sel[2], 14);
                 world.set(sel[0], sel[1], sel[2], Block.AIR);
                 breakOtherDoorHalf(broken, sel[0], sel[1], sel[2]);
+                if (broken == Block.CHEST) spillChest(sel[0], sel[1], sel[2]);
                 coolL = 0.2;
                 swing = 0.3;
             }
@@ -456,17 +528,33 @@ public class BlockGame {
                 breakProgress += hard == 0 ? 1 : dt * mining[0] / hard;
                 if (swing <= 0) swing = 0.3;
                 hitSoundCd -= dt;
-                if (hitSoundCd <= 0) { hitSoundCd = 0.25; Sounds.playAt(breakSound(b), breakX + 0.5, breakY + 0.5, breakZ + 0.5, player, 0.3); }
+                if (hitSoundCd <= 0) {
+                    hitSoundCd = 0.25;
+                    Sounds.playAt(breakSound(b), breakX + 0.5, breakY + 0.5, breakZ + 0.5, player, 0.3);
+                    particles.blockBits(b, breakX, breakY, breakZ, 3);
+                }
                 if (breakProgress >= 1) {
                     Sounds.playAt(breakSound(b), breakX + 0.5, breakY + 0.5, breakZ + 0.5, player, 0.9);
+                    particles.blockBits(b, breakX, breakY, breakZ, 16);
                     world.set(breakX, breakY, breakZ, Block.AIR);
                     breakOtherDoorHalf(b, breakX, breakY, breakZ);
+                    if (b == Block.CHEST) spillChest(breakX, breakY, breakZ);
                     if (mining[1] > 0) {
+                        // o que o bloco solta vira miniatura no chão, coletada quando o jogador chega perto
                         int drop = Block.drop(b);
-                        if (drop != Block.AIR && inv.add(drop, 1) > 0) toast("Inventário cheio!");
-                        if (Block.isMixedSlab(b)) inv.add(Block.slab(Block.mixedUpper(b), 0), 1); // a outra laje
-                        if (b == Block.LEAVES && rnd.nextDouble() < 0.08) inv.add(Items.APPLE, 1);
-                        if (b == Block.TALL_GRASS && rnd.nextDouble() < 0.05) inv.add(Items.STICK, 1);
+                        if (b == Block.GRAVEL && rnd.nextDouble() < 0.1) drop = Items.FLINT; // às vezes o cascalho dá sílex
+                        boolean dropped = false;
+                        if (drop != Block.AIR) { drops.spawn(drop, breakX, breakY, breakZ); dropped = true; }
+                        if (Block.isMixedSlab(b)) { drops.spawn(Block.slab(Block.mixedUpper(b), 0), breakX, breakY, breakZ); dropped = true; } // a outra laje
+                        if (b == Block.LEAVES && rnd.nextDouble() < 0.08) { drops.spawn(Items.APPLE, breakX, breakY, breakZ); dropped = true; }
+                        if (Block.isLeaves(b) && rnd.nextDouble() < 0.07) { drops.spawn(b == Block.LEAVES ? Block.SAPLING : Block.BIRCH_SAPLING, breakX, breakY, breakZ); dropped = true; }
+                        if (b == Block.TALL_GRASS && rnd.nextDouble() < 0.05) { drops.spawn(Items.STICK, breakX, breakY, breakZ); dropped = true; }
+                        if (b == Block.TALL_GRASS && rnd.nextDouble() < 0.15) { drops.spawn(Items.SEEDS, breakX, breakY, breakZ); dropped = true; }
+                        if (b == Block.WHEAT + 2) { // trigo maduro: além da semente, dá o trigo e às vezes mais sementes
+                            drops.spawn(Items.WHEAT, breakX, breakY, breakZ);
+                            for (int k = rnd.nextInt(3); k > 0; k--) drops.spawn(Items.SEEDS, breakX, breakY, breakZ);
+                        }
+                        if (dropped) Sounds.playAt("drop", breakX + 0.5, breakY + 0.5, breakZ + 0.5, player, 0.8);
                     } else if (Block.requiredTier(b) >= 0) {
                         toast("Precisa de uma picareta " + (Block.requiredTier(b) == 0 ? "" : Block.requiredTier(b) == 1 ? "de pedra " : "de ferro ") + "para coletar isso");
                     }
@@ -486,6 +574,17 @@ public class BlockGame {
             int aimed = sel == null ? Block.AIR : world.get(sel[0], sel[1], sel[2]);
             if (rPending && (aimed == Block.TABLE || aimed == Block.FURNACE) && !keys[KeyEvent.VK_SHIFT]) {
                 openInventory();
+            } else if (rPending && aimed == Block.BED && !keys[KeyEvent.VK_SHIFT]) {
+                useBed(sel[0], sel[1], sel[2]);
+                swing = 0.3;
+            } else if (rPending && aimed == Block.CHEST && !keys[KeyEvent.VK_SHIFT]) {
+                openChest(sel[0], sel[1], sel[2]);
+            } else if (rPending && aimed == Block.TNT && held == Items.FLINT_STEEL) {
+                prime(sel[0], sel[1], sel[2], 3.0, true);
+                if (!creative && inv.useTool(slot)) toast("Sua pederneira acabou!");
+                swing = 0.3;
+            } else if (rPending && aimed == Block.TNT && !Items.isBlock(held) && Items.food(held) == 0) {
+                toast("Use uma pederneira para acender a dinamite");
             } else if (rPending && Block.isDoor(aimed) && !keys[KeyEvent.VK_SHIFT]) {
                 toggleDoor(sel[0], sel[1], sel[2]);
                 swing = 0.3;
@@ -498,6 +597,22 @@ public class BlockGame {
                     eatCd = 0.8;
                     swing = 0.3;
                 }
+            } else if (rPending && Items.isArmor(held)) {
+                equipHeld();
+            } else if (rPending && held == Items.BONE && sel != null && Block.isWheat(aimed) && aimed < Block.WHEAT + 2) {
+                world.set(sel[0], sel[1], sel[2], aimed + 1); // osso como adubo: o trigo cresce uma fase
+                particles.hitBits(sel[0] + 0.5, sel[1] + 0.4, sel[2] + 0.5, 0xE8F0D8, 8);
+                if (!creative) inv.set(slot, held, inv.count[slot] - 1);
+                swing = 0.3;
+            } else if (Items.isHoe(held) && sel != null && (aimed == Block.GRASS || aimed == Block.DIRT)) {
+                till(sel[0], sel[1], sel[2]);
+            } else if (held == Items.SEEDS && sel != null && aimed == Block.FARMLAND && world.get(sel[0], sel[1] + 1, sel[2]) == Block.AIR) {
+                world.set(sel[0], sel[1] + 1, sel[2], Block.WHEAT);
+                Sounds.playAt("colocar", sel[0] + 0.5, sel[1] + 1.2, sel[2] + 0.5, player, 0.6);
+                if (!creative) inv.set(slot, held, inv.count[slot] - 1);
+                swing = 0.3;
+            } else if (rPending && held == Items.SEEDS && sel != null && aimed != Block.FARMLAND) {
+                toast("Sementes só crescem em terra arada: use a enxada na terra");
             } else if (sel != null && Items.isBlock(held)) {
                 placeBlock(held, lx, ly, lz);
             }
@@ -575,6 +690,7 @@ public class BlockGame {
     }
 
     private void setAndPay(int x, int y, int z, int b, int item) {
+        if (b == Block.CHEST && toHost == null) chests.remove(chestKey(x, y, z));
         world.set(x, y, z, b);
         Sounds.playAt("colocar", x + 0.5, y + 0.5, z + 0.5, player, 0.8);
         if (!creative) inv.set(slot, item, inv.count[slot] - 1);
@@ -598,6 +714,296 @@ public class BlockGame {
         if (!Block.isDoor(b)) return;
         int oy = Block.doorHalf(b) == 0 ? y + 1 : y - 1;
         if (Block.isDoor(world.get(x, oy, z))) world.set(x, oy, z, Block.AIR);
+    }
+
+    // ----------------------------------------------------------------- arco e flechas
+
+    private void tickBow(double dt, double lx, double ly, double lz) {
+        boolean hasArrow = creative || inv.countOf(Items.ARROW) > 0;
+        if (lHeld && hasArrow) {
+            if (bowCharge == 0) Sounds.play("arco_tensao", 0.6);
+            bowCharge += dt;
+        } else if (lPending && !hasArrow) {
+            toast("Você não tem flechas");
+        } else if (!lHeld && bowCharge > 0) {
+            if (bowCharge >= 0.15) fireBow(Math.min(1, bowCharge / BOW_FULL), lx, ly, lz);
+            bowCharge = 0;
+        }
+    }
+
+    /** Solta a flecha: quanto mais puxado (power 0..1), mais rápida e mais forte. O amigo pede o disparo ao anfitrião. */
+    private void fireBow(double power, double lx, double ly, double lz) {
+        double speed = 9 + 31 * power, dmg = 2 + 7 * power;
+        double x = player.x + lx * 0.4, y = player.y + Player.EYE - 0.12 + ly * 0.4, z = player.z + lz * 0.4;
+        boolean pickup = !creative;
+        if (!creative) {
+            inv.remove(Items.ARROW, 1);
+            if (inv.useTool(slot)) toast("Seu arco quebrou!");
+        }
+        Sounds.play("arco_disparo", 0.8);
+        swing = 0.2;
+        if (toHost != null) toHost.send(new Net.Out(Net.SHOOT).f(x).f(y).f(z).f(lx * speed).f(ly * speed).f(lz * speed).f(dmg).b(pickup));
+        else spawnArrow(0, -1, x, y, z, lx * speed, ly * speed, lz * speed, dmg, pickup);
+    }
+
+    /** Anfitrião (ou jogo sozinho): põe a flecha no mundo e avisa os amigos. owner 0 = este jogador. */
+    private Arrows.Arrow spawnArrow(int owner, int mob, double x, double y, double z, double vx, double vy, double vz, double dmg, boolean pickup) {
+        Arrows.Arrow a = arrows.spawn(owner, mob, x, y, z, vx, vy, vz, dmg, pickup);
+        if (owner != 0) Sounds.playAt("arco_disparo", x, y, z, player, 0.8);
+        if (server != null) server.broadcast(arrowPacket(a, true), null);
+        return a;
+    }
+
+    private static Net.Out arrowPacket(Arrows.Arrow a, boolean sound) {
+        return new Net.Out(Net.ARROW).i(a.id).i(a.owner).f(a.x).f(a.y).f(a.z).f(a.vx).f(a.vy).f(a.vz).b(sound);
+    }
+
+    private static Net.Out stuckPacket(Arrows.Arrow a) {
+        return new Net.Out(Net.ARROW_STUCK).i(a.id).f(a.x).f(a.y).f(a.z).f(a.dx).f(a.dy).f(a.dz).i(a.bx).i(a.by).i(a.bz);
+    }
+
+    private final Arrows.Listener arrowHooks = new Arrows.Listener() {
+        @Override public boolean hitEntity(Arrows.Arrow a, double ux, double uy, double uz, double len) { return arrowHit(a, ux, uy, uz, len); }
+        @Override public void stuck(Arrows.Arrow a, int block) {
+            arrowStuckSound(a, block);
+            if (server != null) server.broadcast(stuckPacket(a), null);
+        }
+        @Override public void expired(Arrows.Arrow a) {
+            if (server != null) server.broadcast(new Net.Out(Net.ARROW_GONE).i(a.id).i(0).f(a.x).f(a.y).f(a.z), null);
+        }
+    };
+
+    /** A flecha acertou uma criatura ou um jogador no trecho que ia percorrer? (só o anfitrião decide) */
+    private boolean arrowHit(Arrows.Arrow a, double ux, double uy, double uz, double len) {
+        Mob mob = null;
+        Remote rem = null;
+        boolean me = false;
+        double best = len;
+        for (Mob m : mobs.list) {
+            if (m.id == a.shooterMob || m.health <= 0) continue;
+            double t = m.rayHit(a.x, a.y, a.z, ux, uy, uz);
+            if (t >= 0 && t <= best) { best = t; mob = m; }
+        }
+        if (!creative) { // jogadores: nunca o próprio dono da flecha
+            if (a.owner != 0 && player.health > 0 && state != State.DEAD) {
+                double t = player.rayHit(a.x, a.y, a.z, ux, uy, uz);
+                if (t >= 0 && t <= best) { best = t; me = true; mob = null; }
+            }
+            for (Remote r : remotes.values()) {
+                if (r.id == a.owner || !r.hasState || r.conn == null) continue;
+                double t = r.body.rayHit(a.x, a.y, a.z, ux, uy, uz);
+                if (t >= 0 && t <= best) { best = t; rem = r; me = false; mob = null; }
+            }
+        }
+        if (mob == null && rem == null && !me) return false;
+        double hx = a.x + ux * best, hy = a.y + uy * best, hz = a.z + uz * best;
+        if (mob != null) {
+            mob.damage(a.damage);
+            mob.vx += ux * 5; mob.vz += uz * 5; mob.vy = Math.max(mob.vy, 3.5);
+            if (Mob.SOUNDS[mob.type] != null) Sounds.playAt(Mob.SOUNDS[mob.type], mob.x, mob.y + 0.8, mob.z, player, 0.6);
+            if (mob.health <= 0) { // o que a criatura solta vai para quem atirou
+                int[] d = mob.drops(rnd);
+                Remote killer = a.owner > 0 ? remotes.get(a.owner) : null;
+                for (int k = 0; k < d.length; k += 2) {
+                    if (a.owner == 0) drops.scatter(d[k], d[k + 1], 0, mob.x, mob.y + 0.4, mob.z);
+                    else if (killer != null && killer.conn != null)
+                        killer.conn.send(new Net.Out(Net.DROP).i(d[k]).i(d[k + 1]).i(0).f(mob.x).f(mob.y + 0.4).f(mob.z));
+                }
+            }
+        } else if (me) {
+            hit(a.damage);
+            player.vx += ux * 6; player.vz += uz * 6; player.vy = 4;
+        } else {
+            rem.conn.send(new Net.Out(Net.DAMAGE).f(a.damage).f(hx - ux * 2).f(hz - uz * 2));
+        }
+        arrowHitEffects(hx, hy, hz);
+        if (server != null) server.broadcast(new Net.Out(Net.ARROW_GONE).i(a.id).i(1).f(hx).f(hy).f(hz), null);
+        return true;
+    }
+
+    private void arrowHitEffects(double x, double y, double z) {
+        Sounds.playAt("flecha_criatura", x, y, z, player, 0.9);
+        particles.hitBits(x, y, z, 0xB02020, 10);
+    }
+
+    private void arrowStuckSound(Arrows.Arrow a, int block) {
+        boolean hard = Block.material(block) == Block.M_ROCK || block == Block.GLASS || block == Block.GLASS_PANE;
+        Sounds.playAt(hard ? "flecha_pedra" : "flecha_madeira", a.x, a.y, a.z, player, 0.7);
+    }
+
+    /** Anfitrião: quem encosta numa flecha presa a recolhe (a do amigo vai como item solto aos pés dele). */
+    private void collectArrows() {
+        for (java.util.Iterator<Arrows.Arrow> it = arrows.list.iterator(); it.hasNext(); ) {
+            Arrows.Arrow a = it.next();
+            if (!a.stuck || !a.pickup || a.stuckAge < 0.4) continue;
+            boolean taken = false;
+            if (player.health > 0 && nearArrow(player, a) && inv.add(Items.ARROW, 1) == 0) {
+                Sounds.play("coletar", 0.7);
+                taken = true;
+            }
+            if (!taken)
+                for (Remote r : remotes.values())
+                    if (r.hasState && r.conn != null && nearArrow(r.body, a)) {
+                        r.conn.send(new Net.Out(Net.DROP).i(Items.ARROW).i(1).i(0).f(r.body.x).f(r.body.y + 1).f(r.body.z));
+                        taken = true;
+                        break;
+                    }
+            if (!taken) continue;
+            it.remove();
+            if (server != null) server.broadcast(new Net.Out(Net.ARROW_GONE).i(a.id).i(0).f(a.x).f(a.y).f(a.z), null);
+        }
+    }
+
+    private static boolean nearArrow(Player p, Arrows.Arrow a) {
+        double dx = a.x - p.x, dz = a.z - p.z;
+        return dx * dx + dz * dz < 1.4 * 1.4 && a.y > p.y - 0.6 && a.y < p.y + 2.3;
+    }
+
+    private static String chestKey(int x, int y, int z) {
+        return x + "," + y + "," + z;
+    }
+
+    /** Abre o baú. No mundo de um amigo o conteúdo fica com o anfitrião: pede a ele e abre quando chegar. */
+    private void openChest(int x, int y, int z) {
+        if (toHost != null) { toHost.send(new Net.Out(Net.CHEST_OPEN).i(x).i(y).i(z)); return; }
+        String key = chestKey(x, y, z);
+        Inventory c = chests.get(key);
+        if (c == null) { c = new Inventory(); chests.put(key, c); }
+        showChest(key, c);
+    }
+
+    private void showChest(String key, Inventory c) {
+        chest = c;
+        chestKey = key;
+        Sounds.play("quebrar_madeira", 0.4);
+        openInventory();
+    }
+
+    /** O baú foi destruído: o que havia dentro cai no chão. (Para um amigo, quem manda os itens é o anfitrião.) */
+    private void spillChest(int x, int y, int z) {
+        if (toHost != null) return;
+        Inventory c = chests.remove(chestKey(x, y, z));
+        if (c == null) return;
+        if (c == chest) { chest = null; chestKey = null; }
+        for (int i = 0; i < Inventory.CHEST; i++)
+            if (!c.empty(i)) drops.scatter(c.id[i], c.count[i], c.wear[i], x + 0.5, y + 0.5, z + 0.5);
+    }
+
+    /** Enxada: transforma grama ou terra em terra arada, onde as sementes crescem. */
+    private void till(int x, int y, int z) {
+        int above = world.get(x, y + 1, z);
+        if (above != Block.AIR && Block.shape(above) != Block.CROSS) return;
+        if (above != Block.AIR) world.set(x, y + 1, z, Block.AIR);
+        world.set(x, y, z, Block.FARMLAND);
+        Sounds.playAt("quebrar_terra", x + 0.5, y + 1, z + 0.5, player, 0.7);
+        particles.blockBits(Block.DIRT, x, y + 1, z, 6);
+        if (!creative && inv.useTool(slot)) toast("Sua ferramenta quebrou!");
+        swing = 0.3;
+    }
+
+    /** Botão direito com uma peça de armadura na mão: veste (trocando com a que já estava). */
+    private void equipHeld() {
+        int item = inv.id[slot], w = inv.wear[slot], a = Inventory.SIZE + Items.armorPiece(item);
+        boolean had = !inv.empty(a);
+        int oldId = inv.id[a], oldW = inv.wear[a];
+        inv.set(a, item, 1, w);
+        inv.set(slot, had ? oldId : 0, had ? 1 : 0, oldW);
+        Sounds.play("colocar", 0.7);
+        toast("Vestiu: " + Items.name(item));
+        swing = 0.3;
+    }
+
+    /** Dano que a armadura absorve em parte (golpes, explosões, espinhos): cada ponto de defesa tira 4%. */
+    private void hit(double n) {
+        int pts = inv.armorPoints();
+        if (n > 0 && pts > 0) {
+            n = Math.max(0.5, n * (1 - pts * 0.04));
+            if (inv.wearArmor()) toast("Uma peça da sua armadura quebrou!");
+        }
+        damage(n);
+    }
+
+    /** Cama: define onde você renasce e, de noite, faz o tempo pular para a manhã. */
+    private void useBed(int x, int y, int z) {
+        info.spawnX = x + 0.5; info.spawnY = y + 0.6; info.spawnZ = z + 0.5;
+        boolean night = world.daylight() < 0.35;
+        if (!night) { toast("Ponto de renascimento definido. Só dá para dormir à noite."); return; }
+        if (toHost != null) { toast("Ponto de renascimento definido. Só o anfitrião faz a noite passar."); return; }
+        for (Mob m : mobs.list)
+            if (m.hostile() && Math.abs(m.x - player.x) < 8 && Math.abs(m.z - player.z) < 8 && Math.abs(m.y - player.y) < 5) {
+                toast("Você não pode dormir agora: há monstros por perto.");
+                return;
+            }
+        if (world.time > World.DAY_LENGTH * 0.5) info.day++;
+        world.time = World.DAY_LENGTH * 0.27;
+        if (server != null) server.broadcast(new Net.Out(Net.TIME).dbl(world.time).i(info.day), null);
+        mobs.list.removeIf(Mob::hostile);
+        toast("Você dormiu. Bom dia!  (dia " + info.day + ")");
+        saveAsync();
+    }
+
+    /** Acende uma dinamite. hasBlock: o bloco ainda está no mundo (falso nas que voaram de outra explosão). */
+    private void prime(int x, int y, int z, double seconds, boolean hasBlock) {
+        for (double[] p : primed) if ((int) p[0] == x && (int) p[1] == y && (int) p[2] == z) return;
+        primed.add(new double[] { x, y, z, seconds, hasBlock ? 1 : 0 });
+        Sounds.playAt("pavio", x + 0.5, y + 0.5, z + 0.5, player, 0.9);
+    }
+
+    private void tickPrimed(double dt) {
+        if (primed.isEmpty()) return;
+        List<double[]> ready = new ArrayList<>();
+        for (java.util.Iterator<double[]> it = primed.iterator(); it.hasNext(); ) {
+            double[] p = it.next();
+            int x = (int) p[0], y = (int) p[1], z = (int) p[2];
+            if (p[4] > 0 && world.get(x, y, z) != Block.TNT) { it.remove(); continue; } // alguém quebrou antes
+            p[3] -= dt;
+            if (rnd.nextDouble() < dt * 20) particles.smoke(x + 0.5, y + 1.05, z + 0.5);
+            if (p[3] <= 0) { it.remove(); ready.add(p); }
+        }
+        for (double[] p : ready) {
+            int x = (int) p[0], y = (int) p[1], z = (int) p[2];
+            if (p[4] > 0) world.set(x, y, z, Block.AIR);
+            explodeAt(x + 0.5, y + 0.5, z + 0.5, TNT_POWER);
+        }
+    }
+
+    /** Explosão num ponto: abre o buraco, solta parte dos blocos como itens, machuca e empurra quem está perto. */
+    private void explodeAt(double x, double y, double z, double power) {
+        List<int[]> gone = world.explode(x, y, z, power, rnd);
+        for (int[] g : gone) {
+            if (g[3] == Block.CHEST) spillChest(g[0], g[1], g[2]);
+            if (g[3] == Block.TNT) prime(g[0], g[1], g[2], 0.25 + rnd.nextDouble() * 0.5, false); // reação em cadeia
+            else if (!creative && rnd.nextDouble() < 0.3) drops.spawn(Block.drop(g[3]), g[0], g[1], g[2]);
+        }
+        if (toHost == null) mobs.blast(x, y, z, power);
+        drops.blast(x, y, z, power);
+        blastEffects(x, y, z, power);
+        if (server != null) server.broadcast(new Net.Out(Net.EXPLODE).f(x).f(y).f(z).f(power), null);
+    }
+
+    /** Som, fumaça e o dano da explosão no jogador desta tela. */
+    private void blastEffects(double x, double y, double z, double power) {
+        Sounds.playAt("explosao", x, y, z, player, 1.0);
+        particles.explosion(x, y, z, power);
+        double dx = player.x - x, dy = player.y + 0.9 - y, dz = player.z - z;
+        double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (dist > power * 2 || creative || state != State.PLAYING) return;
+        double k = 1 - dist / (power * 2);
+        hit(Math.floor(k * power * 5));
+        double l = Math.max(0.3, dist);
+        player.vx += dx / l * k * 12; player.vz += dz / l * k * 12; player.vy += 4 + k * 5;
+    }
+
+    /** Tecla Q: joga na frente um item do espaço selecionado (com Ctrl, a pilha toda). */
+    private void dropHeld(boolean all) {
+        if (inv.empty(slot)) return;
+        int item = inv.id[slot], n = all ? inv.count[slot] : 1, w = inv.wear[slot];
+        if (!creative) inv.set(slot, item, inv.count[slot] - n, w);
+        double cp = Math.cos(player.pitch);
+        double lx = Math.sin(player.yaw) * cp, ly = Math.sin(player.pitch), lz = Math.cos(player.yaw) * cp;
+        drops.spawn(item, n, w, player.x + lx * 0.3, player.y + Player.EYE - 0.3, player.z + lz * 0.3,
+                lx * 6 + player.vx, ly * 6 + 1.5, lz * 6 + player.vz, 1.5);
+        swing = 0.3;
     }
 
     private boolean mobBlocks(int bx, int by, int bz, int b) {
@@ -626,7 +1032,7 @@ public class BlockGame {
         hazardCd -= dt;
         if (hazardCd <= 0) {
             if (player.inLava) { damage(4); hazardCd = 0.5; }
-            else if (player.touching(world, Block.CACTUS)) { damage(1); hazardCd = 0.6; }
+            else if (player.touching(world, Block.CACTUS)) { hit(1); hazardCd = 0.6; }
         }
 
         // ataques das criaturas
@@ -635,7 +1041,7 @@ public class BlockGame {
         if (netDamage > 0) { from[0] = netDamageX; from[1] = netDamageZ; }
         netDamage = 0;
         if (mobDamage > 0) {
-            damage(mobDamage);
+            hit(mobDamage);
             double kx = player.x - from[0], kz = player.z - from[1], kl = Math.max(0.01, Math.sqrt(kx * kx + kz * kz));
             player.vx += kx / kl * 8;
             player.vz += kz / kl * 8;
@@ -664,6 +1070,13 @@ public class BlockGame {
     }
 
     private void die() {
+        // como no Minecraft: tudo o que você carregava cai onde você morreu
+        if (!creative) {
+            for (int i = 0; i < Inventory.TOTAL; i++)
+                if (!inv.empty(i)) drops.scatter(inv.id[i], inv.count[i], inv.wear[i], player.x, player.y + 0.8, player.z);
+            inv.clear();
+            cursorId = cursorCount = cursorWear = 0;
+        }
         player.health = 0;
         state = State.DEAD;
         releaseMouse();
@@ -723,7 +1136,6 @@ public class BlockGame {
         player.food = Player.MAX_FOOD;
         player.fallDist = player.landedFall = 0;
         hurtFlash = 0;
-        if (!creative) inv.clear();
         resume();
     }
 
@@ -819,6 +1231,7 @@ public class BlockGame {
         world = w;
         info = i;
         creative = i.creative;
+        if (BENCH && System.getProperty("bench.survival") != null) creative = false; // teste: força a sobrevivência
         player = new Player();
         player.x = i.px; player.y = i.py; player.z = i.pz;
         player.yaw = i.yaw; player.pitch = i.pitch;
@@ -831,6 +1244,19 @@ public class BlockGame {
         if (creative && i.inventory.isEmpty())
             for (int k = 0; k < Block.HOTBAR.length; k++) inv.set(k, Block.HOTBAR[k], Inventory.MAX);
         mobs.clear();
+        drops.clear();
+        particles.clear();
+        primed.clear();
+        arrows.clear();
+        bowCharge = 0;
+        chests.clear();
+        chest = null;
+        chestKey = null;
+        for (java.util.Map.Entry<String, String> e : i.chests.entrySet()) {
+            Inventory c = new Inventory();
+            c.deserialize(e.getValue(), false);
+            chests.put(e.getKey(), c);
+        }
         cursorId = cursorCount = cursorWear = 0;
         recipeScroll = paletteScroll = 0;
         slot = 0;
@@ -884,7 +1310,8 @@ public class BlockGame {
 
     private void resume() {
         state = State.PLAYING;
-        lPending = rPending = false;
+        lPending = rPending = lHeld = rHeld = false;
+        bowCharge = 0;
         capture();
     }
 
@@ -894,6 +1321,13 @@ public class BlockGame {
     }
 
     private void closeInventory() {
+        if (chest != null && chestKey != null && toHost != null) { // amigo: devolve o conteúdo ao anfitrião
+            String[] k = chestKey.split(",");
+            toHost.send(new Net.Out(Net.CHEST_SET).i(Integer.parseInt(k[0])).i(Integer.parseInt(k[1])).i(Integer.parseInt(k[2]))
+                    .s(chest.serialize(Inventory.CHEST)));
+        }
+        chest = null;
+        chestKey = null;
         if (cursorCount > 0) {
             int left = returnCursor();
             if (left > 0) toast(left + " " + Items.name(cursorId) + " descartado(s): inventário cheio");
@@ -905,7 +1339,7 @@ public class BlockGame {
     /** Devolve o item preso no mouse ao inventário (mantendo o desgaste de ferramentas). Retorna o que sobrou. */
     private int returnCursor() {
         if (cursorCount <= 0) return 0;
-        if (Items.isTool(cursorId)) {
+        if (Items.isDurable(cursorId)) {
             for (int i = 0; i < Inventory.SIZE; i++)
                 if (inv.empty(i)) { inv.set(i, cursorId, 1, cursorWear); return 0; }
             return 1;
@@ -1115,7 +1549,8 @@ public class BlockGame {
                 netMobTimer = 0.1;
                 Net.Out o = new Net.Out(Net.MOBS).i(mobs.list.size());
                 for (Mob m : mobs.list)
-                    o.i(m.id).i(m.type).f(m.x).f(m.y).f(m.z).f(m.yaw).f(m.walk).b(m.hurt > 0);
+                    o.i(m.id).i(m.type).f(m.x).f(m.y).f(m.z).f(m.yaw).f(m.walk).b(m.hurt > 0)
+                            .f(m.type == Mob.CREEPER ? m.fuse : m.aim); // pavio do creeper ou arco do esqueleto
                 server.broadcast(o, null);
             }
             server.flushAll();
@@ -1164,6 +1599,10 @@ public class BlockGame {
                 // quem já está no mundo (o anfitrião e os outros amigos)
                 p.from.send(joinPacket(0, info.persona.name, info.persona));
                 for (Remote o : remotes.values()) p.from.send(joinPacket(o.id, o.name, o.persona));
+                for (Arrows.Arrow a : arrows.list) { // flechas que já estão no mundo
+                    p.from.send(arrowPacket(a, false));
+                    if (a.stuck) p.from.send(stuckPacket(a));
+                }
                 server.broadcast(joinPacket(nr.id, unique, pe), p.from);
                 remotes.put(nr.id, nr);
                 toast(unique + " entrou no mundo"); addChat(unique + " entrou no mundo", new Color(255, 230, 120));
@@ -1182,7 +1621,45 @@ public class BlockGame {
             case Net.BLOCK: {
                 if (r == null) return;
                 int x = d.readInt(), y = d.readInt(), z = d.readInt(), b = d.readInt();
-                if (World.inBounds(x, y, z) && b >= 0 && b < Block.COUNT) world.set(x, y, z, b); // repassa a todos pelo listener
+                if (World.inBounds(x, y, z) && b >= 0 && b < Block.COUNT) {
+                    if (world.get(x, y, z) == Block.CHEST && b != Block.CHEST) { // baú quebrado por um amigo: o conteúdo cai para ele
+                        Inventory c = chests.remove(chestKey(x, y, z));
+                        if (c != null) {
+                            if (c == chest) { chest = null; chestKey = null; }
+                            for (int k = 0; k < Inventory.CHEST; k++)
+                                if (!c.empty(k)) p.from.send(new Net.Out(Net.DROP).i(c.id[k]).i(c.count[k]).i(c.wear[k]).f(x + 0.5).f(y + 0.5).f(z + 0.5));
+                        }
+                    }
+                    world.set(x, y, z, b); // repassa a todos pelo listener
+                }
+                break;
+            }
+            case Net.SHOOT: { // um amigo soltou uma flecha: ela nasce aqui e vai para todos
+                if (r == null) return;
+                float x = d.readFloat(), y = d.readFloat(), z = d.readFloat(), vx = d.readFloat(), vy = d.readFloat(), vz = d.readFloat();
+                float dmg = d.readFloat();
+                boolean pickup = d.readBoolean();
+                double sp = Math.sqrt(vx * vx + vy * vy + vz * vz);
+                if (!(sp <= 42) || !(dmg >= 0 && dmg <= 9.5)) return; // fora do que o arco consegue
+                spawnArrow(r.id, -1, x, y, z, vx, vy, vz, dmg, pickup && !creative);
+                break;
+            }
+            case Net.CHEST_OPEN: {
+                if (r == null) return;
+                int x = d.readInt(), y = d.readInt(), z = d.readInt();
+                if (world.get(x, y, z) != Block.CHEST) return;
+                Inventory c = chests.get(chestKey(x, y, z));
+                p.from.send(new Net.Out(Net.CHEST_DATA).i(x).i(y).i(z).s(c == null ? "" : c.serialize(Inventory.CHEST)));
+                break;
+            }
+            case Net.CHEST_SET: {
+                if (r == null) return;
+                int x = d.readInt(), y = d.readInt(), z = d.readInt();
+                String data = d.readUTF();
+                if (world.get(x, y, z) != Block.CHEST) return;
+                Inventory c = chests.get(chestKey(x, y, z));
+                if (c == null) { c = new Inventory(); chests.put(chestKey(x, y, z), c); }
+                c.deserialize(data, false);
                 break;
             }
             case Net.HIT_MOB: {
@@ -1285,14 +1762,63 @@ public class BlockGame {
                     int id = d.readInt(), type = d.readInt();
                     float x = d.readFloat(), y = d.readFloat(), z = d.readFloat(), yaw = d.readFloat(), walk = d.readFloat();
                     boolean hurt = d.readBoolean();
+                    float anim = d.readFloat();
                     Mob m = mobs.byId(id);
                     if (m == null) { m = new Mob(type, x, y, z); m.id = id; mobs.list.add(m); }
                     m.vx = (x - m.x) * 10; m.vz = (z - m.z) * 10; // para a animação das pernas
                     m.x = x; m.y = y; m.z = z; m.yaw = yaw; m.walk = walk;
                     if (hurt) m.hurt = 0.1;
+                    if (m.type == Mob.CREEPER) m.fuse = anim; else m.aim = anim;
                     seen.add(id);
                 }
                 mobs.list.removeIf(m -> !seen.contains(m.id));
+                break;
+            }
+            case Net.EXPLODE: {
+                float x = d.readFloat(), y = d.readFloat(), z = d.readFloat(), power = d.readFloat();
+                if (world != null && player != null) { drops.blast(x, y, z, power); blastEffects(x, y, z, power); }
+                break;
+            }
+            case Net.ARROW: {
+                int id = d.readInt(), owner = d.readInt();
+                float x = d.readFloat(), y = d.readFloat(), z = d.readFloat(), vx = d.readFloat(), vy = d.readFloat(), vz = d.readFloat();
+                boolean sound = d.readBoolean();
+                if (world == null || player == null) break;
+                arrows.mirror(id, owner, x, y, z, vx, vy, vz);
+                if (sound && owner != myId) Sounds.playAt("arco_disparo", x, y, z, player, 0.8);
+                break;
+            }
+            case Net.ARROW_STUCK: {
+                Arrows.Arrow a = arrows.byId(d.readInt());
+                float x = d.readFloat(), y = d.readFloat(), z = d.readFloat(), dx = d.readFloat(), dy = d.readFloat(), dz = d.readFloat();
+                int bx = d.readInt(), by = d.readInt(), bz = d.readInt();
+                if (a == null || world == null) break;
+                boolean was = a.stuck;
+                Arrows.stick(a, x, y, z, dx, dy, dz, bx, by, bz);
+                if (!was) arrowStuckSound(a, by == Integer.MIN_VALUE ? Block.STONE : world.get(bx, by, bz));
+                break;
+            }
+            case Net.ARROW_GONE: {
+                Arrows.Arrow a = arrows.byId(d.readInt());
+                int kind = d.readInt();
+                float x = d.readFloat(), y = d.readFloat(), z = d.readFloat();
+                if (a != null) arrows.list.remove(a);
+                if (kind == 1 && world != null && player != null) arrowHitEffects(x, y, z);
+                break;
+            }
+            case Net.CHEST_DATA: {
+                int x = d.readInt(), y = d.readInt(), z = d.readInt();
+                String data = d.readUTF();
+                if (world == null || state != State.PLAYING) break;
+                Inventory c = new Inventory();
+                c.deserialize(data, false);
+                showChest(chestKey(x, y, z), c);
+                break;
+            }
+            case Net.DROP: {
+                int item = d.readInt(), count = d.readInt(), wear = d.readInt();
+                float x = d.readFloat(), y = d.readFloat(), z = d.readFloat();
+                if (world != null) drops.scatter(item, count, wear, x, y, z);
                 break;
             }
             case Net.DAMAGE:
@@ -1335,6 +1861,7 @@ public class BlockGame {
         player = null;
         info = null;
         mobs.clear();
+        drops.clear();
         enterLobby();
         if (msg != null) toast(msg);
         netError = null;
@@ -1352,6 +1879,12 @@ public class BlockGame {
         info.flying = player.flying;
         info.time = world.time;
         info.inventory = inv.serialize();
+        info.chests.clear();
+        for (java.util.Map.Entry<String, Inventory> e : chests.entrySet()) {
+            String[] k = e.getKey().split(",");
+            if (world.get(Integer.parseInt(k[0]), Integer.parseInt(k[1]), Integer.parseInt(k[2])) == Block.CHEST)
+                info.chests.put(e.getKey(), e.getValue().serialize(Inventory.CHEST));
+        }
         info.lastPlayed = System.currentTimeMillis();
     }
 
@@ -1402,6 +1935,252 @@ public class BlockGame {
     // =====================================================================
     // desenho
     // =====================================================================
+    private boolean benchTested;
+    private double benchT;
+    private int benchPhase, benchShots, benchX, benchZ, benchMark;
+    private Mob benchPig;
+
+    private static void say(String s) {
+        System.out.println("flechas: " + s);
+    }
+
+    private String arrowDump() {
+        StringBuilder sb = new StringBuilder(arrows.list.size() + " flecha(s)");
+        for (Arrows.Arrow a : arrows.list)
+            sb.append(String.format(java.util.Locale.ROOT, " [#%d dono %d %s %.1f,%.1f,%.1f%s]", a.id, a.owner, a.stuck ? "presa" : "voando",
+                    a.x, a.y, a.z, a.pickup ? " recolhivel" : ""));
+        return sb.toString();
+    }
+
+    private void aimAndFire(double tx, double ty, double tz) {
+        double ex = player.x, ey = player.y + Player.EYE - 0.12, ez = player.z;
+        double dx = tx - ex, dy = ty - ey, dz = tz - ez, l = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        fireBow(1.0, dx / l, dy / l, dz / l);
+    }
+
+    /**
+     * Teste automático da atualização do arco (-Dbench.arrows, com -Dbench.survival): monta um palco no alto,
+     * fabrica arco e flechas, atira num porco e na parede, põe um esqueleto para atirar, recolhe a flecha,
+     * confere que o esqueleto não atira através de parede e salva. Com -Dbench.host abre para a LAN;
+     * o jogo que entra (-Dbench.join) atira, recolhe e mexe no baú pelo lado do amigo.
+     */
+    private void benchArrows(double dt) {
+        benchT += dt;
+        if (toHost != null) { benchArrowsClient(); return; }
+        int x = benchX, z = benchZ;
+        if (benchPhase == 0 && benchT > 1.5) {
+            benchPhase = 1;
+            x = benchX = (int) player.x; z = benchZ = (int) player.z;
+            for (int dx = -4; dx <= 4; dx++)
+                for (int dz = -3; dz <= 14; dz++) {
+                    world.set(x + dx, 60, z + dz, Block.STONE);
+                    for (int y = 61; y <= 63; y++) world.set(x + dx, y, z + dz, dz == 14 ? Block.PLANKS : Block.AIR);
+                }
+            player.x = x + 0.5; player.y = 61.01; player.z = z + 0.5;
+            player.vx = player.vy = player.vz = 0; player.flying = false; player.fallDist = player.landedFall = 0;
+            player.health = Player.MAX_HEALTH;
+            world.time = World.DAY_LENGTH * 0.75; // meia-noite: o esqueleto não queima
+            state = State.PLAYING;
+            inv.clear();
+            inv.add(Items.STICK, 5); inv.add(Items.STRING, 3); inv.add(Items.FLINT, 2); inv.add(Items.FEATHER, 2);
+            boolean okBow = false, okArrow = false;
+            for (Items.Recipe r : Items.RECIPES) {
+                if (r.out == Items.BOW) okBow = inv.craft(r);
+                if (r.out == Items.ARROW) okArrow = inv.craft(r) & inv.craft(r);
+            }
+            say("fabricou arco=" + okBow + " flechas=" + okArrow + " -> " + inv.countOf(Items.BOW) + " arco, " + inv.countOf(Items.ARROW)
+                    + " flechas, sobraram " + inv.countOf(Items.STICK) + " gravetos");
+            for (int i = 0; i < Inventory.SIZE; i++)
+                if (inv.id[i] == Items.BOW && i != 0) { int oi = inv.id[0], oc = inv.count[0]; inv.set(0, Items.BOW, 1, 0); inv.set(i, oi, oc); }
+            slot = 0;
+            world.set(x - 3, 61, z + 1, Block.CHEST);
+            Inventory c = new Inventory();
+            c.addRange(Items.BREAD, 5, 0, 0, Inventory.CHEST);
+            chests.put(chestKey(x - 3, 61, z + 1), c);
+            if (System.getProperty("bench.host") != null) { openToLan(); say("aberto para LAN: " + (server != null)); }
+        } else if (benchPhase == 1 && benchT > 3) {
+            benchPhase = 2;
+            benchPig = new Mob(Mob.PIG, x + 0.5, 61.01, z + 5.5);
+            mobs.list.add(benchPig);
+            aimAndFire(benchPig.x, 61.5, benchPig.z);
+            say("1a flecha no porco (vida " + benchPig.health + "); " + arrowDump());
+        } else if (benchPhase == 2 && benchT > 3.6) {
+            benchPhase = 3;
+            say("porco depois da 1a flecha: vida " + benchPig.health + " (era 10; flecha cheia tira 9)");
+            aimAndFire(benchPig.x, benchPig.y + 0.5, benchPig.z);
+            aimAndFire(x + 3.5, 62.6, z + 14.5); // esta vai para a parede de tábuas
+        } else if (benchPhase == 3 && benchT > 5) {
+            benchPhase = 4;
+            say("porco depois da 2a: vida " + benchPig.health + ", ainda no mundo=" + mobs.list.contains(benchPig) + "; flechas no inventario "
+                    + inv.countOf(Items.ARROW) + "; " + arrowDump());
+            mobs.list.add(new Mob(Mob.SKELETON, x + 0.5, 61.01, z + 10.5));
+            benchMark = benchShots;
+        } else if (benchPhase == 4 && benchT > 12) {
+            benchPhase = 5;
+            Mob sk = null;
+            for (Mob m : mobs.list) if (m.type == Mob.SKELETON && Math.abs(m.y - 61) < 2) sk = m;
+            say("esqueleto em 7 s: " + (benchShots - benchMark) + " disparo(s); vida do jogador " + player.health + "/20; esqueleto "
+                    + (sk == null ? "sumiu" : String.format(java.util.Locale.ROOT, "a %.1f blocos", Math.abs(sk.z - player.z))) + "; " + arrowDump());
+            for (Arrows.Arrow a : arrows.list)
+                if (a.stuck && a.pickup) { player.x = a.x; player.z = a.z - 0.8; break; }
+            benchMark = inv.countOf(Items.ARROW);
+        } else if (benchPhase == 5 && benchT > 13) {
+            benchPhase = 6;
+            say("recolher flecha presa: " + benchMark + " -> " + inv.countOf(Items.ARROW) + " flechas");
+            player.x = x + 0.5; player.z = z + 0.5;
+            for (int dx = -4; dx <= 4; dx++) for (int y = 61; y <= 63; y++) world.set(x + dx, y, z + 6, Block.STONE); // parede no meio
+            benchMark = benchShots;
+        } else if (benchPhase == 6 && benchT > 20) {
+            benchPhase = 7;
+            say("com parede no meio, em 7 s: " + (benchShots - benchMark) + " disparo(s) (esperado 0)");
+            for (int dx = -4; dx <= 4; dx++) for (int y = 61; y <= 63; y++) world.set(x + dx, y, z + 6, Block.AIR);
+            saveSync();
+            for (Saves.Info s : Saves.list())
+                if (s.id.equals(info.id)) say("salvo e relido: arco no inventario=" + s.inventory.contains(Items.BOW + ":1") + ", flecha="
+                        + s.inventory.contains(Items.ARROW + ":") + ", baus=" + s.chests.size());
+        } else if (benchPhase == 7 && benchT > 36 && !remotes.isEmpty()) {
+            benchPhase = 8;
+            for (Remote r : remotes.values()) if (r.hasState) { aimAndFire(r.body.x, r.body.y + 1, r.body.z); say("anfitriao atirou no amigo " + r.name); }
+        } else if (benchPhase >= 7 && benchPhase < 9 && benchT > 42) {
+            benchPhase = 9;
+            Inventory c = chests.get(chestKey(x - 3, 61, z + 1));
+            say("FIM anfitriao: jogadores remotos=" + remotes.size() + ", vida " + player.health + ", pao no bau=" + (c == null ? -1 : c.countOf(Items.BREAD))
+                    + ", disparos de esqueleto=" + benchShots + "; " + arrowDump());
+        }
+    }
+
+    /** Lado do amigo no teste de rede. */
+    private void benchArrowsClient() {
+        if (benchPhase == 0 && benchT > 2) {
+            benchPhase = 1;
+            benchX = -1;
+            for (int cx = 0; cx < World.SX && benchX < 0; cx++)
+                for (int cz = 0; cz < World.SZ; cz++)
+                    if (world.get(cx, 61, cz) == Block.CHEST) { benchX = cx + 3; benchZ = cz - 1; break; }
+            if (benchX < 0) { say("AMIGO: nao achei o palco do anfitriao"); benchPhase = 99; return; }
+            player.x = benchX + 2.5; player.y = 61.01; player.z = benchZ + 1.5;
+            player.vx = player.vy = player.vz = 0; player.fallDist = player.landedFall = 0;
+            inv.clear();
+            inv.set(0, Items.BOW, 1, 0); inv.set(1, Items.ARROW, 10);
+            slot = 0;
+            int sk = 0;
+            for (Mob m : mobs.list) if (m.type == Mob.SKELETON) sk++;
+            say("AMIGO entrou: modo " + (creative ? "criativo" : "sobrevivencia") + ", ve " + remotes.size() + " jogador(es), " + mobs.list.size()
+                    + " criaturas (" + sk + " esqueleto), " + arrowDump());
+        } else if (benchPhase == 1 && benchT > 3) {
+            benchPhase = 2;
+            aimAndFire(benchX + 3.5, 62.6, benchZ + 5.5);
+            Remote h = remotes.get(0);
+            if (h != null && h.hasState) aimAndFire(h.body.x, h.body.y + 1, h.body.z); // uma no anfitrião
+            say("AMIGO atirou 2; flechas no inventario " + inv.countOf(Items.ARROW));
+        } else if (benchPhase == 2 && benchT > 5) {
+            benchPhase = 3;
+            say("AMIGO depois de 2 s: vida " + player.health + "; " + arrowDump());
+            openChest(benchX - 3, 61, benchZ + 1);
+        } else if (benchPhase == 3 && benchT > 6) {
+            benchPhase = 4;
+            if (chest == null) say("AMIGO: BAU NAO ABRIU");
+            else {
+                say("AMIGO abriu o bau: " + chest.countOf(Items.BREAD) + " paes");
+                quickMove(chest, 0);
+                closeInventory();
+                say("AMIGO pegou: " + inv.countOf(Items.BREAD) + " paes no inventario");
+            }
+            benchMark = inv.countOf(Items.ARROW);
+        } else if (benchPhase == 4 && benchT > 7 && benchT < 20) {
+            for (Arrows.Arrow a : arrows.list)
+                if (a.stuck && a.owner == myId) { player.x = a.x; player.z = a.z - 0.8; player.y = Math.max(61.01, Math.floor(a.y) + 0.01); benchPhase = 5; benchT = 20; break; }
+        } else if (benchPhase == 5 && benchT > 23) {
+            benchPhase = 6;
+            say("amigo: recolher flecha " + benchMark + " -> " + inv.countOf(Items.ARROW) + "; " + arrowDump());
+            player.x = benchX + 2.5; player.z = benchZ + 1.5; player.y = 61.01;
+            Remote h = remotes.get(0);
+            if (h != null && h.hasState) { aimAndFire(h.body.x, h.body.y + 1, h.body.z); say(String.format(java.util.Locale.ROOT, "amigo atirou no anfitriao que esta em %.1f,%.1f,%.1f", h.body.x, h.body.y, h.body.z)); }
+        } else if (benchPhase == 6 && benchT > 31) {
+            benchPhase = 7;
+            say("FIM amigo: recolher flecha " + benchMark + " -> " + inv.countOf(Items.ARROW) + "; vida " + player.health + "; " + arrowDump());
+        }
+    }
+
+    /** Teste automático (-Dbench.test): mexe em tudo o que é novo perto do jogador, para ver se nada quebra. */
+    private void benchTest() {
+        int x = (int) player.x, y = (int) player.y, z = (int) player.z;
+        System.out.println("teste: jogador em " + x + "," + y + "," + z + " modo " + (creative ? "criativo" : "sobrevivencia"));
+        for (int i = 0; i < 6; i++) world.set(x + 3, Math.min(World.SY - 1, y + 6 + i), z, i % 2 == 0 ? Block.SAND : Block.GRAVEL);
+        world.set(x - 3, y + 1, z, Block.TNT); world.set(x - 4, y + 1, z, Block.TNT);
+        prime(x - 3, y + 1, z, 2.0, true);
+        world.set(x, y + 8, z + 4, Block.LEAVES);
+        drops.scatter(Block.COBBLE, 40, 0, player.x + 2, player.y + 1, player.z + 2);
+        drops.scatter(Items.tool(Items.PICK, 2), 1, 17, player.x + 2, player.y + 1, player.z - 2);
+        drops.spawn(Block.BED, x, y + 2, z + 1); drops.spawn(Block.SAPLING, x, y + 2, z + 1); drops.spawn(Items.GUNPOWDER, x, y + 2, z + 1);
+        for (int t = 0; t < Mob.TYPES; t++) mobs.list.add(new Mob(t, player.x + 4 + t, player.y + 3, player.z + 5));
+        particles.blockBits(Block.GRASS, x, y, z, 30);
+        dropHeld(false);
+        // baú, plantação, armadura, itens novos e as telas (salvas em PNG se -Dbench.shot=pasta)
+        world.set(x + 5, y + 3, z, Block.FARMLAND);
+        world.set(x + 5, y + 4, z, Block.WHEAT + 2);
+        world.set(x + 2, y + 1, z + 2, Block.CHEST);
+        Inventory c = new Inventory();
+        c.addRange(Items.BREAD, 70, 0, 0, Inventory.CHEST);
+        c.addRange(Items.armor(Items.CHESTPLATE, 2), 1, 40, 0, Inventory.CHEST);
+        c.addRange(Items.FLINT_STEEL, 1, 9, 0, Inventory.CHEST);
+        chests.put(chestKey(x + 2, y + 1, z + 2), c);
+        int n = 0;
+        for (int i = Items.FIRST_ITEM; i <= Items.LAST; i++)
+            if (Items.exists(i)) { n++; if (Items.icon(i) == null || Items.name(i).equals("?")) System.out.println("teste: ITEM SEM ICONE/NOME " + i); }
+        for (Items.Recipe r : Items.RECIPES) if (!Items.exists(r.out)) System.out.println("teste: RECEITA INVALIDA " + r.out);
+        inv.set(Inventory.SIZE, Items.armor(Items.HELMET, 0), 1, 0);
+        inv.set(Inventory.SIZE + 1, Items.armor(Items.CHESTPLATE, 1), 1, 30);
+        inv.set(Inventory.SIZE + 3, Items.armor(Items.BOOTS, 2), 1, 0);
+        inv.set(3, Items.tool(Items.HOE, 2), 1, 0); inv.set(4, Items.SEEDS, 12); inv.set(5, Items.RAW_PORK, 3); inv.set(6, Items.COOKED_CHICKEN, 2);
+        inv.set(7, Items.FLINT_STEEL, 1, 0); inv.set(8, Block.CHEST, 2); inv.set(9, Items.RAW_MUTTON, 2); inv.set(10, Items.LEATHER, 5);
+        inv.set(11, Items.WHEAT, 5); inv.set(12, Items.FLINT, 5); inv.set(13, Items.armor(Items.LEGGINGS, 1), 1, 0);
+        double before = player.health;
+        hit(5);
+        System.out.println("teste: " + n + " itens; defesa " + inv.armorPoints() + "; golpe de 5 tirou " + (before - player.health));
+        till(x + 6, y + 3, z);
+        quickMove(inv, 13);
+        String shot = System.getProperty("bench.shot");
+        if (shot != null) {
+            try {
+                BufferedImage img = new BufferedImage(1280, 720, BufferedImage.TYPE_INT_ARGB);
+                Graphics2D g = img.createGraphics();
+                g.setColor(new Color(90, 130, 170)); g.fillRect(0, 0, 1280, 720);
+                chest = c; chestKey = chestKey(x + 2, y + 1, z + 2);
+                drawInventory(g, 1280, 720);
+                javax.imageio.ImageIO.write(img, "png", new java.io.File(shot, "bau.png"));
+                chest = null; chestKey = null;
+                g.setColor(new Color(90, 130, 170)); g.fillRect(0, 0, 1280, 720);
+                drawInventory(g, 1280, 720);
+                javax.imageio.ImageIO.write(img, "png", new java.io.File(shot, "inventario.png"));
+                g.setColor(new Color(90, 130, 170)); g.fillRect(0, 0, 1280, 720);
+                drawHud(g, 1280, 720, true);
+                javax.imageio.ImageIO.write(img, "png", new java.io.File(shot, "hud.png"));
+                g.setColor(new Color(60, 60, 70)); g.fillRect(0, 0, 1280, 720);
+                int k = 0;
+                for (int i = Items.FIRST_ITEM; i <= Items.LAST; i++)
+                    if (Items.exists(i)) { g.drawImage(Items.icon(i), 10 + (k % 16) * 78, 10 + (k / 16) * 78, 64, 64, null); k++; }
+                int[] nb = { Block.CHEST, Block.FARMLAND, Block.WHEAT, Block.WHEAT + 1, Block.WHEAT + 2, Block.TNT };
+                for (int b : nb) { g.drawImage(Items.icon(b), 10 + (k % 16) * 78, 10 + (k / 16) * 78, 64, 64, null); k++; }
+                javax.imageio.ImageIO.write(img, "png", new java.io.File(shot, "icones.png"));
+                g.dispose();
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        spillChest(x + 2, y + 1, z + 2);
+        System.out.println("teste: itens novos " + Items.name(Block.TNT) + ", " + Items.name(Block.BED) + ", " + Items.name(Items.GUNPOWDER)
+                + "; icones " + (Items.icon(Block.BED) != null) + (Items.icon(Block.SAPLING) != null) + (Items.icon(Items.GUNPOWDER) != null));
+    }
+
+    private long lastUiDraw, benchSwapNs, benchWorkNs;
+
+    private void swapBuffers() {
+        long t = System.nanoTime();
+        glfwSwapBuffers(window);
+        benchSwapNs += System.nanoTime() - t;
+    }
+
     private void renderFrame() {
         int cw = fbW, ch = fbH;
         if (cw <= 0 || ch <= 0) return; // janela minimizada
@@ -1413,6 +2192,9 @@ public class BlockGame {
         if (inWorld) {
             renderer.breakProgress = playing ? breakProgress : 0;
             mobs.buildMesh(renderer, world, player.x, player.z, settings.viewDist);
+            drops.buildMesh(renderer, world, player.x, player.z, settings.viewDist, time);
+            arrows.buildMesh(renderer, world, player.x, player.z, settings.viewDist);
+            particles.buildMesh(renderer, world, player);
             appendRemotePlayers();
             if (playing) {
                 // luz no lugar do jogador, para a mão escurecer à noite e em cavernas
@@ -1422,7 +2204,7 @@ public class BlockGame {
                 double light = Math.min(1.0, Math.max(sky, blk) * 0.92 + 0.08);
                 int[] n = new int[1];
                 renderer.handVerts = Hand.build(renderer.handVerts, n, info.persona, inv.empty(slot) ? 0 : inv.id[slot],
-                        player.walkDist, swing, light);
+                        player.walkDist, swing, light, bowCharge / BOW_FULL);
                 renderer.handVertCount = n[0];
             } else renderer.handVertCount = 0;
             renderer.render(player, playing ? sel : null, time, cw, ch, playing);
@@ -1434,7 +2216,16 @@ public class BlockGame {
             renderer.render(lobbyCam, null, lobbyTime, cw, ch, false);
         }
 
-        // 2) menus e HUD em Java2D, numa imagem transparente por cima
+        // 2) menus e HUD em Java2D, numa imagem transparente por cima.
+        // Jogando, o HUD muda pouco: é redesenhado 30 vezes por segundo e, nos outros quadros, só recomposto.
+        long uiNow = System.nanoTime();
+        boolean sameSize = uiImg != null && uiImg.getWidth() == cw && uiImg.getHeight() == ch;
+        if (playing && sameSize && remotes.isEmpty() && uiNow - lastUiDraw < 33_000_000L) {
+            renderer.drawUi(null, cw, ch);
+            swapBuffers();
+            return;
+        }
+        lastUiDraw = uiNow;
         if (uiImg == null || uiImg.getWidth() != cw || uiImg.getHeight() != ch) {
             uiImg = new BufferedImage(cw, ch, BufferedImage.TYPE_INT_ARGB_PRE); // mais rápido de compor
             uiPx = ((DataBufferInt) uiImg.getRaster().getDataBuffer()).getData();
@@ -1458,6 +2249,8 @@ public class BlockGame {
             case INVENTORY: drawHud(g, cw, ch, false); drawInventory(g, cw, ch); break;
             case DEAD: drawDead(g, cw, ch); break;
         }
+        String soundWarning = Sounds.takeWarning();
+        if (soundWarning != null) { toast = soundWarning; toastTimer = 8; }
         if (toast != null && toastTimer > 0) {
             g.setFont(Ui.BIG);
             int w = g.getFontMetrics().stringWidth(toast) + 40;
@@ -1468,7 +2261,7 @@ public class BlockGame {
         }
         g.dispose();
         renderer.drawUi(uiPx, cw, ch);
-        glfwSwapBuffers(window);
+        swapBuffers();
         if (state == State.LOADING) loadingFrames++;
     }
 
@@ -1507,7 +2300,7 @@ public class BlockGame {
         }
         if (slotNameTimer > 0 && !inv.empty(slot)) {
             int a = (int) (255 * Math.min(1, slotNameTimer));
-            Ui.centered(g, new Font(Font.SANS_SERIF, Font.BOLD, 15), Items.name(inv.id[slot]), cx, y0 - (creative ? 12 : 38),
+            Ui.centered(g, new Font(Font.SANS_SERIF, Font.BOLD, 15), Items.name(inv.id[slot]), cx, y0 - (creative ? 12 : 58),
                     new Color(255, 255, 255, a));
         }
 
@@ -1518,6 +2311,9 @@ public class BlockGame {
                 f = f >= 1 ? 1 : (f > 0 ? 0.5 : 0);
                 Ui.heart(g, x0 + i * 21, y0 - 26, 18, f);
             }
+            int armor = inv.armorPoints(); // barra de armadura: 10 ícones = 20 pontos
+            for (int i = 0; i < 10 && armor > 0; i++)
+                drawArmorIcon(g, x0 + i * 21, y0 - 47, armor >= i * 2 + 2 ? 1 : armor > i * 2 ? 0.5 : 0);
             for (int i = 0; i < 10; i++) {
                 double f = Math.max(0, Math.min(1, (player.food - i * 2) / 2));
                 drawFood(g, x0 + n * size - 22 - i * 21, y0 - 26, f >= 1 ? 1 : (f > 0 ? 0.5 : 0));
@@ -1556,7 +2352,10 @@ public class BlockGame {
                     "WASD mover   Espaço pular/nadar   Ctrl correr   Mouse olhar   E inventário e receitas",
                     creative ? "Esq. quebrar/bater   Dir. colocar/comer   Meio copiar bloco   1-9/roda escolher"
                              : "Segure esq. para quebrar (ferramentas aceleram)   Esq. bate em criaturas   Dir. colocar ou comer",
-                    "Dir. numa bancada/fornalha abre as receitas   " + (creative ? "F voar   " : "") + "T chat   Esc pausar   F1 esconder ajuda"
+                    "Dir. numa bancada/fornalha abre as receitas, num baú abre o baú   " + (creative ? "F voar   " : "") + "T chat   Esc pausar   F1 esconder ajuda",
+                    "Q joga o item fora (Ctrl+Q a pilha)   Dir. na cama dorme e marca o renascimento   Pederneira acende a dinamite",
+                    "Enxada na terra faz terra arada, onde se plantam sementes   Dir. com armadura na mão veste",
+                    "Arco: segure o botão esquerdo para puxar e solte para atirar (precisa de flechas)"
             };
             for (String l : lines) Ui.shadow(g, l, 10, ty += 18, Color.WHITE);
         }
@@ -1634,10 +2433,26 @@ public class BlockGame {
         g.fillOval(x + 15, y + 9, 4, 4);
     }
 
+    /** Ícone de armadura (peitoral) para a barra de defesa. */
+    private static void drawArmorIcon(Graphics2D g, int x, int y, double fill) {
+        g.setColor(new Color(0, 0, 0, 170));
+        g.fillRect(x, y, 17, 7);
+        g.fillRect(x + 3, y + 7, 11, 9);
+        Color on = new Color(214, 214, 222), off = new Color(70, 70, 78, 230);
+        g.setColor(fill > 0 ? on : off);
+        g.fillRect(x + 1, y + 1, 15, 5);
+        g.fillRect(x + 4, y + 6, 9, 9);
+        if (fill > 0 && fill < 1) {
+            g.setColor(off);
+            g.fillRect(x + 9, y + 1, 7, 5);
+            g.fillRect(x + 9, y + 6, 4, 9);
+        }
+    }
+
     private static void drawItem(Graphics2D g, int id, int count, int wear, int x, int y, int s, boolean showCount) {
         if (id == Block.AIR || count <= 0) return;
         g.drawImage(Items.icon(id), x, y, s, s, null);
-        if (Items.isTool(id) && wear > 0) { // barra de desgaste
+        if (Items.isDurable(id) && wear > 0) { // barra de desgaste
             double left = 1 - wear / (double) Items.durability(id);
             g.setColor(new Color(0, 0, 0, 200));
             g.fillRect(x + 3, y + s - 4, s - 6, 4);
@@ -1914,7 +2729,7 @@ public class BlockGame {
         ui.button(g, x, y, bw, bh, "Configurações", () -> { settingsReturn = State.PAUSED; state = State.SETTINGS; });
         y += bh + gap;
         if (toHost != null) {
-            ui.button(g, x, y, bw, bh, "Desconectar", () -> { closeNet("saiu"); world = null; player = null; info = null; mobs.clear(); enterLobby(); });
+            ui.button(g, x, y, bw, bh, "Desconectar", () -> { closeNet("saiu"); world = null; player = null; info = null; mobs.clear(); drops.clear(); enterLobby(); });
             Ui.centered(g, Ui.SMALL, "Você está no mundo de outro jogador (o progresso fica salvo com ele)", cw / 2, y + bh + 30, Ui.TEXT_DIM);
         } else {
             ui.button(g, x, y, bw, bh, "Salvar e voltar ao lobby", this::quitToLobby);
@@ -1974,7 +2789,7 @@ public class BlockGame {
         g.setColor(new Color(110, 0, 0, 150));
         g.fillRect(0, 0, cw, ch);
         Ui.centered(g, new Font(Font.SANS_SERIF, Font.BOLD, 52), "Você morreu!", cw / 2, ch / 2 - 70, Color.WHITE);
-        Ui.centered(g, Ui.LABEL, info.persona.name + " perdeu todos os itens do inventário.", cw / 2, ch / 2 - 30, new Color(255, 220, 220));
+        Ui.centered(g, Ui.LABEL, info.persona.name + " deixou cair tudo: seus itens ficaram onde você morreu (por 5 minutos).", cw / 2, ch / 2 - 30, new Color(255, 220, 220));
         ui.button(g, cw / 2 - 160, ch / 2, 320, 46, "Renascer", true, true, this::respawn);
         ui.button(g, cw / 2 - 160, ch / 2 + 60, 320, 46, "Voltar ao lobby", () -> {
             player.health = Player.MAX_HEALTH;
@@ -1991,8 +2806,7 @@ public class BlockGame {
     static {
         List<Integer> l = new ArrayList<>();
         for (int b = 1; b < Block.COUNT; b++) if (Block.isItemForm(b)) l.add(b); // só a forma de item (sem variantes)
-        for (int i = Items.FIRST_ITEM; i <= Items.COOKED_FISH; i++) l.add(i);
-        for (int i = Items.TOOL_BASE; i <= Items.LAST; i++) l.add(i);
+        for (int i = Items.FIRST_ITEM; i <= Items.LAST; i++) if (Items.exists(i)) l.add(i);
         ALL_ITEMS = new int[l.size()];
         for (int i = 0; i < l.size(); i++) ALL_ITEMS[i] = l.get(i);
     }
@@ -2009,13 +2823,33 @@ public class BlockGame {
         int ph = 64 + 3 * step + 16 + step + 40 + sectionH + 26;
         int px = (cw - pw) / 2, py = Math.max(4, (ch - ph) / 2);
         Ui.panel(g, px, py, pw, ph);
-        Ui.centered(g, Ui.BIG, "Inventário de " + info.persona.name, px + pw / 2, py + 36, Color.WHITE);
+        Ui.centered(g, Ui.BIG, chest != null ? "Baú" : "Inventário de " + info.persona.name, px + pw / 2, py + 36, Color.WHITE);
 
         // personagem e lixeira
         int lx = px + 28;
         g.setColor(new Color(255, 255, 255, 14));
         g.fillRoundRect(lx, py + 56, leftW, 3 * step + 16 + step, 12, 12);
-        info.persona.draw(g, lx + leftW / 2 - 32, py + 66, 4);
+        int pxo = lx + 66, pyo = py + 66;
+        info.persona.draw(g, pxo, pyo, 4);
+        // armadura: 4 espaços à esquerda do personagem; a peça vestida aparece pintada por cima dele
+        int[][] zone = { { 4, 0, 8, 3 }, { 0, 8, 16, 5 }, { 4, 20, 8, 7 }, { 4, 27, 8, 4 } }; // x, y, largura, altura em "pixels" do boneco
+        for (int k = 0; k < Inventory.ARMOR; k++) {
+            int a = Inventory.SIZE + k, ax = lx + 6, ay = py + 62 + k * 40;
+            slotBox(g, inv, a, ax, ay, 36);
+            if (inv.empty(a)) {
+                java.awt.Composite old = g.getComposite();
+                g.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 0.22f));
+                g.drawImage(Items.icon(Items.armor(k, 1)), ax + 5, ay + 5, 26, 26, null);
+                g.setComposite(old);
+                if (ui.hover(new Rectangle(ax, ay, 36, 36)) && cursorCount == 0) tooltip = "Espaço de armadura: " + ARMOR_SLOT[k];
+            } else {
+                Color c = new Color(Items.armorColor(inv.id[a]));
+                g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 220));
+                g.fillRect(pxo + zone[k][0] * 4, pyo + zone[k][1] * 4, zone[k][2] * 4, zone[k][3] * 4);
+                if (k == 1) g.fillRect(pxo + 16, pyo + 52, 32, 28); // o resto do tronco
+                if (k == 0) { g.fillRect(pxo + 16, pyo + 12, 4, 12); g.fillRect(pxo + 44, pyo + 12, 4, 12); } // laterais do capacete
+            }
+        }
         Rectangle trash = new Rectangle(lx + (leftW - sz) / 2, py + 56 + 3 * step + 16 + step - sz - 26, sz, sz);
         boolean th = ui.hover(trash);
         g.setColor(th ? new Color(160, 50, 50, 220) : new Color(90, 30, 30, 200));
@@ -2031,16 +2865,21 @@ public class BlockGame {
         int gx = lx + leftW + 24, gy = py + 56;
         for (int r = 0; r < 3; r++)
             for (int c = 0; c < cols; c++)
-                slotBox(g, Inventory.HOTBAR + r * cols + c, gx + c * step, gy + r * step, sz);
+                slotBox(g, inv, Inventory.HOTBAR + r * cols + c, gx + c * step, gy + r * step, sz);
         int hy = gy + 3 * step + 16;
-        for (int c = 0; c < cols; c++) slotBox(g, c, gx + c * step, hy, sz);
+        for (int c = 0; c < cols; c++) slotBox(g, inv, c, gx + c * step, hy, sz);
 
         // seção de baixo: paleta (criativo) ou receitas (sobrevivência), com rolagem pela roda do mouse
         int sy = hy + step + 14;
         g.setFont(Ui.BUTTON);
         int sx = px + 28, sw = pw - 56;
         Shape oldClip = g.getClip();
-        if (creative) {
+        if (chest != null) {
+            Ui.shadow(g, "Dentro do baú  —  clique pega e solta; Shift+clique manda direto para o outro lado", sx, sy + 16, Color.WHITE);
+            sy += 26;
+            int ox = sx + (sw - gridW) / 2;
+            for (int i = 0; i < Inventory.CHEST; i++) slotBox(g, chest, i, ox + (i % cols) * step, sy + (i / cols) * step, sz);
+        } else if (creative) {
             int rows = (ALL_ITEMS.length + cols - 1) / cols;
             paletteScroll = Math.max(0, Math.min(paletteScroll, rows - 4));
             Ui.shadow(g, "Todos os itens — esquerdo pega a pilha, direito pega 1  (role o mouse: "
@@ -2119,28 +2958,48 @@ public class BlockGame {
         return inv.canCraft(r) ? 2 : 1;
     }
 
-    private void slotBox(Graphics2D g, final int i, int x, int y, int sz) {
+    private static final String[] ARMOR_SLOT = { "capacete", "peitoral", "calças", "botas" };
+
+    /** Um espaço de inventário na tela; target é o inventário do jogador ou o baú aberto. */
+    private void slotBox(Graphics2D g, final Inventory target, final int i, int x, int y, int sz) {
         Rectangle r = new Rectangle(x, y, sz, sz);
         boolean hv = ui.hover(r);
         g.setColor(hv ? new Color(255, 255, 255, 60) : new Color(0, 0, 0, 120));
         g.fillRect(x, y, sz, sz);
-        if (i == slot) {
+        if (target == inv && i == slot) {
             g.setColor(new Color(255, 255, 255, 170));
             g.drawRect(x, y, sz - 1, sz - 1);
         }
-        drawItem(g, inv.id[i], inv.count[i], inv.wear[i], x + 5, y + 5, sz - 10, true);
-        if (hv && !inv.empty(i)) {
-            int id = inv.id[i];
+        drawItem(g, target.id[i], target.count[i], target.wear[i], x + 5, y + 5, sz - 10, true);
+        if (hv && !target.empty(i)) {
+            int id = target.id[i];
             tooltip = Items.name(id);
-            if (Items.isTool(id)) tooltip += "  (" + (Items.durability(id) - inv.wear[i]) + "/" + Items.durability(id) + ")";
+            if (Items.isDurable(id)) tooltip += "  (" + (Items.durability(id) - target.wear[i]) + "/" + Items.durability(id) + ")";
+            if (Items.isArmor(id)) tooltip += "  (defesa +" + Items.armorPoints(id) + ")";
             int food = Items.food(id);
             if (food > 0) tooltip += "  (comida +" + food + ")";
         }
-        ui.region(r, (b, shift) -> clickSlot(i, b, shift));
+        ui.region(r, (b, shift) -> clickSlot(target, i, b, shift));
     }
 
-    private void clickSlot(int i, int button, boolean shift) {
-        if (button == 1 && shift && cursorCount == 0) { inv.quickMove(i); return; }
+    /** Shift+clique: com o baú aberto, passa a pilha para o outro lado; sem baú, veste/tira armadura ou troca barra/mochila. */
+    private void quickMove(Inventory target, int i) {
+        if (target.empty(i)) return;
+        int item = target.id[i], n = target.count[i], w = target.wear[i], left;
+        if (chest != null) left = target == chest ? inv.addRange(item, n, w, 0, Inventory.SIZE) : chest.addRange(item, n, w, 0, Inventory.CHEST);
+        else if (i >= Inventory.SIZE) left = inv.addRange(item, n, w, 0, Inventory.SIZE);
+        else if (Items.isArmor(item) && inv.empty(Inventory.SIZE + Items.armorPiece(item))) {
+            inv.set(Inventory.SIZE + Items.armorPiece(item), item, 1, w);
+            left = 0;
+        } else { inv.quickMove(i); return; }
+        target.set(i, item, left, w);
+    }
+
+    private void clickSlot(final Inventory inv, int i, int button, boolean shift) {
+        if (button == 1 && shift && cursorCount == 0) { quickMove(inv, i); return; }
+        // espaços de armadura só aceitam a peça certa
+        if (inv == this.inv && i >= Inventory.SIZE && cursorCount > 0
+                && !(Items.isArmor(cursorId) && Items.armorPiece(cursorId) == i - Inventory.SIZE)) return;
         int id = inv.id[i], n = inv.count[i], w = inv.wear[i];
         boolean slotEmpty = inv.empty(i);
         int max = Items.maxStack(cursorCount > 0 ? cursorId : id);
@@ -2285,6 +3144,7 @@ public class BlockGame {
     // =====================================================================
     /** Esconde e prende o cursor; o GLFW passa a entregar o movimento "cru" do mouse. */
     private void capture() {
+        if (NO_INPUT) return;
         captured = true;
         firstMouse = true;
         mdx = mdy = 0;
@@ -2318,6 +3178,7 @@ public class BlockGame {
                 if (k == KeyEvent.VK_T || k == KeyEvent.VK_ENTER) openChat(k == KeyEvent.VK_T ? 't' : 0);
                 else if (k == KeyEvent.VK_ESCAPE) pause();
                 else if (k == KeyEvent.VK_E) openInventory();
+                else if (k == KeyEvent.VK_Q) dropHeld(keys[KeyEvent.VK_CONTROL]);
                 else if (k >= KeyEvent.VK_1 && k <= KeyEvent.VK_9) selectSlot(k - KeyEvent.VK_1);
                 else if (k == KeyEvent.VK_F && creative) { player.flying = !player.flying; player.vy = 0; }
                 else if (k == KeyEvent.VK_F1) help = !help;
@@ -2394,6 +3255,7 @@ public class BlockGame {
         if (state == State.PLAYING) selectSlot(Math.floorMod(slot + (rot > 0 ? 1 : -1), Inventory.HOTBAR));
         else if (state == State.LOBBY) listScroll += rot > 0 ? 1 : -1;
         else if (state == State.INVENTORY) {
+            if (chest != null) return;
             if (creative) paletteScroll += rot > 0 ? 1 : -1;
             else recipeScroll += rot > 0 ? 1 : -1;
         }

@@ -3,19 +3,22 @@ cd /d "%~dp0"
 setlocal
 set "JDKBIN="
 
-rem Usa o java que fica ao lado do javac (JDK 21), e nao o Java 8 antigo que aparece primeiro no PATH.
-for /f "delims=" %%I in ('where javac 2^>nul') do if not defined JDKBIN set "JDKBIN=%%~dpI"
+rem Procura um JDK em pastas conhecidas (evita o atalho "javapath" e o Java 8 antigo do PATH, que misturam DLLs).
+for /d %%D in ("%ProgramFiles%\Microsoft\jdk-*") do set "JDKBIN=%%D\bin\"
+if not defined JDKBIN for /d %%D in ("%LOCALAPPDATA%\Programs\jdk21\jdk-*") do set "JDKBIN=%%D\bin\"
+if not defined JDKBIN for /d %%D in ("%ProgramFiles%\Java\jdk-21*") do set "JDKBIN=%%D\bin\"
+if not defined JDKBIN for /d %%D in ("%ProgramFiles%\Java\jdk-17*") do set "JDKBIN=%%D\bin\"
+if not defined JDKBIN for /d %%D in ("%ProgramFiles%\Java\jdk-*") do set "JDKBIN=%%D\bin\"
 if not defined JDKBIN (
-  for /d %%D in ("%ProgramFiles%\Microsoft\jdk-*") do set "JDKBIN=%%D\bin\"
-)
-if not defined JDKBIN (
-  for /d %%D in ("%LOCALAPPDATA%\Programs\jdk21\jdk-*") do set "JDKBIN=%%D\bin\"
+  for /f "delims=" %%I in ('where javac 2^>nul') do if not defined JDKBIN set "JDKBIN=%%~dpI"
 )
 if not defined JDKBIN (
   echo Nao encontrei um JDK ^(javac^). Instale o JDK 21.
   pause
   exit /b 1
 )
+
+set "PATH=%JDKBIN%;%SystemRoot%\system32;%SystemRoot%"
 
 rem lib\ tem o LWJGL (OpenGL + GLFW), que liga o Java a placa de video.
 if not exist out mkdir out

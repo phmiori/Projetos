@@ -1,4 +1,4 @@
-# Gera dist\MundoDeBlocos.zip: o jogo pronto para enviar a um amigo, com o Java embutido.
+﻿# Gera dist\MundoDeBlocos.zip: o jogo pronto para enviar a um amigo, com o Java embutido.
 # Uso: clique com o botão direito > "Executar com o PowerShell", ou rode empacotar.bat.
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
@@ -6,7 +6,8 @@ Set-Location $PSScriptRoot
 # acha um JDK (precisa do javac, jar e jlink)
 $jdk = $null
 foreach ($c in @((Get-ChildItem "$env:ProgramFiles\Microsoft\jdk-*" -Directory -ErrorAction SilentlyContinue),
-                 (Get-ChildItem "$env:LOCALAPPDATA\Programs\jdk21\jdk-*" -Directory -ErrorAction SilentlyContinue))) {
+                 (Get-ChildItem "$env:LOCALAPPDATA\Programs\jdk21\jdk-*" -Directory -ErrorAction SilentlyContinue),
+                 (Get-ChildItem "$env:ProgramFiles\Java\jdk-*" -Directory -ErrorAction SilentlyContinue))) {
     foreach ($d in $c) { if (Test-Path "$($d.FullName)\bin\jlink.exe") { $jdk = "$($d.FullName)\bin"; break } }
     if ($jdk) { break }
 }
@@ -14,7 +15,11 @@ if (-not $jdk) { throw "Não encontrei um JDK com jlink. Instale o JDK 21." }
 Write-Host "JDK: $jdk"
 
 $dist = "dist\MundoDeBlocos"
-Remove-Item "dist" -Recurse -Force -ErrorAction SilentlyContinue
+# Apaga só o que este script gera. Sons, texturas, mundos e configurações que você tiver
+# colocado em dist\MundoDeBlocos continuam lá.
+foreach ($old in @("$dist\jogo.jar", "$dist\lib", "$dist\runtime", "dist\MundoDeBlocos.zip")) {
+    Remove-Item $old -Recurse -Force -ErrorAction SilentlyContinue
+}
 New-Item -ItemType Directory "$dist\lib" -Force | Out-Null
 
 Write-Host "Compilando..."
@@ -25,10 +30,13 @@ if ($LASTEXITCODE -ne 0) { throw "Falha ao compilar" }
 & "$jdk\jar.exe" --create --file "$dist\jogo.jar" -C out .
 Copy-Item "lib\*.jar" "$dist\lib\"
 
-Write-Host "Criando o Java embutido (só os módulos que o jogo usa)..."
-& "$jdk\jlink.exe" --add-modules java.base,java.desktop,jdk.unsupported --strip-debug --no-man-pages `
-    --no-header-files --compress zip-6 --output "$dist\runtime"
-if ($LASTEXITCODE -ne 0) { throw "Falha no jlink" }
+Write-Host "Copiando o Java embutido (JDK completo, sem jmods)..."
+$jdkRoot = Split-Path $jdk -Parent
+New-Item -ItemType Directory "$dist\runtime" -Force | Out-Null
+foreach ($item in @("bin","lib","conf","legal","release")) {
+    if (Test-Path "$jdkRoot\$item") { Copy-Item "$jdkRoot\$item" "$dist\runtime\$item" -Recurse -Force }
+}
+if (-not (Test-Path "$dist\runtime\bin\javaw.exe")) { throw "Falha ao copiar o Java" }
 
 @'
 @echo off
@@ -79,6 +87,16 @@ explicando como trocar pelos seus.
 '@ | Set-Content "$dist\LEIA-ME.txt" -Encoding UTF8
 
 Write-Host "Compactando..."
-Compress-Archive -Path $dist -DestinationPath "dist\MundoDeBlocos.zip" -Force
+# O zip leva sons e texturas personalizados, mas não os seus mundos nem as suas configurações.
+Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+$root = (Resolve-Path "dist").Path
+$zip = [System.IO.Compression.ZipFile]::Open((Join-Path $root "MundoDeBlocos.zip"), 'Create')
+try {
+    foreach ($f in Get-ChildItem $dist -Recurse -File) {
+        $rel = $f.FullName.Substring($root.Length + 1)
+        if ($rel -like "MundoDeBlocos\worlds\*" -or $rel -eq "MundoDeBlocos\settings.properties") { continue }
+        [void][System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile($zip, $f.FullName, $rel.Replace('\', '/'), 'Optimal')
+    }
+} finally { $zip.Dispose() }
 $size = [math]::Round((Get-Item "dist\MundoDeBlocos.zip").Length / 1MB, 1)
 Write-Host "Pronto: dist\MundoDeBlocos.zip ($size MB)"

@@ -12,11 +12,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 final class Net {
     static final int PORT = 25600;
-    static final int VERSION = 2;
+    static final int VERSION = 5;
 
     // tipos de pacote
     static final byte HELLO = 1, WELCOME = 2, JOIN = 3, LEAVE = 4, STATE = 5, BLOCK = 6, TIME = 7,
-            MOBS = 8, HIT_MOB = 9, DAMAGE = 10, GIVE = 11, SAVE_STATE = 12, BYE = 13, CHAT = 14, CLOSED = 99;
+            MOBS = 8, HIT_MOB = 9, DAMAGE = 10, GIVE = 11, SAVE_STATE = 12, BYE = 13, CHAT = 14, EXPLODE = 15,
+            CHEST_OPEN = 16, CHEST_DATA = 17, CHEST_SET = 18, DROP = 19,
+            SHOOT = 20, ARROW = 21, ARROW_STUCK = 22, ARROW_GONE = 23, CLOSED = 99;
 
     /** Pacote recebido. */
     static final class Packet {

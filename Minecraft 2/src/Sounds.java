@@ -34,6 +34,8 @@ final class Sounds {
             { "quebrar_planta", "quebrar folhas, grama alta, flores, cacto, lã" },
             { "quebrar_vidro", "quebrar vidro e gelo" },
             { "colocar", "colocar um bloco" },
+            { "drop", "quebrar um bloco e soltar o item no chão" },
+            { "coletar", "pegar um item do chão" },
             { "passo_grama", "andar sobre grama e terra" },
             { "passo_areia", "andar sobre areia, cascalho e neve" },
             { "passo_pedra", "andar sobre pedra" },
@@ -46,7 +48,16 @@ final class Sounds {
             { "galinha", "galinha" },
             { "morto_vivo", "morto-vivo" },
             { "aranha", "aranha" },
+            { "vaca", "vaca" },
+            { "pavio", "creeper prestes a explodir e dinamite acesa" },
+            { "explosao", "explosão" },
             { "criatura_dano", "acertar uma criatura" },
+            { "esqueleto", "esqueleto" },
+            { "arco_tensao", "puxar a corda do arco" },
+            { "arco_disparo", "soltar a flecha" },
+            { "flecha_madeira", "flecha prendendo em madeira, terra ou planta" },
+            { "flecha_pedra", "flecha batendo em pedra, vidro ou metal" },
+            { "flecha_criatura", "flecha acertando uma criatura ou jogador" },
             { "clique", "clicar num botão do menu" },
     };
 
@@ -86,6 +97,31 @@ final class Sounds {
     static void setVolume(double v) { master = Math.max(0, Math.min(1, v)); }
 
     static String status() { return status; }
+
+    /** Aviso pendente sobre arquivos de som que não deu para ler (lido uma vez só, para mostrar na tela). */
+    private static volatile String warning;
+
+    static String takeWarning() {
+        String w = warning;
+        warning = null;
+        return w;
+    }
+
+    /** Tenta adivinhar o formato real de um arquivo que não é WAV, pelos primeiros bytes. */
+    private static String realFormat(File f) {
+        byte[] h = new byte[12];
+        try (java.io.FileInputStream in = new java.io.FileInputStream(f)) {
+            if (in.read(h) < 12) return null;
+        } catch (IOException e) {
+            return null;
+        }
+        String s = new String(h, java.nio.charset.StandardCharsets.ISO_8859_1);
+        if (s.startsWith("ID3") || ((h[0] & 0xFF) == 0xFF && (h[1] & 0xE0) == 0xE0)) return "MP3";
+        if (s.substring(4, 8).equals("ftyp")) return "M4A/MP4";
+        if (s.startsWith("OggS")) return "OGG";
+        if (s.startsWith("fLaC")) return "FLAC";
+        return null;
+    }
 
     /** Relê os WAVs da pasta (depois de trocar algum). */
     static void reload() {
@@ -172,6 +208,7 @@ final class Sounds {
 
     private static void load() throws Exception {
         Map<String, float[]> loaded = new HashMap<>();
+        StringBuilder bad = new StringBuilder();
         for (String[] s : LIST) {
             File f = new File(DIR, s[0] + ".wav");
             try {
@@ -179,8 +216,11 @@ final class Sounds {
             } catch (Exception e) {
                 System.out.println("Som inválido " + f + ": " + e.getMessage() + " (usando o padrão)");
                 loaded.put(s[0], synth(s[0]));
+                String real = realFormat(f);
+                bad.append(bad.length() > 0 ? ", " : "").append(f.getName()).append(real != null ? " (é " + real + ")" : "");
             }
         }
+        if (bad.length() > 0) warning = "Som não lido, usando o padrão: " + bad + ". Precisa ser WAV de verdade.";
         synchronized (SAMPLES) {
             SAMPLES.clear();
             SAMPLES.putAll(loaded);
@@ -271,6 +311,8 @@ final class Sounds {
             case "quebrar_vidro": return mix(noise(r, 0.08, 0.9, 40, 0.5), mix(tone(0.5, 2300, 2280, 9, 0.25, 0),
                     mix(tone(0.45, 3150, 3120, 11, 0.2, 0), tone(0.4, 4400, 4380, 13, 0.15, 0))));
             case "colocar": return mix(noise(r, 0.1, 0.18, 40, 0.6), tone(0.1, 110, 80, 40, 0.4, 0));
+            case "coletar": return mix(tone(0.07, 700, 1050, 35, 0.4, 0), tone(0.1, 1050, 1400, 30, 0.3, 0));
+            case "drop": return mix(tone(0.09, 520, 760, 30, 0.45, 0), noise(r, 0.05, 0.4, 60, 0.25));
             case "passo_grama": return noise(r, 0.09, 0.15, 45, 0.35);
             case "passo_areia": return noise(r, 0.12, 0.3, 32, 0.3);
             case "passo_pedra": return noise(r, 0.07, 0.55, 60, 0.35);
@@ -282,9 +324,18 @@ final class Sounds {
             case "ovelha": return lowpass(vibrato(0.65, 320, 7, 0.05, 0.5, 1), 0.35);
             case "galinha": return mix(chirp(0.0), mix(chirp(0.11), chirp(0.25)));
             case "morto_vivo": return lowpass(mix(vibrato(1.3, 82, 3, 0.04, 0.35, 1), vibrato(1.3, 86, 2.5, 0.05, 0.3, 1)), 0.12);
+            case "vaca": return lowpass(vibrato(0.9, 150, 4, 0.06, 0.55, 1), 0.2);
+            case "pavio": return tremolo(noise(r, 1.2, 0.95, 1.2, 0.3), 30);
+            case "explosao": return mix(lowpass(noise(r, 1.4, 0.2, 3.5, 1.0), 0.12), tone(0.6, 70, 30, 5, 0.7, 0));
             case "aranha": return tremolo(noise(r, 0.55, 0.92, 4, 0.35), 18);
             case "criatura_dano": return mix(noise(r, 0.12, 0.3, 30, 0.6), tone(0.12, 160, 90, 25, 0.5, 0));
             case "clique": return tone(0.035, 1500, 1500, 80, 0.3, 0);
+            case "esqueleto": return mix(clicks(r, 0.5, 9, 0.5), tremolo(noise(r, 0.5, 0.6, 5, 0.2), 26));
+            case "arco_tensao": return tremolo(mix(tone(0.5, 150, 290, 2.5, 0.28, 1), noise(r, 0.5, 0.35, 3, 0.12)), 38);
+            case "arco_disparo": return mix(tone(0.2, 430, 170, 16, 0.5, 0), noise(r, 0.09, 0.75, 42, 0.3));
+            case "flecha_madeira": return mix(noise(r, 0.1, 0.25, 40, 0.5), tone(0.14, 230, 150, 26, 0.5, 0));
+            case "flecha_pedra": return mix(noise(r, 0.07, 0.7, 55, 0.5), clicks(r, 0.08, 3, 0.45));
+            case "flecha_criatura": return mix(noise(r, 0.1, 0.2, 34, 0.6), tone(0.1, 130, 80, 30, 0.45, 0));
             default: return new float[RATE / 10];
         }
     }

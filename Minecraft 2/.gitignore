@@ -1,0 +1,2 @@
+# O jogo empacotado (com o Java embutido) é grande demais para o GitHub: gere com empacotar.bat
+dist/

@@ -369,6 +369,7 @@ final class GLRenderer {
     void setWorld(World w) {
         if (w == world) return;
         world = w;
+        shadowDirty = true;
         generation++;
         for (int i = 0; i < NCHUNKS; i++) {
             deleteChunk(i);
@@ -453,6 +454,7 @@ final class GLRenderer {
     }
 
     private void upload(Mesher.Mesh m) {
+        shadowDirty = true;
         int i = m.chunk;
         haveVersion[i] = m.version;
         int[] vao = { opaqueVao[i], waterVao[i] }, vbo = { opaqueVbo[i], waterVbo[i] };
@@ -653,7 +655,7 @@ final class GLRenderer {
                 entityCap = Math.max(floats, entityCap * 2);
                 glBufferData(GL_ARRAY_BUFFER, (long) entityCap * 4, GL_DYNAMIC_DRAW);
             }
-            glBufferSubData(GL_ARRAY_BUFFER, 0, java.util.Arrays.copyOf(entityVerts, floats));
+            glBufferSubData(GL_ARRAY_BUFFER, 0, scratch(entityVerts, floats));
             glDisable(GL_CULL_FACE);
             glDrawArrays(GL_TRIANGLES, 0, entityVertCount);
             glEnable(GL_CULL_FACE);
@@ -701,7 +703,7 @@ final class GLRenderer {
                 handCap = Math.max(floats, handCap * 2);
                 glBufferData(GL_ARRAY_BUFFER, (long) handCap * 4, GL_DYNAMIC_DRAW);
             }
-            glBufferSubData(GL_ARRAY_BUFFER, 0, java.util.Arrays.copyOf(handVerts, floats));
+            glBufferSubData(GL_ARRAY_BUFFER, 0, scratch(handVerts, floats));
             glDrawArrays(GL_TRIANGLES, 0, handVertCount);
             glEnable(GL_CULL_FACE);
         }
@@ -719,6 +721,19 @@ final class GLRenderer {
     }
 
     private int lastW = 1, lastH = 1;
+
+    private java.nio.FloatBuffer scratchBuf;
+
+    /** Os primeiros n floats de data num buffer reaproveitado (sem criar um vetor novo a cada quadro). */
+    private java.nio.FloatBuffer scratch(float[] data, int n) {
+        if (scratchBuf == null || scratchBuf.capacity() < n) {
+            if (scratchBuf != null) MemoryUtil.memFree(scratchBuf);
+            scratchBuf = MemoryUtil.memAllocFloat(Math.max(n, 16384) * 2);
+        }
+        scratchBuf.clear();
+        scratchBuf.put(data, 0, n).flip();
+        return scratchBuf;
+    }
 
     /** Ponto do mundo -> pixel na tela (do último quadro desenhado), ou null se estiver atrás da câmera. */
     float[] project(double x, double y, double z) {
@@ -744,19 +759,36 @@ final class GLRenderer {
     }
 
     /** Desenha a profundidade vista do sol, numa região em volta da câmera. */
+    // cache do mapa de sombras: ele só é redesenhado quando o sol andou um pouco, a câmera saiu da
+    // região coberta ou algum pedaço do mundo mudou (antes era redesenhado inteiro a cada quadro)
+    private static final boolean NO_SHADOW_CACHE = System.getProperty("bench.nocache") != null; // só para comparar
+    private boolean shadowDirty = true, shadowValid;
+    private float shLightX, shLightY, shLightZ, shCx, shCy, shCz, shR;
+
     private void shadowPass() {
         float R = Math.max(48, Math.min(112, viewDist));
+        // enquanto o sol quase não andou, continua usando a direção do último desenho
+        boolean force = shadowDirty || !shadowValid || R != shR || NO_SHADOW_CACHE
+                || lightX * shLightX + lightY * shLightY + lightZ * shLightZ < 0.999997f;
+        float lx = force ? lightX : shLightX, ly = force ? lightY : shLightY, lz = force ? lightZ : shLightZ;
         // direção da luz e base ortogonal
-        float fx = -lightX, fy = -lightY, fz = -lightZ;
+        float fx = -lx, fy = -ly, fz = -lz;
         float rx = -fz, rz = fx; // frente x (0,1,0)
         float rl = (float) Math.sqrt(rx * rx + rz * rz);
         rx /= rl; rz /= rl;
         float ux = -rz * fy, uy = rz * fx - rx * fz, uz = rx * fy; // direita x frente
         // centro "grudado" na grade de texels para a sombra não tremer ao andar
+        // (a grade é de ~4 blocos, múltipla do texel: andando, o mapa é refeito só de vez em quando)
         float texel = 2 * R / SHADOW_SIZE;
+        float step = texel * Math.max(1, Math.round(4 / texel));
         float cr = camX * rx + camZ * rz, cu = camX * ux + camY * uy + camZ * uz;
-        float sr = (float) Math.floor(cr / texel) * texel - cr, su = (float) Math.floor(cu / texel) * texel - cu;
+        float sr = (float) Math.floor(cr / step) * step - cr, su = (float) Math.floor(cu / step) * step - cu;
         float cx = camX + sr * rx + su * ux, cyy = camY + su * uy, cz = camZ + sr * rz + su * uz;
+        if (!force && Math.abs(cx - shCx) + Math.abs(cyy - shCy) + Math.abs(cz - shCz) < 0.01f) return; // o mapa atual ainda serve
+        shadowDirty = false;
+        shadowValid = true;
+        shLightX = lx; shLightY = ly; shLightZ = lz;
+        shCx = cx; shCy = cyy; shCz = cz; shR = R;
         float dist = 160;
         float ex = cx - fx * dist, ey = cyy - fy * dist, ez = cz - fz * dist;
         float[] view = Mat.view(ex, ey, ez, rx, 0, rz, ux, uy, uz, fx, fy, fz);
@@ -894,6 +926,7 @@ final class GLRenderer {
      */
     void drawUi(int[] argb, int w, int h) {
         glBindTexture(GL_TEXTURE_2D, uiTex);
+        if (argb == null) { composeUi(w, h); return; } // nada mudou: reaproveita a imagem anterior
         boolean full = false;
         if (w != uiW || h != uiH) {
             uiW = w;
@@ -931,7 +964,10 @@ final class GLRenderer {
         glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
         glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
         glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
+        composeUi(w, h);
+    }
 
+    private void composeUi(int w, int h) {
         glViewport(0, 0, w, h);
         glDisable(GL_DEPTH_TEST);
         glEnable(GL_BLEND);

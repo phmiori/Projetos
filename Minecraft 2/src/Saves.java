@@ -33,6 +33,8 @@ final class Saves {
         int inventoryFormat = 2; // 1 = itens com ids antigos (64..95)
         /** Progresso dos amigos que jogaram neste mundo pela LAN: nome -> estado (Remote.stateString). */
         java.util.Map<String, String> lanPlayers = new java.util.HashMap<>();
+        /** O que há em cada baú: "x,y,z" -> conteúdo (Inventory.serialize). */
+        java.util.Map<String, String> chests = new java.util.HashMap<>();
 
         File dir() { return new File(DIR, id); }
     }
@@ -83,6 +85,7 @@ final class Saves {
         i.inventoryFormat = Integer.parseInt(p.getProperty("inventarioFormato", "1"));
         for (String k : p.stringPropertyNames())
             if (k.startsWith("lan.")) i.lanPlayers.put(k.substring(4), p.getProperty(k));
+            else if (k.startsWith("bau.")) i.chests.put(k.substring(4), p.getProperty(k));
         return i;
     }
 
@@ -125,6 +128,7 @@ final class Saves {
         p.setProperty("inventario", i.inventory);
         p.setProperty("inventarioFormato", "2");
         for (java.util.Map.Entry<String, String> e : i.lanPlayers.entrySet()) p.setProperty("lan." + e.getKey(), e.getValue());
+        for (java.util.Map.Entry<String, String> e : i.chests.entrySet()) p.setProperty("bau." + e.getKey(), e.getValue());
         p.setProperty("hora", String.valueOf(i.time));
         p.setProperty("dia", String.valueOf(i.day));
         File tmp = new File(d, "meta.properties.tmp");

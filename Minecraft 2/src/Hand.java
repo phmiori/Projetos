@@ -11,13 +11,32 @@ final class Hand {
     /** Modelos dos itens, no espaço do próprio item (centrado na origem, tamanho 1): x,y,z,r,g,b. */
     private static final Map<Integer, float[]> MODELS = new HashMap<>();
 
+    private static final Map<Integer, float[]> DROP_MODELS = new HashMap<>();
+
     static synchronized void reload() {
         MODELS.clear();
+        DROP_MODELS.clear();
+    }
+
+    /**
+     * Modelo leve para os itens soltos no chão: nos blocos, 4x4 quadradinhos por face em vez de 16x16
+     * (16 vezes menos triângulos; numa miniatura girando não se nota). Os outros itens usam o modelo normal.
+     */
+    static synchronized float[] dropModel(int item) {
+        if (!isCubeItem(item)) return model(item);
+        float[] m = DROP_MODELS.get(item);
+        if (m == null) {
+            m = cubeModel(item, 4);
+            DROP_MODELS.put(item, m);
+        }
+        return m;
     }
 
     /** Escreve os triângulos (x,y,z,r,g,b) do braço e do item em out. Retorna quantos floats escreveu. */
-    static float[] build(float[] out, int[] count, Persona persona, int item, double walkDist, double swing, double light) {
-        int need = 2 * 36 * 6 + (item > 0 ? model(item).length : 0);
+    static float[] build(float[] out, int[] count, Persona persona, int item, double walkDist, double swing, double light, double charge) {
+        // arco: a figura muda conforme a corda é puxada (charge 0..1; 0 = solto)
+        float[] m = item <= 0 ? null : item == Items.BOW ? bowModel(charge <= 0 ? 0 : 1 + Math.min(2, (int) (charge * 3))) : model(item);
+        int need = 2 * 36 * 6 + (m != null ? m.length : 0);
         if (out.length < need) out = new float[need + 1024];
         int o = 0;
 
@@ -36,7 +55,15 @@ final class Hand {
 
         if (item > 0) {
             double[] t;
-            if (Items.isBlock(item) && Block.shape(item) != Block.CROSS) {
+            if (item == Items.BOW) {
+                // arco: em pé na frente da mão; ao puxar, vem para o meio da tela e treme quando está no máximo
+                double c = Math.max(0, Math.min(1, charge));
+                double shake = c >= 1 ? Math.sin(System.nanoTime() / 2.5e7) * 0.004 : 0;
+                t = Tf.mul(arm, Tf.translate(-0.06 - c * 0.17 + shake, 0.26 + c * 0.03, -0.66 + c * 0.07));
+                t = Tf.mul(t, Tf.rotY(0.35 - c * 0.3));
+                t = Tf.mul(t, Tf.rotX(-0.15));
+                t = Tf.mul(t, Tf.scale(0.62));
+            } else if (Items.isBlock(item) && Block.shape(item) != Block.CROSS) {
                 t = Tf.mul(arm, Tf.translate(-0.02, 0.18, -0.64));
                 t = Tf.mul(t, Tf.rotY(0.75));
                 t = Tf.mul(t, Tf.scale(0.27));
@@ -58,7 +85,6 @@ final class Hand {
             }
             // tocha e lava brilham sozinhas
             double itemLight = Items.isBlock(item) && Block.light(item) > 0 ? 1.0 : light;
-            float[] m = model(item);
             for (int i = 0; i < m.length; i += 6) {
                 double x = m[i], y = m[i + 1], z = m[i + 2];
                 out[o++] = (float) (t[0] * x + t[1] * y + t[2] * z + t[3]);
@@ -80,6 +106,16 @@ final class Hand {
         return model(item);
     }
 
+    /** Arco na fase de puxada dada (0 a 3), guardado junto dos outros modelos com chave negativa. */
+    private static synchronized float[] bowModel(int stage) {
+        float[] m = MODELS.get(-1 - stage);
+        if (m == null) {
+            m = flatModel(Items.bowPixels(stage));
+            MODELS.put(-1 - stage, m);
+        }
+        return m;
+    }
+
     /** O item é um bloco desenhado como cubo (e não uma figura plana)? */
     static boolean isCubeItem(int item) {
         return Items.isBlock(item) && Block.shape(item) != Block.CROSS && !Block.isDoor(item);
@@ -89,7 +125,7 @@ final class Hand {
         float[] m = MODELS.get(item);
         if (m == null) {
             if (Items.isBlock(item) && Block.isDoor(item)) m = flatModel(doorPixels());
-            else m = Items.isBlock(item) && Block.shape(item) != Block.CROSS ? cubeModel(item) : flatModel(Items.pixels16(item));
+            else m = Items.isBlock(item) && Block.shape(item) != Block.CROSS ? cubeModel(item, 16) : flatModel(Items.pixels16(item));
             MODELS.put(item, m);
         }
         return m;
@@ -105,11 +141,12 @@ final class Hand {
      * O bloco com as texturas de verdade, um quadradinho colorido por pixel. Para escadas e lajes,
      * cada caixa do formato recebe só a parte da textura que lhe cabe (como no mundo).
      */
-    private static float[] cubeModel(int b) {
+    private static float[] cubeModel(int b, int res) {
+        final int cell = 16 / res; // pixels da textura por quadradinho
         int[][] tex = Textures.get(16);
         float[][] boxes = Block.boxes(b);
         if (boxes == null) boxes = new float[][] { { 0, 0, 0, 1, 1, 1 } };
-        float[] buf = new float[boxes.length * 6 * 256 * 36];
+        float[] buf = new float[boxes.length * 6 * res * res * 36];
         int o = 0;
         for (float[] box : boxes)
             for (int f = 0; f < 6; f++) {
@@ -121,13 +158,21 @@ final class Hand {
                 double va0 = 0.5 + (box[ua] - 0.5) * up[ua], vb0 = 0.5 + (box[ua + 3] - 0.5) * up[ua];
                 double uMin = Math.min(ua0, ub0), uMax = Math.max(ua0, ub0), vMin = Math.min(va0, vb0), vMax = Math.max(va0, vb0);
                 double plane = n[na] > 0 ? box[na + 3] : box[na];
-                for (int ty = 0; ty < 16; ty++)
-                    for (int tx = 0; tx < 16; tx++) {
-                        double u0 = tx / 16.0, u1 = (tx + 1) / 16.0, v0 = 1 - (ty + 1) / 16.0, v1 = 1 - ty / 16.0;
+                for (int ty = 0; ty < res; ty++)
+                    for (int tx = 0; tx < res; tx++) {
+                        double u0 = tx / (double) res, u1 = (tx + 1) / (double) res, v0 = 1 - (ty + 1) / (double) res, v1 = 1 - ty / (double) res;
                         double uc = (u0 + u1) / 2, vc = (v0 + v1) / 2;
                         if (uc < uMin || uc > uMax || vc < vMin || vc > vMax) continue;
-                        int c = t[ty * 16 + tx];
-                        if ((c >>> 24) < 128) continue;
+                        // cor média dos pixels opacos deste quadradinho
+                        int n2 = 0, cr = 0, cg = 0, cb = 0;
+                        for (int py = 0; py < cell; py++)
+                            for (int px = 0; px < cell; px++) {
+                                int p = t[(ty * cell + py) * 16 + tx * cell + px];
+                                if ((p >>> 24) < 128) continue;
+                                n2++; cr += (p >> 16) & 255; cg += (p >> 8) & 255; cb += p & 255;
+                            }
+                        if (n2 * 2 < cell * cell) continue;
+                        int c = 0xFF000000 | (cr / n2) << 16 | (cg / n2) << 8 | (cb / n2);
                         double[][] q = { point(na, plane, ra, r, u0, ua, up, v0), point(na, plane, ra, r, u1, ua, up, v0),
                                 point(na, plane, ra, r, u1, ua, up, v1), point(na, plane, ra, r, u0, ua, up, v1) };
                         o = quad(buf, o, q, c, FACE_SHADE[f]);

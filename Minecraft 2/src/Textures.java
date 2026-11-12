@@ -38,6 +38,13 @@ final class Textures {
                 "cacto", "grama_alta", "flor_amarela", "flor_vermelha", "gelo", "lava",
                 "la", "tijolos_pedra", "bloco_ferro", "bloco_ouro", "rocha_mae" };
         System.arraycopy(base, 0, FILE, 0, base.length);
+        FILE[Block.TNT] = "dinamite";
+        FILE[Block.BED] = "cama";
+        FILE[Block.SAPLING] = "muda";
+        FILE[Block.BIRCH_SAPLING] = "muda_betula";
+        FILE[Block.CHEST] = "bau";
+        FILE[Block.FARMLAND] = "terra_arada";
+        for (int s = 0; s < 3; s++) FILE[Block.WHEAT + s] = "trigo_" + (s + 1);
         FILE[Block.DOOR_TEX_LOWER] = "porta_baixo";
         FILE[Block.DOOR_TEX_UPPER] = "porta_cima";
         for (int l = 0; l < 7; l++) FILE[Block.WATER_FLOW + l] = "agua"; // água corrente usa a mesma textura
@@ -557,7 +564,64 @@ final class Textures {
         int[] bedrock = make(S, (gx, gy, x, y) ->
                 mul(rgb(70, 70, 72), 0.6 + 0.5 * World.noise(gx * 0.5, gy * 0.5, 63) + 0.25 * rnd(x, y, S, 64)));
 
+        // dinamite: faixas vermelhas com a cinta branca no meio; em cima, o pavio
+        int[] tntSide = make(S, (gx, gy, x, y) -> {
+            double f = 0.9 + 0.16 * rnd(x, y, S, 101);
+            if (gy >= 5.5 && gy < 10.5) {
+                boolean letter = gy >= 6.5 && gy < 9.5 && (((int) gx) % 5 == 1 || (((int) gx) % 5 == 2 && (int) gy == 7));
+                return letter ? rgb(40, 40, 40) : mul(rgb(232, 228, 216), f);
+            }
+            if (((int) gx) % 4 == 3) f *= 0.72;
+            return mul(rgb(200, 44, 36), f);
+        });
+        int[] tntTop = make(S, (gx, gy, x, y) -> {
+            double f = 0.9 + 0.16 * rnd(x, y, S, 102);
+            double dx = gx - 8, dy = gy - 8;
+            if (dx * dx + dy * dy < 2.6) return rgb(60, 60, 60);
+            if (((int) gx) % 4 == 3 || ((int) gy) % 4 == 3) f *= 0.75;
+            return mul(rgb(200, 44, 36), f);
+        });
+        // cama: colchão vermelho com travesseiro branco em cima; lados com a madeira embaixo
+        int[] bedTop = make(S, (gx, gy, x, y) -> {
+            double f = 0.9 + 0.14 * rnd(x, y, S, 103);
+            if (gy < 5) return mul(rgb(238, 238, 232), gx < 1 || gx > 15 || gy < 1 ? f * 0.85 : f);
+            return mul(rgb(176, 40, 44), gx < 1 || gx > 15 || gy > 15 ? f * 0.8 : f);
+        });
+        int[] bedSide = make(S, (gx, gy, x, y) -> {
+            double f = 0.9 + 0.14 * rnd(x, y, S, 104);
+            if (gy < 7) return mul(rgb(176, 40, 44), f); // (a cama tem 9/16 de altura: esta parte não aparece)
+            if (gy < 12) return mul(rgb(176, 40, 44), f);
+            return mul(rgb(150, 110, 62), ((int) gx) % 8 == 0 ? f * 0.75 : f);
+        });
+        int[] sapling = sapling(S, rgb(62, 132, 44), rgb(102, 81, 51));
+        int[] birchSapling = sapling(S, rgb(110, 170, 70), rgb(214, 210, 196));
+
+        // baú: caixa de madeira com moldura escura, a linha da tampa e o fecho de metal
+        int[] chestSide = make(S, (gx, gy, x, y) -> {
+            double f = 0.9 + 0.16 * rnd(x, y, S, 110);
+            if (gx < 1 || gx >= 15 || gy < 1 || gy >= 15) return mul(rgb(72, 48, 22), f);
+            if (gx >= 7 && gx < 9 && gy >= 4 && gy < 8) return mul(rgb(206, 206, 212), gy >= 7 ? f * 0.7 : f);
+            if (gy >= 5 && gy < 6) return mul(rgb(60, 40, 18), f);
+            return mul(rgb(162, 114, 50), ((int) gy) % 4 == 0 ? f * 0.86 : f);
+        });
+        int[] chestTop = make(S, (gx, gy, x, y) -> {
+            double f = 0.9 + 0.16 * rnd(x, y, S, 111);
+            if (gx < 1 || gx >= 15 || gy < 1 || gy >= 15) return mul(rgb(72, 48, 22), f);
+            return mul(rgb(170, 122, 56), ((int) gy) % 4 == 0 ? f * 0.86 : f);
+        });
+        // terra arada: sulcos escuros em cima; dos lados é terra comum
+        int[] farmTop = make(S, (gx, gy, x, y) ->
+                mul(rgb(98, 64, 40), (((int) gx) % 4 < 2 ? 0.78 : 1.06) * (0.86 + 0.28 * rnd(x, y, S, 112))));
+        int[][] wheat = { wheat(S, 0), wheat(S, 1), wheat(S, 2) };
+
         int[][] t = new int[Block.COUNT * 3][];
+        set(t, Block.CHEST, chestSide, chestTop, chestTop);
+        set(t, Block.FARMLAND, dirt, farmTop, dirt);
+        for (int s = 0; s < 3; s++) set(t, Block.WHEAT + s, wheat[s], wheat[s], wheat[s]);
+        set(t, Block.TNT, tntSide, tntTop, tntTop);
+        set(t, Block.BED, bedSide, bedTop, planks);
+        set(t, Block.SAPLING, sapling, sapling, sapling);
+        set(t, Block.BIRCH_SAPLING, birchSapling, birchSapling, birchSapling);
         set(t, Block.COAL_ORE, coalOre, coalOre, coalOre);
         set(t, Block.IRON_ORE, ironOre, ironOre, ironOre);
         set(t, Block.GOLD_ORE, goldOre, goldOre, goldOre);
@@ -639,6 +703,35 @@ final class Textures {
                 }
             }
             return stone[y * S + x];
+        });
+    }
+
+    /** Muda: um caule fino com um tufo de folhas. */
+    private static int[] sapling(int S, int leaf, int trunk) {
+        return make(S, (gx, gy, x, y) -> {
+            if (gx >= 7.4 && gx < 8.6 && gy >= 8) return mul(trunk, 0.9 + 0.2 * rnd(x, y, S, 105));
+            double dx = gx - 8, dy = gy - 6;
+            double d = dx * dx / 16 + dy * dy / 12;
+            if (d < 1 && World.hash(x * 16 / S, y * 16 / S, 106) > 0.22) return mul(leaf, 0.8 + 0.4 * rnd(x, y, S, 107));
+            if (gy >= 10 && gy < 12 && Math.abs(dx) > 1 && Math.abs(dx) < 3.4) return mul(leaf, 0.95);
+            return 0;
+        });
+    }
+
+    /** Trigo: hastes que crescem a cada fase; na última ficam douradas, com as espigas em cima. */
+    private static int[] wheat(int S, final int stage) {
+        final int h = stage == 0 ? 5 : stage == 1 ? 9 : 13;
+        final int stalk = stage == 2 ? rgb(204, 172, 62) : rgb(74, 150, 48), ear = rgb(230, 196, 74);
+        return make(S, (gx, gy, x, y) -> {
+            int col = (int) gx, row = (int) gy;
+            int sc = col - col % 3 + 1; // coluna da haste deste trio
+            int top = 16 - (h - (int) (World.hash(sc, stage, 120) * 3));
+            if (row < top) return 0;
+            double f = 0.86 + 0.28 * rnd(x, y, S, 121);
+            if (col == sc) return mul(stage == 2 && row < top + 4 ? ear : stalk, f);
+            if (stage == 2 && row < top + 4 && (row - top) % 2 == 1) return mul(ear, f * 0.9);   // grãos
+            if (stage == 1 && row == top + 3 && col == sc - 1) return mul(stalk, f * 0.9);       // folhinha
+            return 0;
         });
     }
 

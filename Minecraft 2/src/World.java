@@ -88,6 +88,10 @@ final class World {
             for (int dz = lz <= 1 ? -1 : 0; dz <= (lz >= 14 ? 1 : 0); dz++)
                 markDirty(cx + dx, cz + dz);
 
+        // areia e cascalho: este bloco e o de cima podem cair
+        if (Block.falls(b)) fallQueue.add(idx(x, y, z));
+        if (y + 1 < SY && Block.falls(blocks[idx(x, y + 1, z)] & 0xFF)) fallQueue.add(idx(x, y + 1, z));
+
         // plantas e tochas sem apoio caem junto
         if (y + 1 < SY && !Block.solid(b)) {
             int above = blocks[idx(x, y + 1, z)] & 0xFF;
@@ -104,6 +108,162 @@ final class World {
             scheduleFluid(x, y, z);
             for (int d = 0; d < 6; d++) scheduleFluid(x + DX[d], y + DY[d], z + DZ[d]);
         }
+    }
+
+    // =====================================================================
+    // areia e cascalho que caem, crescimento e explosões
+    // =====================================================================
+    private final java.util.LinkedHashSet<Integer> fallQueue = new java.util.LinkedHashSet<>();
+    private double fallTimer, growTimer;
+
+    /** O que aconteceu sozinho no mundo e o jogo precisa saber: {tipo, x, y, z, bloco}. */
+    static final int EV_LEAF_DECAY = 0;
+    final java.util.ArrayList<int[]> events = new java.util.ArrayList<>();
+
+    /** Faz os blocos soltos descerem uma célula por vez (parece que escorrem para baixo). */
+    void tickFalling(double dt) {
+        fallTimer += dt;
+        if (fallTimer < 0.09 || fallQueue.isEmpty()) return;
+        fallTimer = 0;
+        int n = Math.min(fallQueue.size(), 2000);
+        int[] batch = new int[n];
+        java.util.Iterator<Integer> it = fallQueue.iterator();
+        for (int i = 0; i < n; i++) { batch[i] = it.next(); it.remove(); }
+        for (int i : batch) {
+            int x = i >> 15, y = i & 63, z = (i >> 6) & 511;
+            int b = blocks[i] & 0xFF;
+            if (!Block.falls(b) || y == 0) continue;
+            int below = blocks[idx(x, y - 1, z)] & 0xFF;
+            if (below != Block.AIR && Block.shape(below) != Block.LIQUID && Block.shape(below) != Block.CROSS) continue;
+            set(x, y, z, Block.AIR);
+            set(x, y - 1, z, b); // entra de novo na fila e continua caindo
+        }
+    }
+
+    /**
+     * Vida do mundo perto de um jogador: folhas sem tronco somem, mudas viram árvores, a grama se
+     * espalha pela terra e morre debaixo de blocos. Sorteia blocos ao acaso, como no Minecraft.
+     */
+    /** Dá para ver de um ponto ao outro sem um bloco sólido no caminho? (plantas, tochas e líquidos não tapam) */
+    boolean lineOfSight(double x0, double y0, double z0, double x1, double y1, double z1) {
+        double dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
+        int steps = (int) Math.ceil(Math.sqrt(dx * dx + dy * dy + dz * dz) / 0.25);
+        for (int i = 1; i < steps; i++) {
+            double t = i / (double) steps;
+            if (Block.solid(get((int) Math.floor(x0 + dx * t), (int) Math.floor(y0 + dy * t), (int) Math.floor(z0 + dz * t)))) return false;
+        }
+        return true;
+    }
+
+    /** Há água a até 4 blocos (no mesmo nível ou um acima)? */
+    private boolean waterNear(int x, int y, int z) {
+        for (int dy = 0; dy <= 1; dy++)
+            for (int dx = -4; dx <= 4; dx++)
+                for (int dz = -4; dz <= 4; dz++)
+                    if (Block.isWater(get(x + dx, y + dy, z + dz))) return true;
+        return false;
+    }
+
+    void tickGrowth(double dt, double px, double pz, Random r) {
+        growTimer += dt;
+        if (growTimer < 0.05) return;
+        int n = (int) Math.min(2000, growTimer * 8000);
+        growTimer = 0;
+        int cx = (int) px, cz = (int) pz;
+        for (int k = 0; k < n; k++) {
+            int x = cx - 48 + r.nextInt(96), z = cz - 48 + r.nextInt(96), y = r.nextInt(SY);
+            if (x < 0 || z < 0 || x >= SX || z >= SZ) continue;
+            int b = blocks[idx(x, y, z)] & 0xFF;
+            if (b == Block.AIR || b == Block.STONE) continue;
+            if (Block.isLeaves(b)) {
+                if (!logNear(x, y, z)) {
+                    set(x, y, z, Block.AIR);
+                    events.add(new int[] { EV_LEAF_DECAY, x, y, z, b });
+                }
+            } else if (Block.isSapling(b)) {
+                if (r.nextInt(3) == 0 && Math.max(skyLight(x, y, z), blockLightAt(x, y, z)) >= 9) growTree(x, y, z, r, b == Block.BIRCH_SAPLING);
+            } else if (Block.isWheat(b)) {
+                // trigo cresce com luz; perto da água, duas vezes mais rápido
+                if (b < Block.WHEAT + 2 && Math.max(skyLight(x, y, z), blockLightAt(x, y, z)) >= 9
+                        && r.nextInt(waterNear(x, y - 1, z) ? 2 : 4) == 0) set(x, y, z, b + 1);
+            } else if (b == Block.FARMLAND) {
+                // terra arada volta a ser terra se for coberta, ou se ficar vazia e seca por muito tempo
+                int above = y + 1 < SY ? blocks[idx(x, y + 1, z)] & 0xFF : Block.AIR;
+                if (Block.solid(above) || (!Block.isWheat(above) && r.nextInt(8) == 0 && !waterNear(x, y, z))) set(x, y, z, Block.DIRT);
+            } else if (b == Block.DIRT) {
+                if (y + 1 < SY && !coversGrass(blocks[idx(x, y + 1, z)] & 0xFF) && skyLight(x, y + 1, z) >= 9 && grassNear(x, y, z))
+                    set(x, y, z, Block.GRASS);
+            } else if (b == Block.GRASS) {
+                if (y + 1 < SY && coversGrass(blocks[idx(x, y + 1, z)] & 0xFF)) set(x, y, z, Block.DIRT);
+            }
+        }
+    }
+
+    private static boolean coversGrass(int above) {
+        return Block.opaqueCube(above) || Block.shape(above) == Block.LIQUID;
+    }
+
+    private boolean grassNear(int x, int y, int z) {
+        for (int dx = -1; dx <= 1; dx++)
+            for (int dz = -1; dz <= 1; dz++)
+                for (int dy = -1; dy <= 1; dy++)
+                    if (get(x + dx, y + dy, z + dz) == Block.GRASS) return true;
+        return false;
+    }
+
+    private boolean logNear(int x, int y, int z) {
+        for (int dx = -4; dx <= 4; dx++)
+            for (int dz = -4; dz <= 4; dz++)
+                for (int dy = -4; dy <= 4; dy++)
+                    if (Block.isLog(get(x + dx, y + dy, z + dz))) return true;
+        return false;
+    }
+
+    /** A muda vira uma árvore, se houver espaço para o tronco. */
+    private void growTree(int x, int y, int z, Random r, boolean birch) {
+        int log = birch ? Block.BIRCH_LOG : Block.LOG, leaf = birch ? Block.BIRCH_LEAVES : Block.LEAVES;
+        int h = (birch ? 5 : 4) + r.nextInt(3);
+        if (y + h + 2 >= SY) return;
+        for (int i = 1; i <= h; i++) {
+            int b = get(x, y + i, z);
+            if (b != Block.AIR && !Block.isLeaves(b)) return;
+        }
+        int top = y + h;
+        for (int dy = -2; dy <= 1; dy++) {
+            int rad = dy < 0 ? 2 : 1;
+            for (int dx = -rad; dx <= rad; dx++)
+                for (int dz = -rad; dz <= rad; dz++) {
+                    boolean corner = Math.abs(dx) == rad && Math.abs(dz) == rad;
+                    if (corner && (dy == 1 || r.nextInt(2) == 0)) continue;
+                    if (get(x + dx, top + dy, z + dz) == Block.AIR) set(x + dx, top + dy, z + dz, leaf);
+                }
+        }
+        for (int i = 0; i < h; i++) set(x, y + i, z, log);
+    }
+
+    /**
+     * Explosão: destrói os blocos numa esfera (os mais duros resistem mais; rocha-mãe e líquidos ficam).
+     * Retorna o que foi destruído: {x, y, z, bloco}.
+     */
+    java.util.List<int[]> explode(double cx, double cy, double cz, double power, Random r) {
+        java.util.List<int[]> out = new java.util.ArrayList<>();
+        int rad = (int) Math.ceil(power);
+        int bx = (int) Math.floor(cx), by = (int) Math.floor(cy), bz = (int) Math.floor(cz);
+        for (int dx = -rad; dx <= rad; dx++)
+            for (int dy = -rad; dy <= rad; dy++)
+                for (int dz = -rad; dz <= rad; dz++) {
+                    int x = bx + dx, y = by + dy, z = bz + dz;
+                    if (!inBounds(x, y, z)) continue;
+                    int b = blocks[idx(x, y, z)] & 0xFF;
+                    if (b == Block.AIR || Block.shape(b) == Block.LIQUID) continue;
+                    double hard = Block.hardness(b);
+                    if (hard < 0) continue;
+                    double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    if (dist + hard * 0.3 + r.nextDouble() * 0.9 > power) continue;
+                    out.add(new int[] { x, y, z, b });
+                }
+        for (int[] d : out) set(d[0], d[1], d[2], Block.AIR);
+        return out;
     }
 
     // =====================================================================
