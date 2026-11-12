@@ -425,16 +425,50 @@ final class Mob extends Entity {
         z.add(b(0.06, 1.6, 0.247, 0.03, 0.025, 0.01, teeth));
         MODELS[ZOMBIE] = z.toArray(new Box[0]);
         int sp = 0x2E2626, spH = 0x3C3030;
+        int spL = 0x4A3C3C, spH2 = 0x453636, spLeg = 0x241C1C, spRed = 0xB02020, spFang = 0xE0D4B8;
         java.util.List<Box> spider = new java.util.ArrayList<>();
-        spider.add(b(0, 0.48, -0.3, 0.8, 0.52, 0.85, sp));
-        spider.add(b(0, 0.46, 0.32, 0.54, 0.44, 0.44, spH));
-        spider.add(eye(-0.13, 0.54, 0.545, 0.09, 0xFF2020));
-        spider.add(eye(0.13, 0.54, 0.545, 0.09, 0xFF2020));
-        spider.add(eye(-0.06, 0.6, 0.545, 0.06, 0xFF2020));
-        spider.add(eye(0.06, 0.6, 0.545, 0.06, 0xFF2020));
+        // abdômen: placa superior, ampulheta vermelha, faixas, barriga e fiandeira
+        spider.add(b(0, 0.5, -0.45, 0.64, 0.55, 0.76, sp));
+        spider.add(b(0, 0.79, -0.48, 0.5, 0.04, 0.6, spH));
+        spider.add(b(0, 0.815, -0.3, 0.16, 0.01, 0.1, spRed));
+        spider.add(b(0, 0.815, -0.4, 0.06, 0.01, 0.1, spRed));
+        spider.add(b(0, 0.815, -0.5, 0.16, 0.01, 0.1, spRed));
+        for (double fz : new double[] { -0.3, -0.5, -0.7 }) spider.add(b(0, 0.46, fz, 0.66, 0.06, 0.08, spH));
+        spider.add(b(0, 0.24, -0.45, 0.5, 0.04, 0.66, 0x1C1616));
+        spider.add(b(0, 0.38, -0.88, 0.2, 0.16, 0.1, 0x1E1818));
+        spider.add(b(-0.05, 0.36, -0.94, 0.05, 0.07, 0.06, spH));
+        spider.add(b(0.05, 0.36, -0.94, 0.05, 0.07, 0.06, spH));
+        // cefalotórax e cabeça
+        spider.add(b(0, 0.45, 0.05, 0.52, 0.4, 0.5, spH));
+        spider.add(b(0, 0.67, 0.05, 0.4, 0.04, 0.4, spL));
+        spider.add(b(0, 0.46, 0.42, 0.42, 0.34, 0.26, spH2));
+        spider.add(b(0, 0.64, 0.42, 0.3, 0.03, 0.2, spL));
+        // oito olhos: dois grandes, dois médios, quatro pequenos
+        spider.add(eye(-0.13, 0.52, 0.555, 0.1, 0xFF2020));
+        spider.add(eye(0.13, 0.52, 0.555, 0.1, 0xFF2020));
+        spider.add(eye(-0.05, 0.57, 0.555, 0.06, 0xFF2020));
+        spider.add(eye(0.05, 0.57, 0.555, 0.06, 0xFF2020));
+        spider.add(eye(-0.17, 0.59, 0.555, 0.05, 0xFF5030));
+        spider.add(eye(0.17, 0.59, 0.555, 0.05, 0xFF5030));
+        spider.add(eye(-0.07, 0.46, 0.555, 0.04, 0xFF5030));
+        spider.add(eye(0.07, 0.46, 0.555, 0.04, 0xFF5030));
+        // quelíceras com presas e pedipalpos
+        for (int side = -1; side <= 1; side += 2) {
+            spider.add(b(side * 0.08, 0.33, 0.575, 0.08, 0.14, 0.07, 0x5A4030));
+            spider.add(b(side * 0.08, 0.22, 0.58, 0.035, 0.1, 0.035, spFang));
+            spider.add(b(side * 0.22, 0.38, 0.5, 0.07, 0.08, 0.24, spH));
+            spider.add(b(side * 0.22, 0.38, 0.64, 0.09, 0.09, 0.06, spH2));
+        }
+        // oito pernas articuladas: segmento alto para fora, joelho e canela descendo até o pé
         for (int side = -1; side <= 1; side += 2)
-            for (int i = 0; i < 4; i++)
-                spider.add(leg(side * 0.62, 0.36, 0.3 - i * 0.22, 0.85, 0.08, 0.08, 0x241C1C, (i % 2) + 1));
+            for (int i = 0; i < 4; i++) {
+                double lz = 0.32 - i * 0.18;
+                int ph = (i % 2) + 1;
+                spider.add(leg(side * 0.42, 0.6, lz, 0.32, 0.08, 0.08, spLeg, ph));
+                spider.add(leg(side * 0.62, 0.6, lz, 0.1, 0.1, 0.1, spH, ph));
+                spider.add(leg(side * 0.62, 0.34, lz, 0.08, 0.56, 0.08, spLeg, ph));
+                spider.add(leg(side * 0.66, 0.04, lz, 0.12, 0.06, 0.1, 0x161111, ph));
+            }
         MODELS[SPIDER] = spider.toArray(new Box[0]);
         int scale = 0xE48A3A, belly = 0xF2D2A0, fin = 0xC0602A;
         MODELS[FISH] = new Box[] {
