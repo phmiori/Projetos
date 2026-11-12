@@ -1,0 +1,31 @@
+﻿MUNDO DE BLOCOS
+===============
+
+Para jogar: descompacte esta pasta e dÃª dois cliques em "Jogar.bat".
+NÃ£o precisa instalar nada (o Java jÃ¡ vem dentro, na pasta runtime).
+Precisa de Windows 64 bits e placa de vÃ­deo com OpenGL 3.3 (quase todas de 2012 para cÃ¡).
+
+JOGAR JUNTO PELO RADMIN VPN
+---------------------------
+1. Os dois instalam o Radmin VPN e entram na mesma rede (um cria, o outro entra com nome e senha).
+
+2. Quem vai hospedar (o anfitriÃ£o):
+   - abre o prÃ³prio mundo, aperta Esc e clica em "Abrir para LAN (multijogador)";
+   - o menu mostra o IP para passar ao amigo: use o que comeÃ§a com 26. (Ã© o do Radmin);
+   - se o Windows perguntar sobre o firewall, marque REDES PRIVADAS E PÃšBLICAS e clique em Permitir
+     (a rede do Radmin costuma ser tratada como pÃºblica).
+
+3. Quem vai entrar (o amigo):
+   - no lobby, clica em "Jogar em LAN";
+   - digita o IP do anfitriÃ£o (26.x.x.x), escolhe nome e personagem e clica em "Entrar".
+
+- O mundo fica salvo no computador do anfitriÃ£o, inclusive o inventÃ¡rio e a posiÃ§Ã£o do amigo.
+- O anfitriÃ£o precisa estar com o mundo aberto para o amigo entrar.
+- Os dois precisam estar com a MESMA versÃ£o do jogo.
+- Porta usada: 25600 (TCP). Se nÃ£o conectar: confira o IP, se os dois estÃ£o na rede do Radmin,
+  e se o firewall do anfitriÃ£o permitiu o Java.
+
+TEXTURAS E SONS
+---------------
+Depois da primeira execuÃ§Ã£o aparecem as pastas "textures" e "sounds" com um LEIA-ME em cada uma
+explicando como trocar pelos seus.

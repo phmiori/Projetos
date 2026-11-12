@@ -1,0 +1,27 @@
+Texturas do Mundo de Blocos
+===========================
+
+Cada bloco é UM arquivo PNG com as 6 faces, num cubo aberto de 4 x 3 células:
+
+              +--------+
+              |  topo  |
+     +--------+--------+--------+--------+
+     |esquerda| frente |direita |  trás  |
+     +--------+--------+--------+--------+
+              |  base  |
+              +--------+
+
+Com células de 16x16 a imagem tem 64x48; com 32x32, 128x96; com 64x64, 256x192.
+As 4 células dos cantos não são usadas (podem ficar transparentes).
+Veja _modelo_faces.png: é um guia com o nome de cada face.
+Uma imagem quadrada também funciona: a mesma textura vai para as 6 faces.
+
+Arquivos: grama, terra, pedra, pedregulho, areia, tronco, folhas, tabuas, tijolos, neve, agua, minerio_carvao, minerio_ferro, minerio_ouro, minerio_cristal, cascalho, arenito, vidro, tocha, bancada, fornalha, tronco_betula, folhas_betula, cacto, grama_alta, flor_amarela, flor_vermelha, gelo, lava, la, tijolos_pedra, bloco_ferro, bloco_ouro, rocha_mae, porta_baixo, porta_cima
+Escadas e lajes usam a textura do material (tabuas, pedregulho, tijolos_pedra, tijolos, arenito).
+A porta tem duas: porta_baixo e porta_cima (a janela é transparente).
+
+Em folhas, vidro, plantas e tocha, pixels transparentes viram buracos
+(plantas e tocha usam a célula da frente).
+Depois de editar, use Configurações > Recarregar texturas (não precisa fechar o jogo).
+Apague um arquivo para ele voltar ao padrão; apague a pasta para voltar tudo.
+Texturas no formato antigo (uma face por arquivo) ficam guardadas em antigo\.
