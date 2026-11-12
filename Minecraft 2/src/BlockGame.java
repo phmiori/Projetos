@@ -92,8 +92,19 @@ public class BlockGame {
     // chat: T ou Enter abre, Enter envia, Esc fecha
     private static final class ChatLine {
         final String text; final Color color; final long time = System.currentTimeMillis();
-        ChatLine(String text, Color color) { this.text = text; this.color = color; }
+        final BufferedImage img; // foto enviada no chat (ou null)
+        ChatLine(String text, Color color, BufferedImage img) { this.text = text; this.color = color; this.img = img; }
     }
+    /** Escolher/preparar fotos do disco demora um pouco: roda numa thread à parte e o resultado volta pela fila de eventos. */
+    private final ExecutorService photoPool = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "fotos");
+        t.setDaemon(true);
+        return t;
+    });
+    private volatile boolean pickingFile; // a janela de escolher arquivo está aberta (o jogo não pausa ao perder o foco)
+    private long lastPhotoSent;
+    private int lastMods; // teclas Ctrl/Shift/Alt do último evento de tecla
+    private long lastSpaceTap; // para voar: dois toques no espaço
     private final java.util.ArrayList<ChatLine> chatLines = new java.util.ArrayList<>();
     private final StringBuilder chatInput = new StringBuilder();
     private boolean chatOpen;
@@ -217,6 +228,7 @@ public class BlockGame {
         glfwSetKeyCallback(window, (w, key, scancode, action, mods) -> {
             if (NO_INPUT) return;
             int k = vk(key);
+            lastMods = mods;
             if (action == GLFW_PRESS) {
                 if (k >= 0 && state == State.PLAYING && !chatOpen) keys[k] = true;
                 if (k >= 0) onKey(k);
@@ -253,7 +265,14 @@ public class BlockGame {
         glfwSetScrollCallback(window, (w, dx, dy) -> { if (dy != 0) onWheel(dy > 0 ? -1 : 1); });
         glfwSetWindowFocusCallback(window, (w, f) -> {
             focused = f;
-            if (!f && state == State.PLAYING && !BENCH) pause();
+            if (!f && state == State.PLAYING && !BENCH && !pickingFile) pause();
+        });
+        // arrastar uma foto do Windows para a janela do jogo manda a foto no chat
+        glfwSetDropCallback(window, (w, count, names) -> {
+            if (NO_INPUT) return;
+            java.util.List<String> paths = new ArrayList<>();
+            for (int i = 0; i < count; i++) paths.add(org.lwjgl.glfw.GLFWDropCallback.getName(names, i));
+            if (!paths.isEmpty()) sendPhoto(new java.io.File(paths.get(0)));
         });
         glfwSetFramebufferSizeCallback(window, (w, width, height) -> { fbW = width; fbH = height; });
         glfwSetWindowSizeCallback(window, (w, width, height) -> { winW = width; winH = height; });
@@ -743,16 +762,6 @@ public class BlockGame {
         Sounds.playAt("colocar", x + 0.5, y + 0.5, z + 0.5, player, 0.8);
         if (!creative) inv.set(slot, item, inv.count[slot] - 1);
         swing = 0.3;
-    }
-
-    /** Tecla R: gira o bloco mirado um quarto de volta (a frente passa para a direção seguinte). */
-    private void rotateAimed() {
-        if (sel == null) return;
-        int b = world.get(sel[0], sel[1], sel[2]);
-        if (!Block.rotatable(b)) { toast("Esse bloco não gira"); return; }
-        world.setRot(sel[0], sel[1], sel[2], b, world.rotation(sel[0], sel[1], sel[2]) + 1);
-        Sounds.playAt("colocar", sel[0] + 0.5, sel[1] + 0.5, sel[2] + 0.5, player, 0.5);
-        swing = 0.2;
     }
 
     /** Abre/fecha as duas metades da porta. */
@@ -1358,9 +1367,97 @@ public class BlockGame {
     }
 
     private void addChat(String text, Color color) {
-        chatLines.add(new ChatLine(text, color));
+        addChatLine(text, color, null);
+    }
+
+    private void addChatLine(String text, Color color, BufferedImage img) {
+        chatLines.add(new ChatLine(text, color, img));
         while (chatLines.size() > 50) chatLines.remove(0);
         Sounds.play("clique", 0.4);
+    }
+
+    private static final Color CHAT_GRAY = new Color(190, 190, 190), CHAT_RED = new Color(255, 150, 150);
+
+    /** Ctrl+O no chat: abre a janela do Windows para escolher uma foto (o jogo continua rodando por trás). */
+    private void pickPhoto() {
+        if (pickingFile) return;
+        if (!System.getProperty("os.name", "").toLowerCase().contains("win")) {
+            addChat("(escolher arquivo só funciona no Windows: arraste a foto para a janela do jogo)", CHAT_GRAY);
+            return;
+        }
+        pickingFile = true;
+        photoPool.submit(() -> {
+            String path = "";
+            try {
+                String script = "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; "
+                        + "Add-Type -AssemblyName System.Windows.Forms; "
+                        + "$o = New-Object System.Windows.Forms.Form; $o.TopMost = $true; "
+                        + "$f = New-Object System.Windows.Forms.OpenFileDialog; "
+                        + "$f.Title = 'Escolha uma foto para o chat'; "
+                        + "$f.Filter = 'Imagens|*.png;*.jpg;*.jpeg;*.gif;*.bmp|Todos os arquivos|*.*'; "
+                        + "if ($f.ShowDialog($o) -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($f.FileName) }";
+                Process pr = new ProcessBuilder("powershell", "-NoProfile", "-STA", "-NonInteractive", "-Command", script).start();
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                byte[] buf = new byte[1024];
+                int n;
+                try (java.io.InputStream in = pr.getInputStream()) {
+                    while ((n = in.read(buf)) > 0) bos.write(buf, 0, n);
+                }
+                pr.waitFor();
+                path = new String(bos.toByteArray(), "UTF-8").replace("﻿", "").trim();
+            } catch (Exception e) {
+                final String msg = String.valueOf(e.getMessage());
+                events.add(() -> addChat("Não consegui abrir a janela de escolher arquivo: " + msg, CHAT_RED));
+            }
+            final String chosen = path;
+            events.add(() -> {
+                pickingFile = false;
+                if (!chosen.isEmpty()) sendPhoto(new java.io.File(chosen));
+            });
+        });
+    }
+
+    /** Prepara a foto (reduz e comprime) em segundo plano e, pronta, mostra no chat e manda para os amigos. */
+    private void sendPhoto(java.io.File f) {
+        if (world == null) return;
+        long now = System.currentTimeMillis();
+        if (now - lastPhotoSent < 1500) { addChat("(espere um instante antes de mandar outra foto)", CHAT_GRAY); return; }
+        lastPhotoSent = now;
+        addChat("Preparando a foto " + f.getName() + "...", CHAT_GRAY);
+        photoPool.submit(() -> {
+            try {
+                byte[] jpg = ChatImage.prepare(f);
+                BufferedImage img = ChatImage.decode(jpg); // a mesma imagem que os amigos vão ver
+                events.add(() -> postPhoto(jpg, img));
+            } catch (java.io.IOException | RuntimeException e) {
+                final String msg = String.valueOf(e.getMessage());
+                events.add(() -> addChat("Não consegui mandar a foto: " + msg, CHAT_RED));
+            }
+        });
+    }
+
+    private void postPhoto(byte[] jpg, BufferedImage img) {
+        String me = info != null && info.persona != null ? info.persona.name : "Eu";
+        addChatLine("<" + me + "> enviou uma foto:", new Color(255, 255, 160), img);
+        if (server != null) server.broadcast(new Net.Out(Net.CHAT_IMAGE).s(me).raw(jpg), null);
+        else if (toHost != null) toHost.send(new Net.Out(Net.CHAT_IMAGE).s(me).raw(jpg));
+        else addChat("(você está sozinho: abra o mundo para LAN no menu de pausa para os amigos verem)", CHAT_GRAY);
+    }
+
+    /** Foto que chegou pela rede: confere o tamanho, abre e mostra no chat. Retorna os bytes se for válida (para repassar). */
+    private byte[] receivePhoto(java.io.DataInputStream d, String from) throws java.io.IOException {
+        int n = d.readInt();
+        if (n <= 0 || n > ChatImage.MAX_BYTES) return null;
+        byte[] data = new byte[n];
+        d.readFully(data);
+        try {
+            BufferedImage img = ChatImage.decode(data);
+            addChatLine("<" + from + "> enviou uma foto:", Color.WHITE, img);
+            return data;
+        } catch (java.io.IOException | RuntimeException e) {
+            System.out.println("Foto recebida ilegível: " + e.getMessage());
+            return null;
+        }
     }
 
     private void pause() {
@@ -1781,6 +1878,13 @@ public class BlockGame {
                 server.broadcast(new Net.Out(Net.CHAT).s(r.name).s(text), p.from);
                 break;
             }
+            case Net.CHAT_IMAGE: { // foto de um amigo: aparece aqui e vai para os outros
+                if (r == null) return;
+                d.readUTF();
+                byte[] photo = receivePhoto(d, r.name);
+                if (photo != null) server.broadcast(new Net.Out(Net.CHAT_IMAGE).s(r.name).raw(photo), p.from);
+                break;
+            }
             case Net.BYE:
             case Net.CLOSED:
                 if (r != null && remotes.remove(r.id) != null) {
@@ -1967,6 +2071,11 @@ public class BlockGame {
                 addChat("<" + from + "> " + text, Color.WHITE);
                 break;
             }
+            case Net.CHAT_IMAGE: {
+                String from = d.readUTF();
+                receivePhoto(d, from);
+                break;
+            }
             case Net.BYE:
                 netError = d.readUTF();
                 disconnectToLobby();
@@ -2087,7 +2196,7 @@ public class BlockGame {
     /**
      * Teste automático de direção dos blocos e de itens no chão (-Dbench.drops, com -Dbench.survival e -Dbench.shot).
      * O anfitrião monta um palco, coloca blocos virados para lados diferentes (como se o jogador os colocasse),
-     * gira um com a tecla R, salva, solta um item e abre para a LAN. O amigo (-Dbench.join) confere as direções que
+     * salva, solta um item e abre para a LAN. O amigo (-Dbench.join) confere as direções que
      * recebeu, vê e pega o item do anfitrião, solta outro item e o anfitrião o pega.
      */
     private void benchDrops(double dt) {
@@ -2115,9 +2224,6 @@ public class BlockGame {
             sel = new int[] { x, 60, z + 2, x, 61, z + 2, 1000 };
             placeBlock(Block.FURNACE, 0, 0, 1);
             say2("fornalha colocada olhando para +Z: direcao " + world.rotation(x, 61, z + 2) + " (esperado 2: a frente aponta para o jogador)");
-            sel = new int[] { x, 61, z + 2, x, 61, z + 3, 1000 };
-            rotateAimed();
-            say2("depois de apertar R: " + world.rotation(x, 61, z + 2) + " (esperado 3)");
             benchPut(x + 0.5, 61.01, z + 0.5, Math.PI / 2);
             inv.set(0, Block.CHEST, 4);
             sel = new int[] { x + 2, 60, z + 2, x + 2, 61, z + 2, 1000 };
@@ -2139,7 +2245,7 @@ public class BlockGame {
             saveSync();
             World w2 = new World(info.seed, Saves.chunkStore(info)); // lê de volta do disco
             w2.ensureAround(x, z, 1);
-            say2("salvo e relido do arquivo: fornalha = " + w2.rotation(x, 61, z + 2) + " (esperado 3)");
+            say2("salvo e relido do arquivo: fornalha = " + w2.rotation(x, 61, z + 2) + " (esperado 2)");
             say2("mundo recarregado: fornalha " + w2.rotation(x, 61, z + 2) + ", bau " + w2.rotation(x + 2, 61, z + 2) + ", cama " + w2.rotation(x - 2, 61, z + 2));
             // quebrar um bloco limpa a direção
             world.set(x + 4, 61, z + 2, Block.AIR);
@@ -2180,7 +2286,7 @@ public class BlockGame {
             int x = dX, z = dZ;
             benchPut(x + 3.5, 61.01, z + 0.5, 0);
             inv.clear();
-            say2("AMIGO recebeu as direcoes: fornalha " + world.rotation(x, 61, z + 2) + " (esperado 3), bau " + world.rotation(x + 2, 61, z + 2)
+            say2("AMIGO recebeu as direcoes: fornalha " + world.rotation(x, 61, z + 2) + " (esperado 2), bau " + world.rotation(x + 2, 61, z + 2)
                     + " (esperado 1), cama " + world.rotation(x - 2, 61, z + 2) + " (esperado 3)");
         } else if (dPhase == 1 && dT > 3) {
             int x = dX, z = dZ;
@@ -2655,10 +2761,10 @@ public class BlockGame {
                     "WASD mover   Espaço pular/nadar   Ctrl correr   Mouse olhar   E inventário e receitas",
                     creative ? "Esq. quebrar/bater   Dir. colocar/comer   Meio copiar bloco   1-9/roda escolher"
                              : "Segure esq. para quebrar (ferramentas aceleram)   Esq. bate em criaturas   Dir. colocar ou comer",
-                    "Dir. numa bancada/fornalha abre as receitas, num baú abre o baú   " + (creative ? "F voar   " : "") + "T chat   Esc pausar   F1 esconder ajuda",
+                    "Dir. numa bancada/fornalha abre as receitas, num baú abre o baú   " + (creative ? "Espaço 2x voar   " : "") + "T chat   Esc pausar   F1 esconder ajuda",
                     "Q joga o item fora (Ctrl+Q a pilha)   Dir. na cama dorme e marca o renascimento   Pederneira acende a dinamite",
                     "Enxada na terra faz terra arada, onde se plantam sementes   Dir. com armadura na mão veste",
-                    "Arco: segure o botão esquerdo para puxar e solte para atirar (precisa de flechas)   R gira o bloco mirado"
+                    "Arco: segure o botão esquerdo para puxar e solte para atirar (precisa de flechas)"
             };
             for (String l : lines) Ui.shadow(g, l, 10, ty += 18, Color.WHITE);
         }
@@ -2682,7 +2788,7 @@ public class BlockGame {
             g.drawString(s + (caret ? "_" : ""), x + 6, y + 17);
             if (chatInput.length() == 0) {
                 g.setColor(new Color(255, 255, 255, 110));
-                g.drawString("   Digite a mensagem e aperte Enter (Esc cancela)", x + 6, y + 17);
+                g.drawString("   Enter envia   Ctrl+O escolhe uma foto (ou arraste o arquivo para a janela)   Esc cancela", x + 6, y + 17);
             }
         }
         long now = System.currentTimeMillis();
@@ -2693,6 +2799,25 @@ public class BlockGame {
             double age = (now - l.time) / 1000.0;
             double alpha = chatOpen ? 1 : age < 8 ? 1 : age < 10 ? (10 - age) / 2 : 0;
             if (alpha <= 0) break;
+            // a foto, se houver, fica embaixo do texto da mensagem
+            int imgH = 0;
+            if (l.img != null) {
+                int iw = l.img.getWidth(), ih = l.img.getHeight();
+                double k = Math.min(Math.min((w - 12.0) / iw, 190.0 / ih), 1.0);
+                int dw = Math.max(1, (int) (iw * k)), dh = Math.max(1, (int) (ih * k));
+                if (by - dh - lh < 175) break; // não cobre o texto de ajuda lá em cima
+                by -= dh + 6;
+                imgH = dh;
+                java.awt.Composite oldC = g.getComposite();
+                Object oldI = g.getRenderingHint(RenderingHints.KEY_INTERPOLATION);
+                g.setComposite(AlphaComposite.SrcOver.derive((float) alpha));
+                g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+                g.setColor(new Color(0, 0, 0, 150));
+                g.fillRect(x, by - 3, dw + 12, dh + 6);
+                g.drawImage(l.img, x + 6, by, dw, dh, null);
+                g.setComposite(oldC);
+                if (oldI != null) g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, oldI);
+            }
             // quebra mensagens compridas em várias linhas
             java.util.List<String> parts = new java.util.ArrayList<>();
             String rest = l.text;
@@ -2704,6 +2829,7 @@ public class BlockGame {
                 rest = rest.substring(n);
             }
             for (int k = parts.size() - 1; k >= 0; k--) {
+                if (by - lh < 165) break; // não invade o texto de ajuda lá em cima
                 by -= lh;
                 g.setColor(new Color(0, 0, 0, (int) (120 * alpha)));
                 g.fillRect(x, by, w, lh);
@@ -3476,15 +3602,19 @@ public class BlockGame {
                 if (chatOpen) {
                     if (k == KeyEvent.VK_ESCAPE) closeChat();
                     else if (k == KeyEvent.VK_ENTER) sendChat();
+                    else if (k == KeyEvent.VK_O && (lastMods & GLFW_MOD_CONTROL) != 0) pickPhoto();
                     break;
                 }
                 if (k == KeyEvent.VK_T || k == KeyEvent.VK_ENTER) openChat(k == KeyEvent.VK_T ? 't' : 0);
                 else if (k == KeyEvent.VK_ESCAPE) pause();
                 else if (k == KeyEvent.VK_E) openInventory();
                 else if (k == KeyEvent.VK_Q) dropHeld(keys[KeyEvent.VK_CONTROL]);
-                else if (k == KeyEvent.VK_R) rotateAimed();
                 else if (k >= KeyEvent.VK_1 && k <= KeyEvent.VK_9) selectSlot(k - KeyEvent.VK_1);
-                else if (k == KeyEvent.VK_F && creative) { player.flying = !player.flying; player.vy = 0; }
+                else if (k == KeyEvent.VK_SPACE && creative) { // dois toques rápidos no espaço ligam/desligam o voo
+                    long now = System.nanoTime();
+                    if (now - lastSpaceTap < 300_000_000L) { player.flying = !player.flying; player.vy = 0; lastSpaceTap = 0; }
+                    else lastSpaceTap = now;
+                }
                 else if (k == KeyEvent.VK_F1) help = !help;
                 break;
             case PAUSED:

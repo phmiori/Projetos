@@ -79,7 +79,10 @@ final class Saves {
             i.flying = Boolean.parseBoolean(p.getProperty("jogador.voando", "false"));
             i.food = Double.parseDouble(p.getProperty("jogador.fome", "20"));
         }
+        // a hora é guardada em segundos; se o dia mudou de duração desde que o mundo foi salvo (era 720 s), mantém a hora do dia
+        double savedDay = Double.parseDouble(p.getProperty("diaDuracao", "720"));
         i.time = Double.parseDouble(p.getProperty("hora", String.valueOf(World.DAY_LENGTH * 0.3)));
+        if (savedDay > 0 && savedDay != World.DAY_LENGTH) i.time = i.time / savedDay * World.DAY_LENGTH;
         i.day = Integer.parseInt(p.getProperty("dia", "1"));
         i.inventory = p.getProperty("inventario", "");
         i.inventoryFormat = Integer.parseInt(p.getProperty("inventarioFormato", "1"));
@@ -130,6 +133,7 @@ final class Saves {
         for (java.util.Map.Entry<String, String> e : i.lanPlayers.entrySet()) p.setProperty("lan." + e.getKey(), e.getValue());
         for (java.util.Map.Entry<String, String> e : i.chests.entrySet()) p.setProperty("bau." + e.getKey(), e.getValue());
         p.setProperty("hora", String.valueOf(i.time));
+        p.setProperty("diaDuracao", String.valueOf(World.DAY_LENGTH));
         p.setProperty("dia", String.valueOf(i.day));
         File tmp = new File(d, "meta.properties.tmp");
         try (Writer w = new OutputStreamWriter(new FileOutputStream(tmp), "UTF-8")) {

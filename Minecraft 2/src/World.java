@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 final class World {
     static final int SY = 64, SEA = 24;
-    static final double DAY_LENGTH = 720; // segundos por dia completo
+    static final double DAY_LENGTH = 2880; // segundos por dia completo (dia e noite): 48 minutos
 
     static final int PLAINS = 0, FOREST = 1, BIRCH_FOREST = 2, DESERT = 3, TUNDRA = 4, MOUNTAINS = 5;
     static final String[] BIOME_NAMES = { "Planície", "Floresta", "Bosque de bétulas", "Deserto", "Tundra", "Montanhas" };

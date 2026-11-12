@@ -291,7 +291,7 @@ final class Textures {
                     + "As 4 células dos cantos não são usadas (podem ficar transparentes).\r\n"
                     + "Veja _modelo_faces.png: é um guia com o nome de cada face.\r\n"
                     + "Uma imagem quadrada também funciona: a mesma textura vai para as 6 faces.\r\n\r\n"
-                    + "A frente (a célula \"frente\") fica virada para quem colocou o bloco; a tecla R gira o bloco mirado.\r\n"
+                    + "A frente (a célula \"frente\") fica virada para quem colocou o bloco.\r\n"
                     + "Para a fornalha, a bancada e o baú ganharem a frente desenhada, apague o arquivo deles (fornalha.png, bancada.png, bau.png).\r\n\r\n"
                     + "Arquivos: " + fileList() + "\r\n"
                     + "Escadas e lajes usam a textura do material (tabuas, pedregulho, tijolos_pedra, tijolos, arenito).\r\n"
