@@ -459,14 +459,56 @@ final class Mob extends Entity {
             pg.add(b(side * 0.18, 0.99, 0.58, 0.08, 0.01, 0.1, pinkS));
         }
         MODELS[PIG] = pg.toArray(new Box[0]);
-        int wool = 0xEDEDE6, face = 0xC8B8A6, legC = 0x8A7E72;
-        MODELS[SHEEP] = new Box[] {
-                leg(-0.18, 0.24, 0.3, 0.2, 0.48, 0.2, legC, 1), leg(0.18, 0.24, 0.3, 0.2, 0.48, 0.2, legC, 2),
-                leg(-0.18, 0.24, -0.3, 0.2, 0.48, 0.2, legC, 2), leg(0.18, 0.24, -0.3, 0.2, 0.48, 0.2, legC, 1),
-                b(0, 0.8, 0, 0.76, 0.6, 1.05, wool),
-                b(0, 0.95, 0.62, 0.38, 0.4, 0.38, face),
-                b(0, 1.1, 0.58, 0.46, 0.14, 0.34, wool),
-                eye(-0.1, 0.98, 0.815, 0.07, 0x202020), eye(0.1, 0.98, 0.815, 0.07, 0x202020) };
+        int wool = 0xEDEDE6, woolL = 0xF8F8F2, woolD = 0xD6D6CC, woolS = 0xC4C2B8;
+        int face = 0xC8B8A6, faceD = 0xA8957F, faceL = 0xDCCDBB, legC = 0x8A7E72, hoofS = 0x4A423A, earIn = 0xE0A8A0, nose = 0x6A4A44;
+        java.util.List<Box> sh = new java.util.ArrayList<>();
+        // pernas: tufo de lã na coxa, canela escura, joelho e casco (balançam no quadril)
+        double[][] shLegs = { { -0.2, 0.3, 1 }, { 0.2, 0.3, 2 }, { -0.2, -0.3, 2 }, { 0.2, -0.3, 1 } };
+        for (double[] sl : shLegs) {
+            int ph = (int) sl[2];
+            sh.add(legp(sl[0], 0.43, sl[1], 0.27, 0.14, 0.27, woolD, ph, 0.5));
+            sh.add(legp(sl[0], 0.3, sl[1], 0.17, 0.26, 0.17, legC, ph, 0.5));
+            sh.add(legp(sl[0], 0.3, sl[1] + 0.09, 0.15, 0.08, 0.02, faceD, ph, 0.5));
+            sh.add(legp(sl[0], 0.07, sl[1] + 0.005, 0.18, 0.14, 0.18, faceD, ph, 0.5));
+            sh.add(legp(sl[0], 0.025, sl[1] + 0.01, 0.19, 0.05, 0.19, hoofS, ph, 0.5));
+        }
+        // corpo: miolo de lã, barriga, camadas fofas e tufos em volta
+        sh.add(b(0, 0.8, 0, 0.76, 0.6, 1.05, wool));
+        sh.add(b(0, 0.52, 0, 0.6, 0.06, 0.9, woolS));
+        sh.add(b(0, 0.86, 0, 0.84, 0.4, 0.9, woolL));
+        sh.add(b(0, 0.72, -0.04, 0.82, 0.3, 0.98, wool));
+        sh.add(b(0, 1.12, -0.02, 0.6, 0.08, 0.8, woolL));
+        sh.add(b(0, 1.16, -0.1, 0.4, 0.05, 0.4, woolL));
+        sh.add(b(0, 0.9, -0.54, 0.64, 0.46, 0.08, woolD));
+        sh.add(b(0, 0.8, 0.54, 0.6, 0.42, 0.06, woolD));
+        sh.add(b(0.405, 0.95, 0.15, 0.04, 0.22, 0.3, woolD)); sh.add(b(-0.405, 0.7, -0.15, 0.04, 0.2, 0.3, woolD));
+        sh.add(b(-0.405, 0.95, 0.2, 0.04, 0.18, 0.26, woolL)); sh.add(b(0.405, 0.68, -0.2, 0.04, 0.2, 0.26, woolL));
+        sh.add(b(0.25, 1.15, 0.28, 0.2, 0.06, 0.2, woolD)); sh.add(b(-0.22, 1.16, -0.3, 0.22, 0.06, 0.18, woolD));
+        sh.add(b(0, 0.9, -0.6, 0.18, 0.18, 0.1, woolL));                     // rabinho de lã
+        // pescoço de lã e cabeça comprida com focinho
+        sh.add(b(0, 0.92, 0.55, 0.5, 0.42, 0.2, woolL));
+        sh.add(b(0, 0.98, 0.66, 0.4, 0.3, 0.12, wool));
+        sh.add(b(0, 0.95, 0.76, 0.32, 0.34, 0.36, face));
+        sh.add(b(0, 0.82, 0.88, 0.2, 0.18, 0.18, faceL));                    // focinho
+        sh.add(b(0, 0.8, 0.975, 0.16, 0.12, 0.01, nose));
+        sh.add(b(-0.04, 0.82, 0.98, 0.03, 0.04, 0.01, 0x2A1A18)); sh.add(b(0.04, 0.82, 0.98, 0.03, 0.04, 0.01, 0x2A1A18));
+        sh.add(b(0, 0.75, 0.975, 0.14, 0.015, 0.01, 0x2A1A18));
+        sh.add(b(0, 1.03, 0.945, 0.12, 0.2, 0.01, faceL));                   // listra da testa
+        sh.add(b(-0.165, 0.92, 0.76, 0.01, 0.2, 0.26, faceD)); sh.add(b(0.165, 0.92, 0.76, 0.01, 0.2, 0.26, faceD)); // bochechas
+        sh.add(b(0, 1.15, 0.72, 0.34, 0.1, 0.28, woolL));                    // topete de lã
+        sh.add(b(0, 1.22, 0.7, 0.22, 0.06, 0.18, wool));
+        for (double ex : new double[] { -0.1, 0.1 }) {
+            sh.add(b(ex, 1.0, 0.945, 0.1, 0.08, 0.01, 0xF2F2EA));
+            sh.add(eye(ex, 1.0, 0.953, 0.06, 0x202020));
+            sh.add(b(ex, 1.06, 0.945, 0.11, 0.02, 0.01, faceD));
+        }
+        // orelhas abertas para os lados, com o interior rosado
+        for (int side = -1; side <= 1; side += 2) {
+            sh.add(b(side * 0.25, 1.02, 0.72, 0.16, 0.07, 0.14, face));
+            sh.add(b(side * 0.33, 0.99, 0.72, 0.08, 0.06, 0.12, faceD));
+            sh.add(b(side * 0.25, 1.015, 0.73, 0.1, 0.06, 0.08, earIn));
+        }
+        MODELS[SHEEP] = sh.toArray(new Box[0]);
         int white = 0xF4F4F0;
         int feather = 0xE6E6E0, featherD = 0xC8C8C0, beakC = 0xF0A020, beakD = 0xD08A18, legC2 = 0xE0A020, redC = 0xD02828, redD = 0xA81C1C;
         java.util.List<Box> ck = new java.util.ArrayList<>();
