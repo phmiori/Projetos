@@ -240,10 +240,19 @@ final class Mob extends Entity {
         final double cx, cy, cz, sx, sy, sz;
         final int color, leg;
         final boolean glow;
+        final double piv; // altura (local) do pivô da perna; NaN = topo da própria caixa
         Box(double cx, double cy, double cz, double sx, double sy, double sz, int color, int leg, boolean glow) {
-            this.cx = cx; this.cy = cy; this.cz = cz; this.sx = sx; this.sy = sy; this.sz = sz;
-            this.color = color; this.leg = leg; this.glow = glow;
+            this(cx, cy, cz, sx, sy, sz, color, leg, glow, Double.NaN);
         }
+        Box(double cx, double cy, double cz, double sx, double sy, double sz, int color, int leg, boolean glow, double piv) {
+            this.cx = cx; this.cy = cy; this.cz = cz; this.sx = sx; this.sy = sy; this.sz = sz;
+            this.color = color; this.leg = leg; this.glow = glow; this.piv = piv;
+        }
+    }
+
+    /** Parte de perna que balança em volta de pivot (altura do quadril), mesmo sendo só um pedaço da perna. */
+    private static Box legp(double cx, double cy, double cz, double sx, double sy, double sz, int c, int phase, double pivot) {
+        return new Box(cx, cy, cz, sx, sy, sz, c, phase, false, pivot);
     }
 
     private static Box b(double cx, double cy, double cz, double sx, double sy, double sz, int c) {
@@ -334,17 +343,87 @@ final class Mob extends Entity {
                 b(0, 0.62, 0.34, 0.12, 0.08, 0.1, 0xF0A020),
                 b(0, 0.82, 0.2, 0.06, 0.08, 0.14, 0xD02828),
                 eye(-0.08, 0.7, 0.305, 0.05, 0x202020), eye(0.08, 0.7, 0.305, 0.05, 0x202020) };
-        int skin = 0x93A890, rag = 0x5E4A66, pants = 0x3E3A36;
-        MODELS[ZOMBIE] = new Box[] {
-                leg(-0.13, 0.4, 0, 0.24, 0.8, 0.26, pants, 1), leg(0.13, 0.4, 0, 0.24, 0.8, 0.26, pants, 2),
-                b(0, 1.16, 0, 0.52, 0.72, 0.3, rag),
-                b(0, 0.86, 0.01, 0.53, 0.12, 0.31, 0x4A3A52),
-                b(-0.36, 1.38, 0.26, 0.18, 0.18, 0.62, skin), b(0.36, 1.38, 0.26, 0.18, 0.18, 0.62, skin),
-                b(-0.36, 1.38, -0.02, 0.2, 0.2, 0.08, rag), b(0.36, 1.38, -0.02, 0.2, 0.2, 0.08, rag),
-                b(0, 1.76, 0, 0.48, 0.48, 0.48, skin),
-                b(0, 1.98, -0.02, 0.5, 0.06, 0.5, 0x6E7E6A),
-                eye(-0.11, 1.8, 0.245, 0.1, 0xFF3020), eye(0.11, 1.8, 0.245, 0.1, 0xFF3020),
-                b(0, 1.64, 0.245, 0.18, 0.05, 0.02, 0x3A2A2A) };
+        int skin = 0x93A890, skinD = 0x7A8D77, bone2 = 0xC9D4C2, rag = 0x5E4A66, ragD = 0x4A3A52, ragL = 0x6F5878, stain = 0x3E5A3A;
+        int pants = 0x3E3A36, pantsD = 0x34302C, boot = 0x26221F, hair = 0x6E7E6A, teeth = 0xDAD8C4, mouth = 0x3A2A2A;
+        java.util.List<Box> z = new java.util.ArrayList<>();
+        for (int side = -1; side <= 1; side += 2) {
+            int ph = side < 0 ? 1 : 2;
+            double lx = side * 0.13;
+            z.add(legp(lx, 0.5, 0, 0.24, 0.6, 0.26, side < 0 ? pants : 0x4A4540, ph, 0.8)); // calça
+            z.add(legp(lx - side * 0.1, 0.5, 0, 0.04, 0.6, 0.265, pantsD, ph, 0.8));        // vinco interno
+            z.add(legp(lx, 0.1, 0.04, 0.27, 0.2, 0.34, boot, ph, 0.8));                     // bota
+            z.add(legp(lx, 0.03, 0.045, 0.28, 0.06, 0.35, 0x171513, ph, 0.8));              // sola
+            z.add(legp(lx, 0.2, 0.04, 0.275, 0.03, 0.345, 0x3A3530, ph, 0.8));              // borda da bota
+        }
+        z.add(legp(-0.13, 0.4, 0.135, 0.2, 0.11, 0.02, skin, 1, 0.8));    // joelho à mostra
+        z.add(legp(-0.13, 0.43, 0.14, 0.2, 0.025, 0.02, skinD, 1, 0.8));
+        z.add(legp(0.16, 0.28, 0.135, 0.06, 0.19, 0.02, skin, 2, 0.8));   // barra rasgada
+        z.add(legp(-0.17, 0.62, -0.135, 0.1, 0.07, 0.02, 0x2E2B28, 1, 0.8)); // remendo nas costas
+        z.add(legp(0.16, 0.3, -0.135, 0.12, 0.08, 0.02, 0x3A3632, 2, 0.8));
+        // tronco
+        z.add(b(0, 1.16, 0, 0.52, 0.72, 0.3, rag));
+        z.add(b(0, 1.5, 0, 0.53, 0.05, 0.31, ragD));                      // gola
+        z.add(b(0, 1.54, 0, 0.1, 0.05, 0.18, skinD));                     // pescoço
+        z.add(b(-0.23, 1.2, 0.0, 0.04, 0.48, 0.305, 0x54425C));           // dobras laterais
+        z.add(b(0.23, 1.2, 0.0, 0.04, 0.48, 0.305, 0x54425C));
+        z.add(b(0.11, 1.19, 0.155, 0.22, 0.32, 0.02, skin));              // rasgo com costelas
+        z.add(b(0.11, 1.34, 0.158, 0.22, 0.03, 0.01, skinD));
+        for (double ry : new double[] { 1.28, 1.22, 1.16, 1.10 }) z.add(b(0.11, ry, 0.168, 0.18, 0.025, 0.01, bone2));
+        z.add(b(0.11, 1.19, 0.17, 0.025, 0.26, 0.01, 0x9BAA96));
+        z.add(b(-0.09, 1.1, 0.153, 0.11, 0.09, 0.01, stain));             // manchas
+        z.add(b(-0.1, 1.0, 0.153, 0.05, 0.06, 0.01, stain));
+        z.add(b(-0.1, 1.33, 0.153, 0.07, 0.04, 0.01, ragL));
+        z.add(b(-0.1, 1.2, -0.155, 0.15, 0.2, 0.02, skin));               // costas rasgadas
+        z.add(b(-0.1, 1.22, -0.168, 0.11, 0.025, 0.01, 0x9BAA96));
+        z.add(b(-0.1, 1.16, -0.168, 0.11, 0.025, 0.01, 0x9BAA96));
+        z.add(b(0.14, 1.1, -0.153, 0.13, 0.11, 0.01, stain));
+        z.add(b(0, 1.2, -0.153, 0.04, 0.55, 0.008, 0x54425C));            // costura
+        // cinto e farrapos da barra
+        z.add(b(0, 0.86, 0.01, 0.53, 0.12, 0.31, ragD));
+        z.add(b(0, 0.86, 0.17, 0.1, 0.09, 0.02, 0x8A7A4A));
+        z.add(b(0, 0.86, 0.182, 0.05, 0.05, 0.01, ragD));
+        z.add(b(-0.18, 0.78, 0.005, 0.07, 0.1, 0.31, ragD));
+        z.add(b(0.12, 0.77, 0.005, 0.05, 0.12, 0.31, ragD));
+        z.add(b(-0.02, 0.8, 0.005, 0.06, 0.06, 0.31, ragD));
+        // braços estendidos: manga, punho, antebraço, mão e dedos
+        for (int side = -1; side <= 1; side += 2) {
+            double ax = side * 0.36;
+            z.add(b(ax, 1.38, 0.09, 0.2, 0.2, 0.24, rag));
+            z.add(b(ax, 1.485, 0.08, 0.12, 0.02, 0.14, ragL));
+            z.add(b(ax, 1.38, 0.215, 0.205, 0.205, 0.04, ragD));
+            z.add(b(ax, 1.38, 0.43, 0.18, 0.18, 0.38, skin));
+            z.add(b(ax, 1.3, 0.43, 0.18, 0.03, 0.38, skinD));
+            z.add(b(ax, 1.38, 0.66, 0.19, 0.19, 0.08, skinD));
+            z.add(b(ax - 0.06, 1.44, 0.72, 0.045, 0.045, 0.1, skin));
+            z.add(b(ax, 1.4, 0.73, 0.045, 0.045, 0.12, skin));
+            z.add(b(ax + 0.06, 1.44, 0.72, 0.045, 0.045, 0.1, skin));
+            z.add(b(ax, 1.32, 0.71, 0.05, 0.04, 0.08, skin));
+        }
+        // cabeça
+        z.add(b(0, 1.76, 0, 0.48, 0.48, 0.48, skin));
+        z.add(b(0, 1.54, 0, 0.485, 0.05, 0.485, skinD));                  // queixo
+        z.add(b(-0.255, 1.76, 0, 0.04, 0.11, 0.08, skinD));               // orelhas
+        z.add(b(0.255, 1.76, 0, 0.04, 0.11, 0.08, skinD));
+        z.add(b(0, 1.99, -0.02, 0.5, 0.07, 0.5, hair));                   // cabelo ralo
+        z.add(b(0, 1.82, -0.245, 0.5, 0.36, 0.03, hair));
+        z.add(b(-0.245, 1.86, -0.1, 0.03, 0.28, 0.28, hair));
+        z.add(b(0.245, 1.86, -0.1, 0.03, 0.28, 0.28, hair));
+        z.add(b(0.14, 1.945, 0.245, 0.2, 0.1, 0.02, hair));
+        z.add(b(-0.17, 1.96, 0.245, 0.14, 0.06, 0.02, hair));
+        z.add(b(0, 1.97, 0.245, 0.08, 0.04, 0.02, hair));
+        z.add(b(0, 1.86, 0.243, 0.44, 0.03, 0.01, skinD));                // sobrancelha
+        z.add(b(-0.11, 1.8, 0.243, 0.15, 0.1, 0.01, 0x241A1A));           // órbitas
+        z.add(b(0.11, 1.8, 0.243, 0.15, 0.1, 0.01, 0x241A1A));
+        z.add(eye(-0.11, 1.8, 0.245, 0.1, 0xFF3020));
+        z.add(eye(0.11, 1.8, 0.245, 0.1, 0xFF3020));
+        z.add(b(0, 1.7, 0.25, 0.08, 0.07, 0.03, skinD));                  // nariz
+        z.add(b(0.14, 1.68, 0.243, 0.11, 0.08, 0.01, 0x4A2A2A));          // ferida na bochecha
+        z.add(b(0.14, 1.68, 0.247, 0.05, 0.03, 0.01, 0x7A3030));
+        z.add(b(0, 1.62, 0.243, 0.26, 0.06, 0.01, mouth));                // boca com dentes
+        for (double tx : new double[] { -0.09, -0.03, 0.03, 0.09 }) z.add(b(tx, 1.64, 0.247, 0.03, 0.03, 0.01, teeth));
+        z.add(b(-0.06, 1.6, 0.247, 0.03, 0.025, 0.01, teeth));
+        z.add(b(0.06, 1.6, 0.247, 0.03, 0.025, 0.01, teeth));
+        MODELS[ZOMBIE] = z.toArray(new Box[0]);
         int sp = 0x2E2626, spH = 0x3C3030;
         java.util.List<Box> spider = new java.util.ArrayList<>();
         spider.add(b(0, 0.48, -0.3, 0.8, 0.52, 0.85, sp));
@@ -388,9 +467,10 @@ final class Mob extends Entity {
             for (int i = 0; i < 8; i++) {
                 double lx = (i & 1) == 0 ? -hx : hx, ly = (i & 2) == 0 ? -hy : hy, lz = (i & 4) == 0 ? -hz : hz;
                 if (angle != 0) {
-                    double py = ly - hy; // pivô no topo
+                    double pv = Double.isNaN(bx.piv) ? hy : bx.piv - bx.cy; // pivô no topo (ou no quadril)
+                    double py = ly - pv;
                     double ny = py * Math.cos(angle) - lz * Math.sin(angle), nz = py * Math.sin(angle) + lz * Math.cos(angle);
-                    ly = ny + hy;
+                    ly = ny + pv;
                     lz = nz;
                 }
                 double mx = bx.cx + lx + ox, my = bx.cy + ly, mz = bx.cz + lz + oz;
