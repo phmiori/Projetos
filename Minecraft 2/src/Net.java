@@ -12,7 +12,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 final class Net {
     static final int PORT = 25600;
-    static final int VERSION = 6;
+    static final int VERSION = 7; // 7: o mundo é infinito; o anfitrião manda só os pedaços modificados
 
     // tipos de pacote
     static final byte HELLO = 1, WELCOME = 2, JOIN = 3, LEAVE = 4, STATE = 5, BLOCK = 6, TIME = 7,

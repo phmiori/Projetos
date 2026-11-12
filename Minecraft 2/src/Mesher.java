@@ -17,12 +17,13 @@ final class Mesher {
 
     /** Resultado: opacos (inclui folhas, vidro, plantas, lava e formatos) e água, separada porque é transparente. */
     static final class Mesh {
-        final int chunk, version;
+        final int cx, cz, version;
         final int[] opaque, water;
         final int opaqueCount, waterCount; // em ints (12 por face)
 
-        Mesh(int chunk, int version, IntList o, IntList w) {
-            this.chunk = chunk;
+        Mesh(int cx, int cz, int version, IntList o, IntList w) {
+            this.cx = cx;
+            this.cz = cz;
             this.version = version;
             opaque = o.data;
             opaqueCount = o.size;
@@ -54,8 +55,17 @@ final class Mesher {
             { { 0, 0 }, { 1, 1 } }, { { 1, 1 }, { 0, 0 } },
             { { 1, 0 }, { 0, 1 } }, { { 0, 1 }, { 1, 0 } } };
 
+    /** Monta a malha do pedaço (cx, cz), ou devolve null se algum dos 8 vizinhos ainda não está carregado. */
     static Mesh build(World w, int cx, int cz, int version) {
-        final byte[] B = w.blocks;
+        Chunk[] nb = new Chunk[9];
+        for (int dx = -1; dx <= 1; dx++)
+            for (int dz = -1; dz <= 1; dz++) {
+                Chunk c = w.chunk(cx + dx, cz + dz);
+                if (c == null) return null;
+                nb[(dx + 1) * 3 + dz + 1] = c;
+            }
+        final Region B = new Region(nb, cx, cz);
+        final byte[] center = nb[4].blocks;
         IntList opaque = new IntList(), water = new IntList();
         int x0 = cx * SIZE, z0 = cz * SIZE;
         int[] occ = new int[4], sky = new int[4], blk = new int[4];
@@ -63,16 +73,15 @@ final class Mesher {
         for (int lx = 0; lx < SIZE; lx++)
             for (int lz = 0; lz < SIZE; lz++) {
                 int x = x0 + lx, z = z0 + lz;
-                int base = (x << 15) | (z << 6);
                 for (int y = 0; y < World.SY; y++) {
-                    int b = B[base | y] & 0xFF;
+                    int b = center[Chunk.idx(lx, y, lz)] & 0xFF;
                     if (b == Block.AIR) continue;
                     int shape = Block.shape(b);
                     int flags = Block.light(b) > 0 && b != Block.TORCH ? FLAG_EMISSIVE : 0;
                     int ox = lx * 16, oy = y * 16, oz = lz * 16; // canto do bloco, em 1/16
 
                     if (shape == Block.CROSS) {
-                        int s = w.skyLight(x, y, z), l = w.blockLightAt(x, y, z);
+                        int s = B.sky(x, y, z), l = B.blk(x, y, z);
                         int b2 = (Block.texture(b) * 6 + 4) | s << 10 | l << 14 | FLAG_PLANT << 18;
                         // tocha na parede: base encostada na parede e topo inclinado para fora
                         int bdx = 0, bdz = 0, tdx = 0, tdz = 0, lift = 0;
@@ -95,7 +104,7 @@ final class Mesher {
 
                     if (shape == Block.MODEL) {
                         // escadas, lajes, portas: cada caixa com suas faces, luz da própria célula, sem oclusão
-                        int s = w.skyLight(x, y, z), l = w.blockLightAt(x, y, z);
+                        int s = B.sky(x, y, z), l = B.blk(x, y, z);
                         int mrot = Block.rotatable(b) ? w.rotation(x, y, z) : 0; // a cama
                         for (float[] box : Block.renderBoxes(w, x, y, z, b)) {
                             int texBlock = box.length > 6 ? (int) box[6] : b; // lajes empilhadas: textura de cada metade
@@ -105,7 +114,7 @@ final class Mesher {
                                 int[] n = N[f];
                                 int axis = n[0] != 0 ? 0 : n[1] != 0 ? 1 : 2;
                                 boolean onEdge = n[axis] > 0 ? p1[axis] == 16 : p0[axis] == 0;
-                                if (onEdge && Block.opaqueCube(at(B, x + n[0], y + n[1], z + n[2]))) continue;
+                                if (onEdge && Block.opaqueCube(B.at(x + n[0], y + n[1], z + n[2]))) continue;
                                 int lf = mrot == 0 ? f : localFace(f, mrot);
                                 int layer = texBlock * 6 + lf;
                                 for (int k = 0; k < 4; k++) {
@@ -127,8 +136,8 @@ final class Mesher {
                     int rot = Block.rotatable(b) ? w.rotation(x, y, z) : 0;
                     for (int f = 0; f < 6; f++) {
                         int[] n = N[f];
-                        int nb = at(B, x + n[0], y + n[1], z + n[2]);
-                        if (!visible(b, nb)) continue;
+                        int nbk = B.at(x + n[0], y + n[1], z + n[2]);
+                        if (!visible(b, nbk)) continue;
                         int[] r = R[f], u = U[f];
                         int fx = x + n[0], fy = y + n[1], fz = z + n[2];
                         for (int k = 0; k < 4; k++) {
@@ -136,13 +145,13 @@ final class Mesher {
                             int ax = fx + sr * r[0], ay = fy + sr * r[1], az = fz + sr * r[2];
                             int bx = fx + su * u[0], by = fy + su * u[1], bz = fz + su * u[2];
                             int qx = ax + su * u[0], qy = ay + su * u[1], qz = az + su * u[2];
-                            int s1 = occluder(B, ax, ay, az), s2 = occluder(B, bx, by, bz), c = occluder(B, qx, qy, qz);
+                            int s1 = B.occluder(ax, ay, az), s2 = B.occluder(bx, by, bz), c = B.occluder(qx, qy, qz);
                             occ[k] = (s1 == 1 && s2 == 1) ? 3 : s1 + s2 + c;
                             // luz suave: média das células livres que encostam no canto
-                            int ns = w.skyLight(fx, fy, fz), nl = w.blockLightAt(fx, fy, fz), cnt = 1;
-                            if (s1 == 0) { ns += w.skyLight(ax, ay, az); nl += w.blockLightAt(ax, ay, az); cnt++; }
-                            if (s2 == 0) { ns += w.skyLight(bx, by, bz); nl += w.blockLightAt(bx, by, bz); cnt++; }
-                            if (c == 0 && !(s1 == 1 && s2 == 1)) { ns += w.skyLight(qx, qy, qz); nl += w.blockLightAt(qx, qy, qz); cnt++; }
+                            int ns = B.sky(fx, fy, fz), nl = B.blk(fx, fy, fz), cnt = 1;
+                            if (s1 == 0) { ns += B.sky(ax, ay, az); nl += B.blk(ax, ay, az); cnt++; }
+                            if (s2 == 0) { ns += B.sky(bx, by, bz); nl += B.blk(bx, by, bz); cnt++; }
+                            if (c == 0 && !(s1 == 1 && s2 == 1)) { ns += B.sky(qx, qy, qz); nl += B.blk(qx, qy, qz); cnt++; }
                             sky[k] = (ns + cnt / 2) / cnt;
                             blk[k] = (nl + cnt / 2) / cnt;
                         }
@@ -150,7 +159,7 @@ final class Mesher {
                         IntList out = Block.isWater(b) ? water : opaque;
                         // altura da superfície da água: 0 = cheia (há água em cima), 1..8 = nível 0..7
                         int surface = 0;
-                        if (Block.isWater(b) && !Block.isWater(at(B, x, y + 1, z))) surface = Block.waterLevel(b) + 1;
+                        if (Block.isWater(b) && !Block.isWater(B.at(x, y + 1, z))) surface = Block.waterLevel(b) + 1;
                         // escolhe a diagonal dos triângulos para a sombra dos cantos não ficar torta
                         int start = occ[0] + occ[2] > occ[1] + occ[3] ? 1 : 0;
                         for (int i = 0; i < 4; i++) {
@@ -165,7 +174,7 @@ final class Mesher {
                     }
                 }
             }
-        return new Mesh(cx * World.CHUNKS_Z + cz, version, opaque, water);
+        return new Mesh(cx, cz, version, opaque, water);
     }
 
     /** Canto k da face f de uma caixa (em 1/16, relativo ao bloco). */
@@ -222,20 +231,58 @@ final class Mesher {
         return ns != Block.CUBE;
     }
 
-    /** Bloco vizinho; abaixo do mundo é rocha-mãe (não desenha o fundo), fora dos lados é ar (mostra a borda). */
-    private static int at(byte[] B, int x, int y, int z) {
-        if (y < 0) return Block.BEDROCK;
-        if (y >= World.SY || x < 0 || z < 0 || x >= World.SX || z >= World.SZ) return Block.AIR;
-        return B[(x << 15) | (z << 6) | y] & 0xFF;
-    }
+    /** O pedaço e seus 8 vizinhos: tudo o que a malha precisa ler, sem consultar o mundo a cada bloco. */
+    private static final class Region {
+        final Chunk[] c;
+        final int cx, cz;
 
-    /** Escurece os cantos: cubos e folhas/vidro contam; plantas, líquidos, formatos e ar não. */
-    private static int occluder(byte[] B, int x, int y, int z) {
-        if (y < 0 || y >= World.SY || x < 0 || z < 0 || x >= World.SX || z >= World.SZ) return 0;
-        int b = B[(x << 15) | (z << 6) | y] & 0xFF;
-        if (b == Block.AIR) return 0;
-        int s = Block.shape(b);
-        return (s == Block.CUBE || s == Block.CUTOUT) ? 1 : 0;
+        Region(Chunk[] c, int cx, int cz) {
+            this.c = c;
+            this.cx = cx;
+            this.cz = cz;
+        }
+
+        private Chunk of(int x, int z) {
+            int dx = (x >> 4) - cx + 1, dz = (z >> 4) - cz + 1;
+            if (dx < 0 || dx > 2 || dz < 0 || dz > 2) return null;
+            return c[dx * 3 + dz];
+        }
+
+        /** Bloco vizinho; abaixo do mundo é rocha-mãe (não desenha o fundo). */
+        int at(int x, int y, int z) {
+            if (y < 0) return Block.BEDROCK;
+            if (y >= World.SY) return Block.AIR;
+            Chunk ch = of(x, z);
+            if (ch == null) return Block.AIR;
+            return ch.blocks[Chunk.idx(x & 15, y, z & 15)] & 0xFF;
+        }
+
+        /** Escurece os cantos: cubos e folhas/vidro contam; plantas, líquidos, formatos e ar não. */
+        int occluder(int x, int y, int z) {
+            if (y < 0 || y >= World.SY) return 0;
+            Chunk ch = of(x, z);
+            if (ch == null) return 0;
+            int b = ch.blocks[Chunk.idx(x & 15, y, z & 15)] & 0xFF;
+            if (b == Block.AIR) return 0;
+            int s = Block.shape(b);
+            return (s == Block.CUBE || s == Block.CUTOUT) ? 1 : 0;
+        }
+
+        int sky(int x, int y, int z) {
+            if (y >= World.SY) return 15;
+            Chunk ch = of(x, z);
+            if (ch == null) return 15;
+            int top = ch.skyTop[(x & 15) * 16 + (z & 15)];
+            if (y > top) return 15;
+            return Math.max(0, 15 - (top - y + 1) * 3);
+        }
+
+        int blk(int x, int y, int z) {
+            if (y < 0 || y >= World.SY) return 0;
+            Chunk ch = of(x, z);
+            if (ch == null) return 0;
+            return ch.light[Chunk.idx(x & 15, y, z & 15)];
+        }
     }
 
     private Mesher() {}

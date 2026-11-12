@@ -1,96 +1,400 @@
 import java.util.Random;
-import java.util.stream.IntStream;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Mundo de blocos 512 x 64 x 512.
- * Geração: biomas, cavernas, minérios, árvores e plantas. Também guarda a luz das tochas/lava
- * e a altura do "teto" de cada coluna (para a luz do céu não entrar em cavernas).
+ * Mundo de blocos infinito (64 de altura), feito de pedaços (Chunk) de 16 x 16 colunas.
+ * Os pedaços são gerados sob demanda perto dos jogadores, a partir da semente: biomas, cavernas,
+ * minérios, árvores e plantas. A mesma semente sempre dá o mesmo mundo; só o que o jogador mudou
+ * precisa ser salvo. Também guarda a luz das tochas/lava e a altura do "teto" de cada coluna.
  */
 final class World {
-    static final int SX = 512, SZ = 512, SY = 64, SEA = 24;
+    static final int SY = 64, SEA = 24;
     static final double DAY_LENGTH = 720; // segundos por dia completo
 
     static final int PLAINS = 0, FOREST = 1, BIRCH_FOREST = 2, DESERT = 3, TUNDRA = 4, MOUNTAINS = 5;
     static final String[] BIOME_NAMES = { "Planície", "Floresta", "Bosque de bétulas", "Deserto", "Tundra", "Montanhas" };
 
-    final byte[] blocks = new byte[SX * SZ * SY];
-    final byte[] blockLight = new byte[SX * SZ * SY];
-    /** Y do bloco mais alto que bloqueia a luz em cada coluna (-1 se nenhum). */
-    final byte[] skyTop = new byte[SX * SZ];
-    /**
-     * Para onde cada bloco está virado (0 +Z, 1 -X, 2 -Z, 3 +X: a direção da "frente"). Só entram os que não
-     * estão no padrão (0). Os blocos continuam um byte só, por isso a direção fica à parte.
-     */
-    private final java.util.concurrent.ConcurrentHashMap<Integer, Byte> rotations = new java.util.concurrent.ConcurrentHashMap<>();
-    private int pendingRot;
+    /** Onde ficam guardados os pedaços modificados que saíram da memória (disco, ou memória no amigo). */
+    interface Store {
+        byte[] read(int cx, int cz);
+        void write(int cx, int cz, byte[] data);
+        /** Todos os pedaços guardados: {cx, cz}. */
+        java.util.List<int[]> list();
+    }
+
+    /** Guarda em memória (o amigo no multijogador: os pedaços do anfitrião e os que ele mesmo mexeu). */
+    static final class MemoryStore implements Store {
+        final ConcurrentHashMap<Long, byte[]> data = new ConcurrentHashMap<>();
+        public byte[] read(int cx, int cz) { return data.get(ckey(cx, cz)); }
+        public void write(int cx, int cz, byte[] d) { data.put(ckey(cx, cz), d); }
+        public java.util.List<int[]> list() {
+            java.util.List<int[]> out = new java.util.ArrayList<>();
+            for (Long k : data.keySet()) out.add(new int[] { ckeyX(k), ckeyZ(k) });
+            return out;
+        }
+    }
+
     final int seed;
     double time = DAY_LENGTH * 0.3; // começa de manhã
+    Store store;
 
-    /** Pedaços de 16x16 colunas cuja malha 3D precisa ser refeita (lido pelo renderizador). */
-    static final int CHUNKS_X = SX >> 4, CHUNKS_Z = SZ >> 4;
-    final boolean[] dirty = new boolean[CHUNKS_X * CHUNKS_Z];
-    boolean anyDirty;
-    private boolean trackChanges;
+    private final ConcurrentHashMap<Long, Chunk> chunks = new ConcurrentHashMap<>();
+    private volatile Chunk lastChunk;
+    private int pendingRot;
+
+    // ---------------------------------------------------------------------------------
+    // chaves
+    // ---------------------------------------------------------------------------------
+    static long ckey(int cx, int cz) {
+        return ((long) cx << 32) | (cz & 0xFFFFFFFFL);
+    }
+
+    static int ckeyX(long k) { return (int) (k >> 32); }
+
+    static int ckeyZ(long k) { return (int) k; }
+
+    private static final int OFF = 1 << 28;
+
+    /** Posição de uma célula num só long (x e z de -268 milhões a +268 milhões, y de 0 a 63). */
+    static long key(int x, int y, int z) {
+        return ((long) (x + OFF) << 35) | ((long) (z + OFF) << 6) | y;
+    }
+
+    static int keyX(long k) { return (int) (k >>> 35) - OFF; }
+
+    static int keyZ(long k) { return (int) ((k >>> 6) & 0x1FFFFFFFL) - OFF; }
+
+    static int keyY(long k) { return (int) (k & 63); }
 
     World(int seed) {
+        this(seed, null);
+    }
+
+    World(int seed, Store store) {
         this.seed = seed;
-        generate();
-        finishLoad();
+        this.store = store;
+        int n = Runtime.getRuntime().availableProcessors();
+        pool = java.util.concurrent.Executors.newFixedThreadPool(Math.max(1, Math.min(4, n / 2)), r -> {
+            Thread t = new Thread(r, "geracao");
+            t.setDaemon(true);
+            t.setPriority(Thread.NORM_PRIORITY - 1);
+            return t;
+        });
     }
 
-    /** Mundo carregado de um save (blocos já prontos). */
-    World(int seed, byte[] data) {
-        this.seed = seed;
-        System.arraycopy(data, 0, blocks, 0, Math.min(data.length, blocks.length));
-        finishLoad();
+    // ---------------------------------------------------------------------------------
+    // pedaços carregados
+    // ---------------------------------------------------------------------------------
+    private final java.util.concurrent.ExecutorService pool;
+    private final java.util.concurrent.ConcurrentLinkedQueue<Chunk> ready = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private final java.util.Set<Long> pending = ConcurrentHashMap.newKeySet();
+    /** Quem precisa dos pedaços: {cx, cz, raio em pedaços}. Pedaços fora do alcance de todos são descarregados. */
+    private volatile double[][] anchors;
+    private double sweepTimer;
+
+    /** O pedaço (cx, cz), se estiver carregado. */
+    Chunk chunk(int cx, int cz) {
+        return chunks.get(ckey(cx, cz));
     }
 
-    private void finishLoad() {
-        for (int x = 0; x < SX; x++)
-            for (int z = 0; z < SZ; z++) recomputeSkyTop(x, z);
-        computeAllLight();
-        // água corrente salva é reavaliada: a que não tem mais de onde vir seca aos poucos
-        for (int i = 0; i < blocks.length; i++)
-            if (Block.waterLevel(blocks[i] & 0xFF) > 0) fluidQueue.add(i);
-        trackChanges = true;
+    /** O pedaço que contém o bloco (x, z), se estiver carregado. */
+    Chunk chunkAt(int x, int z) {
+        int cx = x >> 4, cz = z >> 4;
+        Chunk c = lastChunk;
+        if (c != null && c.cx == cx && c.cz == cz) return c;
+        c = chunks.get(ckey(cx, cz));
+        if (c != null) lastChunk = c;
+        return c;
     }
 
-    static int idx(int x, int y, int z) {
-        return (x << 15) | (z << 6) | y;
+    boolean isLoaded(int x, int z) {
+        return chunkAt(x, z) != null;
     }
 
-    /** Fora do mundo (lados/baixo) conta como rocha-mãe: funciona como parede invisível. */
+    int loadedCount() {
+        return chunks.size();
+    }
+
+    /** O pedaço e seus 8 vizinhos estão carregados? (precisa disso para montar a malha 3D) */
+    boolean neighborsLoaded(int cx, int cz) {
+        for (int dx = -1; dx <= 1; dx++)
+            for (int dz = -1; dz <= 1; dz++)
+                if (!chunks.containsKey(ckey(cx + dx, cz + dz))) return false;
+        return true;
+    }
+
+    /** Lê do arquivo ou gera um pedaço, já com a luz de dentro dele. Pode rodar em qualquer thread. */
+    private Chunk produce(int cx, int cz) {
+        Chunk c = null;
+        byte[] saved = store == null ? null : store.read(cx, cz);
+        if (saved != null) {
+            try {
+                c = Chunk.fromBytes(cx, cz, saved);
+                c.fromStore = true;
+            } catch (java.io.IOException e) {
+                System.out.println("Pedaço " + cx + "," + cz + " ilegível, gerando de novo: " + e.getMessage());
+            }
+        }
+        if (c == null) c = generate(cx, cz);
+        c.prepare();
+        return c;
+    }
+
+    /** Pede um pedaço em segundo plano. */
+    void request(int cx, int cz) {
+        long k = ckey(cx, cz);
+        if (chunks.containsKey(k) || !pending.add(k)) return;
+        pool.execute(() -> {
+            try {
+                ready.add(produce(cx, cz));
+            } catch (Throwable t) {
+                t.printStackTrace();
+                pending.remove(k);
+            }
+        });
+    }
+
+    /** Carrega agora (esperando) o pedaço (cx, cz). */
+    Chunk ensureChunk(int cx, int cz) {
+        Chunk c = chunks.get(ckey(cx, cz));
+        if (c != null) return c;
+        c = produce(cx, cz);
+        insert(c);
+        return c;
+    }
+
+    /** Carrega agora todos os pedaços até `radius` pedaços de distância do bloco (x, z). */
+    void ensureAround(double x, double z, int radius) {
+        int cx = (int) Math.floor(x) >> 4, cz = (int) Math.floor(z) >> 4;
+        for (int dx = -radius; dx <= radius; dx++)
+            for (int dz = -radius; dz <= radius; dz++) ensureChunk(cx + dx, cz + dz);
+    }
+
+    private void insert(Chunk c) {
+        long k = ckey(c.cx, c.cz);
+        Chunk old = chunks.putIfAbsent(k, c);
+        pending.remove(k);
+        if (old != null) return;
+        if (c.fromStore && c.hasWater()) { // água corrente salva é reavaliada: a que não tem mais de onde vir seca aos poucos
+            for (int lx = 0; lx < 16; lx++)
+                for (int lz = 0; lz < 16; lz++)
+                    for (int y = 0; y < SY; y++)
+                        if (Block.waterLevel(c.blocks[Chunk.idx(lx, y, lz)] & 0xFF) > 0) fluidQueue.add(key(c.cx * 16 + lx, y, c.cz * 16 + lz));
+        }
+        spillLight(c);
+    }
+
+    /**
+     * Junta os pedaços que as threads terminaram. `budgetNs` limita o tempo gasto no quadro.
+     * Retorna quantos entraram no mundo.
+     */
+    int integrate(long budgetNs) {
+        long end = System.nanoTime() + budgetNs;
+        int n = 0;
+        Chunk c;
+        while ((c = ready.poll()) != null) {
+            long k = ckey(c.cx, c.cz);
+            if (chunks.containsKey(k)) { pending.remove(k); continue; }
+            if (!wanted(c.cx, c.cz, 1)) { pending.remove(k); continue; } // o jogador já foi embora
+            insert(c);
+            n++;
+            if (System.nanoTime() > end) break;
+        }
+        return n;
+    }
+
+    private boolean wanted(int cx, int cz, int margin) {
+        double[][] a = anchors;
+        if (a == null) return true;
+        for (double[] an : a) {
+            double dx = cx - an[0], dz = cz - an[1], r = an[2] + margin;
+            if (dx * dx + dz * dz <= r * r) return true;
+        }
+        return false;
+    }
+
+    private static final java.util.Map<Integer, int[][]> RING = new java.util.HashMap<>();
+
+    /** Posições (dx, dz) em volta de um pedaço dentro do raio, da mais perto para a mais longe. */
+    private static synchronized int[][] ring(int radius) {
+        int[][] r = RING.get(radius);
+        if (r == null) {
+            java.util.List<int[]> l = new java.util.ArrayList<>();
+            for (int dx = -radius; dx <= radius; dx++)
+                for (int dz = -radius; dz <= radius; dz++)
+                    if (dx * dx + dz * dz <= radius * radius) l.add(new int[] { dx, dz });
+            l.sort((p, q) -> Integer.compare(p[0] * p[0] + p[1] * p[1], q[0] * q[0] + q[1] * q[1]));
+            r = l.toArray(new int[0][]);
+            RING.put(radius, r);
+        }
+        return r;
+    }
+
+    /**
+     * Chamado todo quadro: carrega (em segundo plano) os pedaços em volta de cada jogador, garante já os
+     * vizinhos imediatos e descarrega o que ficou longe. anchors: {x, z, raio em pedaços} de cada jogador.
+     */
+    void updateLoading(double[][] players, double dt) {
+        double[][] a = new double[players.length][];
+        for (int i = 0; i < a.length; i++) // o pedaço de cada jogador, em coordenadas de pedaço
+            a[i] = new double[] { (int) Math.floor(players[i][0]) >> 4, (int) Math.floor(players[i][1]) >> 4, players[i][2] };
+        anchors = a;
+        integrate(3_000_000L);
+        for (double[] an : a) {
+            int acx = (int) an[0], acz = (int) an[1];
+            for (int dx = -1; dx <= 1; dx++)
+                for (int dz = -1; dz <= 1; dz++) {
+                    ensureChunk(acx + dx, acz + dz); // nunca deixa o jogador sem chão
+                }
+            if (pending.size() < 40)
+                for (int[] o : ring((int) an[2])) {
+                    int cx = acx + o[0], cz = acz + o[1];
+                    if (!chunks.containsKey(ckey(cx, cz))) request(cx, cz);
+                    if (pending.size() >= 40) break;
+                }
+        }
+        sweepTimer -= dt;
+        if (sweepTimer <= 0) {
+            sweepTimer = 1;
+            for (Chunk c : chunks.values()) if (!wanted(c.cx, c.cz, 2)) unload(c);
+        }
+    }
+
+    private void unload(Chunk c) {
+        if (c.modified && store != null) {
+            c.modified = false;
+            try {
+                store.write(c.cx, c.cz, c.toBytes());
+            } catch (RuntimeException e) {
+                System.out.println("Não consegui guardar o pedaço " + c.cx + "," + c.cz + ": " + e.getMessage());
+            }
+        }
+        chunks.remove(ckey(c.cx, c.cz));
+        lastChunk = null;
+    }
+
+    /** Para as threads de geração (o mundo não vai mais ser usado). */
+    void close() {
+        pool.shutdownNow();
+        ready.clear();
+        pending.clear();
+    }
+
+    /** Larga todos os pedaços (o mundo do lobby, ao entrar num mundo). */
+    void clear() {
+        anchors = new double[0][];
+        for (Chunk c : chunks.values()) unload(c);
+        ready.clear();
+        pending.clear();
+        lastChunk = null;
+    }
+
+    /** Guarda no armazenamento todos os pedaços carregados que mudaram (esperando terminar). */
+    void saveAll() {
+        if (store == null) return;
+        for (Chunk c : chunks.values())
+            if (c.modified) {
+                c.modified = false;
+                store.write(c.cx, c.cz, c.toBytes());
+            }
+    }
+
+    /** Cópias dos pedaços modificados, para gravar em segundo plano. Desmarca os originais. */
+    java.util.List<Chunk> snapshotModified() {
+        java.util.List<Chunk> out = new java.util.ArrayList<>();
+        for (Chunk c : chunks.values())
+            if (c.modified) {
+                c.modified = false;
+                out.add(c.copyForSave());
+            }
+        return out;
+    }
+
+    /** Tudo o que difere do gerador (o que o anfitrião manda ao amigo que entra): n, e para cada pedaço cx, cz, tamanho, bytes. */
+    byte[] exportModified() {
+        java.util.LinkedHashMap<Long, byte[]> all = new java.util.LinkedHashMap<>();
+        if (store != null)
+            for (int[] k : store.list()) {
+                byte[] b = store.read(k[0], k[1]);
+                if (b != null) all.put(ckey(k[0], k[1]), b);
+            }
+        for (Chunk c : chunks.values()) if (c.modified) all.put(ckey(c.cx, c.cz), c.toBytes());
+        try {
+            java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream(1 << 16);
+            java.io.DataOutputStream out = new java.io.DataOutputStream(bos);
+            out.writeInt(all.size());
+            for (java.util.Map.Entry<Long, byte[]> e : all.entrySet()) {
+                out.writeInt(ckeyX(e.getKey()));
+                out.writeInt(ckeyZ(e.getKey()));
+                out.writeInt(e.getValue().length);
+                out.write(e.getValue());
+            }
+            return bos.toByteArray();
+        } catch (java.io.IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+    }
+
+    /** O contrário de exportModified: um armazenamento em memória com esses pedaços. */
+    static MemoryStore importModified(byte[] bytes) throws java.io.IOException {
+        MemoryStore s = new MemoryStore();
+        java.io.DataInputStream in = new java.io.DataInputStream(new java.io.ByteArrayInputStream(bytes));
+        int n = in.readInt();
+        for (int i = 0; i < n; i++) {
+            int cx = in.readInt(), cz = in.readInt();
+            byte[] b = new byte[in.readInt()];
+            in.readFully(b);
+            s.write(cx, cz, b);
+        }
+        return s;
+    }
+
+    // ---------------------------------------------------------------------------------
+    // acesso aos blocos
+    // ---------------------------------------------------------------------------------
+
+    /** Acima do mundo é ar, abaixo é rocha-mãe e num pedaço ainda não carregado é uma parede (ninguém cai no vazio). */
     int get(int x, int y, int z) {
         if (y >= SY) return Block.AIR;
-        if (y < 0 || x < 0 || z < 0 || x >= SX || z >= SZ) return Block.BEDROCK;
-        return blocks[idx(x, y, z)] & 0xFF;
+        if (y < 0) return Block.BEDROCK;
+        Chunk c = chunkAt(x, z);
+        if (c == null) return Block.STONE;
+        return c.blocks[Chunk.idx(x & 15, y, z & 15)] & 0xFF;
     }
 
+    /** A altura é limitada; para os lados o mundo não tem fim. */
     static boolean inBounds(int x, int y, int z) {
-        return x >= 0 && z >= 0 && y >= 0 && x < SX && z < SZ && y < SY;
+        return y >= 0 && y < SY;
     }
 
     /** Direção da frente do bloco (0 +Z, 1 -X, 2 -Z, 3 +X). */
     int rotation(int x, int y, int z) {
-        if (rotations.isEmpty()) return 0;
-        Byte r = rotations.get(idx(x, y, z));
+        if (y < 0 || y >= SY) return 0;
+        Chunk c = chunkAt(x, z);
+        if (c == null || c.rot == null) return 0;
+        Byte r = c.rot.get(Chunk.idx(x & 15, y, z & 15));
         return r == null ? 0 : r;
     }
 
-    private void storeRot(int i, int rot) {
-        if (rot == 0) { if (!rotations.isEmpty()) rotations.remove(i); }
-        else rotations.put(i, (byte) rot);
+    private static void storeRot(Chunk c, int li, int rot) {
+        if (rot == 0) { if (c.rot != null) c.rot.remove(li); }
+        else {
+            if (c.rot == null) c.rot = new ConcurrentHashMap<>();
+            c.rot.put(li, (byte) rot);
+        }
     }
 
     /** Põe um bloco já virado para a direção rot; se o bloco já é esse, só gira. */
     void setRot(int x, int y, int z, int b, int rot) {
-        if (!inBounds(x, y, z)) return;
+        if (y < 0 || y >= SY) return;
+        Chunk c = chunkAt(x, z);
+        if (c == null) return;
         rot = Block.rotatable(b) ? rot & 3 : 0;
-        int i = idx(x, y, z);
-        if ((blocks[i] & 0xFF) == b) {
+        int li = Chunk.idx(x & 15, y, z & 15);
+        if ((c.blocks[li] & 0xFF) == b) {
             if (rotation(x, y, z) == rot) return;
-            storeRot(i, rot);
-            if (!trackChanges) return;
+            storeRot(c, li, rot);
+            c.modified = true;
             if (listener != null) listener.changed(x, y, z, b);
             markDirty(x >> 4, z >> 4);
             return;
@@ -100,41 +404,24 @@ final class World {
         pendingRot = 0;
     }
 
-    /** Direções guardadas no formato do arquivo: cada int é a posição do bloco com a direção nos bits 24 e 25. */
-    int[] packRotations() {
-        int[] out = new int[rotations.size()];
-        int n = 0;
-        for (java.util.Map.Entry<Integer, Byte> e : rotations.entrySet()) {
-            if (n >= out.length) break;
-            out[n++] = e.getKey() | (e.getValue() & 3) << 24;
-        }
-        return n == out.length ? out : java.util.Arrays.copyOf(out, n);
-    }
-
-    void loadRotations(int[] packed) {
-        rotations.clear();
-        if (packed == null) return;
-        for (int v : packed) {
-            int i = v & 0xFFFFFF, rot = (v >>> 24) & 3;
-            if (rot != 0 && Block.rotatable(blocks[i] & 0xFF)) rotations.put(i, (byte) rot);
-        }
-    }
-
     void set(int x, int y, int z, int b) {
-        if (!inBounds(x, y, z)) return;
-        int old = blocks[idx(x, y, z)] & 0xFF;
+        if (y < 0 || y >= SY) return;
+        Chunk c = chunkAt(x, z);
+        if (c == null) return; // pedaço não carregado: nada a fazer
+        int lx = x & 15, lz = z & 15, li = Chunk.idx(lx, y, lz);
+        int old = c.blocks[li] & 0xFF;
         if (old == b) return;
-        blocks[idx(x, y, z)] = (byte) b;
+        c.blocks[li] = (byte) b;
+        c.modified = true;
         int rot = pendingRot;
         pendingRot = 0; // vale só para este bloco (set é chamado de novo para plantas que caem)
-        storeRot(idx(x, y, z), rot);
-        if (!trackChanges) return;
+        storeRot(c, li, rot);
         if (listener != null) listener.changed(x, y, z, b); // multijogador: avisa a rede
 
         // teto de luz da coluna
-        int top = skyTop[x * SZ + z];
-        if (Block.blocksLight(b) && y > top) skyTop[x * SZ + z] = (byte) y;
-        else if (!Block.blocksLight(b) && y == top) recomputeSkyTop(x, z);
+        int col = lx * 16 + lz, top = c.skyTop[col];
+        if (Block.blocksLight(b) && y > top) c.skyTop[col] = (byte) y;
+        else if (!Block.blocksLight(b) && y == top) c.recomputeSkyTop(lx, lz);
 
         // luz de tochas/lava: refaz a região se algo que emite ou bloqueia luz mudou perto de luz
         boolean lightChange = Block.light(old) > 0 || Block.light(b) > 0;
@@ -142,18 +429,18 @@ final class World {
         if (lightChange || blockChange) relight(x, y, z);
 
         // o pedaço (chunk) do bloco e os vizinhos que encostam nele precisam de malha nova
-        int cx = x >> 4, cz = z >> 4, lx = x & 15, lz = z & 15;
+        int cx = x >> 4, cz = z >> 4;
         for (int dx = lx <= 1 ? -1 : 0; dx <= (lx >= 14 ? 1 : 0); dx++)
             for (int dz = lz <= 1 ? -1 : 0; dz <= (lz >= 14 ? 1 : 0); dz++)
                 markDirty(cx + dx, cz + dz);
 
         // areia e cascalho: este bloco e o de cima podem cair
-        if (Block.falls(b)) fallQueue.add(idx(x, y, z));
-        if (y + 1 < SY && Block.falls(blocks[idx(x, y + 1, z)] & 0xFF)) fallQueue.add(idx(x, y + 1, z));
+        if (Block.falls(b)) fallQueue.add(key(x, y, z));
+        if (y + 1 < SY && Block.falls(get(x, y + 1, z))) fallQueue.add(key(x, y + 1, z));
 
         // plantas e tochas sem apoio caem junto
         if (y + 1 < SY && !Block.solid(b)) {
-            int above = blocks[idx(x, y + 1, z)] & 0xFF;
+            int above = get(x, y + 1, z);
             if (Block.needsSupport(above)) set(x, y + 1, z, Block.AIR);
             // tochas presas nesta parede também caem
             for (int f = 0; f < 4; f++) {
@@ -172,7 +459,7 @@ final class World {
     // =====================================================================
     // areia e cascalho que caem, crescimento e explosões
     // =====================================================================
-    private final java.util.LinkedHashSet<Integer> fallQueue = new java.util.LinkedHashSet<>();
+    private final java.util.LinkedHashSet<Long> fallQueue = new java.util.LinkedHashSet<>();
     private double fallTimer, growTimer;
 
     /** O que aconteceu sozinho no mundo e o jogo precisa saber: {tipo, x, y, z, bloco}. */
@@ -185,24 +472,20 @@ final class World {
         if (fallTimer < 0.09 || fallQueue.isEmpty()) return;
         fallTimer = 0;
         int n = Math.min(fallQueue.size(), 2000);
-        int[] batch = new int[n];
-        java.util.Iterator<Integer> it = fallQueue.iterator();
+        long[] batch = new long[n];
+        java.util.Iterator<Long> it = fallQueue.iterator();
         for (int i = 0; i < n; i++) { batch[i] = it.next(); it.remove(); }
-        for (int i : batch) {
-            int x = i >> 15, y = i & 63, z = (i >> 6) & 511;
-            int b = blocks[i] & 0xFF;
+        for (long k : batch) {
+            int x = keyX(k), y = keyY(k), z = keyZ(k);
+            int b = get(x, y, z);
             if (!Block.falls(b) || y == 0) continue;
-            int below = blocks[idx(x, y - 1, z)] & 0xFF;
+            int below = get(x, y - 1, z);
             if (below != Block.AIR && Block.shape(below) != Block.LIQUID && Block.shape(below) != Block.CROSS) continue;
             set(x, y, z, Block.AIR);
             set(x, y - 1, z, b); // entra de novo na fila e continua caindo
         }
     }
 
-    /**
-     * Vida do mundo perto de um jogador: folhas sem tronco somem, mudas viram árvores, a grama se
-     * espalha pela terra e morre debaixo de blocos. Sorteia blocos ao acaso, como no Minecraft.
-     */
     /** Dá para ver de um ponto ao outro sem um bloco sólido no caminho? (plantas, tochas e líquidos não tapam) */
     boolean lineOfSight(double x0, double y0, double z0, double x1, double y1, double z1) {
         double dx = x1 - x0, dy = y1 - y0, dz = z1 - z0;
@@ -223,16 +506,19 @@ final class World {
         return false;
     }
 
+    /**
+     * Vida do mundo perto de um jogador: folhas sem tronco somem, mudas viram árvores, a grama se
+     * espalha pela terra e morre debaixo de blocos. Sorteia blocos ao acaso, como no Minecraft.
+     */
     void tickGrowth(double dt, double px, double pz, Random r) {
         growTimer += dt;
         if (growTimer < 0.05) return;
         int n = (int) Math.min(2000, growTimer * 8000);
         growTimer = 0;
-        int cx = (int) px, cz = (int) pz;
+        int cx = (int) Math.floor(px), cz = (int) Math.floor(pz);
         for (int k = 0; k < n; k++) {
             int x = cx - 48 + r.nextInt(96), z = cz - 48 + r.nextInt(96), y = r.nextInt(SY);
-            if (x < 0 || z < 0 || x >= SX || z >= SZ) continue;
-            int b = blocks[idx(x, y, z)] & 0xFF;
+            int b = get(x, y, z);
             if (b == Block.AIR || b == Block.STONE) continue;
             if (Block.isLeaves(b)) {
                 if (!logNear(x, y, z)) {
@@ -247,13 +533,13 @@ final class World {
                         && r.nextInt(waterNear(x, y - 1, z) ? 2 : 4) == 0) set(x, y, z, b + 1);
             } else if (b == Block.FARMLAND) {
                 // terra arada volta a ser terra se for coberta, ou se ficar vazia e seca por muito tempo
-                int above = y + 1 < SY ? blocks[idx(x, y + 1, z)] & 0xFF : Block.AIR;
+                int above = y + 1 < SY ? get(x, y + 1, z) : Block.AIR;
                 if (Block.solid(above) || (!Block.isWheat(above) && r.nextInt(8) == 0 && !waterNear(x, y, z))) set(x, y, z, Block.DIRT);
             } else if (b == Block.DIRT) {
-                if (y + 1 < SY && !coversGrass(blocks[idx(x, y + 1, z)] & 0xFF) && skyLight(x, y + 1, z) >= 9 && grassNear(x, y, z))
+                if (y + 1 < SY && !coversGrass(get(x, y + 1, z)) && skyLight(x, y + 1, z) >= 9 && grassNear(x, y, z))
                     set(x, y, z, Block.GRASS);
             } else if (b == Block.GRASS) {
-                if (y + 1 < SY && coversGrass(blocks[idx(x, y + 1, z)] & 0xFF)) set(x, y, z, Block.DIRT);
+                if (y + 1 < SY && coversGrass(get(x, y + 1, z))) set(x, y, z, Block.DIRT);
             }
         }
     }
@@ -312,8 +598,8 @@ final class World {
             for (int dy = -rad; dy <= rad; dy++)
                 for (int dz = -rad; dz <= rad; dz++) {
                     int x = bx + dx, y = by + dy, z = bz + dz;
-                    if (!inBounds(x, y, z)) continue;
-                    int b = blocks[idx(x, y, z)] & 0xFF;
+                    if (!inBounds(x, y, z) || !isLoaded(x, z)) continue;
+                    int b = get(x, y, z);
                     if (b == Block.AIR || Block.shape(b) == Block.LIQUID) continue;
                     double hard = Block.hardness(b);
                     if (hard < 0) continue;
@@ -329,7 +615,7 @@ final class World {
     // água corrente
     // =====================================================================
     private static final int[] DX = { 1, -1, 0, 0, 0, 0 }, DY = { 0, 0, 1, -1, 0, 0 }, DZ = { 0, 0, 0, 0, 1, -1 };
-    private final java.util.LinkedHashSet<Integer> fluidQueue = new java.util.LinkedHashSet<>();
+    private final java.util.LinkedHashSet<Long> fluidQueue = new java.util.LinkedHashSet<>();
     private double fluidTimer;
 
     private boolean waterAround(int x, int y, int z) {
@@ -338,7 +624,7 @@ final class World {
     }
 
     private void scheduleFluid(int x, int y, int z) {
-        if (inBounds(x, y, z)) fluidQueue.add(idx(x, y, z));
+        if (y >= 0 && y < SY) fluidQueue.add(key(x, y, z));
     }
 
     /** Ar, plantas e tochas: a água ocupa o lugar (e leva as plantas embora). */
@@ -355,13 +641,14 @@ final class World {
         if (fluidTimer < 0.2 || fluidQueue.isEmpty()) return;
         fluidTimer = 0;
         int n = Math.min(fluidQueue.size(), 6000);
-        int[] batch = new int[n];
-        java.util.Iterator<Integer> it = fluidQueue.iterator();
+        long[] batch = new long[n];
+        java.util.Iterator<Long> it = fluidQueue.iterator();
         for (int i = 0; i < n; i++) { batch[i] = it.next(); it.remove(); }
-        for (int i : batch) updateFluid(i >> 15, i & 63, (i >> 6) & 511);
+        for (long k : batch) updateFluid(keyX(k), keyY(k), keyZ(k));
     }
 
     private void updateFluid(int x, int y, int z) {
+        if (!isLoaded(x, z)) return;
         int b = get(x, y, z);
         int level = Block.waterLevel(b);
         if (level < 0) {
@@ -414,34 +701,73 @@ final class World {
     interface Listener { void changed(int x, int y, int z, int b); }
     Listener listener;
 
+    // =====================================================================
+    // pedaços com malha para refazer (lido pelo renderizador)
+    // =====================================================================
+    private final java.util.LinkedHashSet<Long> dirty = new java.util.LinkedHashSet<>();
+    private final java.util.LinkedHashSet<Long> lazyDirty = new java.util.LinkedHashSet<>();
+    boolean anyDirty;
+    private long lastDirty = Long.MIN_VALUE, lastLazy = Long.MIN_VALUE;
+
+    /** A malha deste pedaço mudou por causa de um bloco: refazer já. */
     private void markDirty(int cx, int cz) {
-        if (cx < 0 || cz < 0 || cx >= CHUNKS_X || cz >= CHUNKS_Z) return;
-        dirty[cx * CHUNKS_Z + cz] = true;
+        long k = ckey(cx, cz);
+        if (k == lastDirty) return;
+        lastDirty = k;
+        dirty.add(k);
         anyDirty = true;
+    }
+
+    /** A malha mudou só um pouco (luz que passou da borda de um pedaço novo): pode ser refeita em segundo plano. */
+    private void markLazy(int cx, int cz) {
+        long k = ckey(cx, cz);
+        if (k == lastLazy) return;
+        lastLazy = k;
+        lazyDirty.add(k);
+        anyDirty = true;
+    }
+
+    /** Os pedaços cuja malha precisa ser refeita já (chave de ckey). */
+    long[] takeDirty() {
+        long[] out = new long[dirty.size()];
+        int i = 0;
+        for (long k : dirty) out[i++] = k;
+        dirty.clear();
+        lastDirty = Long.MIN_VALUE;
+        anyDirty = !lazyDirty.isEmpty();
+        return out;
+    }
+
+    /** Os que podem esperar a vez das threads de malha. */
+    long[] takeLazyDirty() {
+        long[] out = new long[lazyDirty.size()];
+        int i = 0;
+        for (long k : lazyDirty) out[i++] = k;
+        lazyDirty.clear();
+        lastLazy = Long.MIN_VALUE;
+        anyDirty = !dirty.isEmpty();
+        return out;
     }
 
     // =====================================================================
     // luz
     // =====================================================================
 
-    private void recomputeSkyTop(int x, int z) {
-        int base = (x << 15) | (z << 6);
-        int y = SY - 1;
-        while (y >= 0 && !Block.blocksLight(blocks[base | y] & 0xFF)) y--;
-        skyTop[x * SZ + z] = (byte) y;
-    }
-
-    /** Luz do céu (0-15): plena acima do teto da coluna, e cai rápido abaixo dele. */
+    /** Luz do céu (0-15): plena acima do teto da coluna, e cai rápido abaixo dele. Sem o pedaço, é dia pleno. */
     int skyLight(int x, int y, int z) {
-        if (x < 0 || z < 0 || x >= SX || z >= SZ || y >= SY) return 15;
-        int top = skyTop[x * SZ + z];
+        if (y >= SY) return 15;
+        Chunk c = chunkAt(x, z);
+        if (c == null) return 15;
+        int top = c.skyTop[(x & 15) * 16 + (z & 15)];
         if (y > top) return 15;
         return Math.max(0, 15 - (top - y + 1) * 3);
     }
 
     int blockLightAt(int x, int y, int z) {
-        if (!inBounds(x, y, z)) return 0;
-        return blockLight[idx(x, y, z)];
+        if (y < 0 || y >= SY) return 0;
+        Chunk c = chunkAt(x, z);
+        if (c == null) return 0;
+        return c.light[Chunk.idx(x & 15, y, z & 15)];
     }
 
     private boolean nearLight(int x, int y, int z) {
@@ -452,81 +778,107 @@ final class World {
         return false;
     }
 
-    private int[] queue = new int[1 << 16];
+    private long[] lq = new long[1 << 12];
+    private int lqn;
 
-    private void computeAllLight() {
-        java.util.Arrays.fill(blockLight, (byte) 0);
-        int n = 0;
-        for (int i = 0; i < blocks.length; i++) {
-            int l = Block.light(blocks[i] & 0xFF);
-            if (l > 0) {
-                blockLight[i] = (byte) l;
-                n = push(n, i);
-            }
-        }
-        spread(n, 0, SX - 1, 0, SY - 1, 0, SZ - 1);
+    private void push(long k) {
+        if (lqn == lq.length) lq = java.util.Arrays.copyOf(lq, lqn * 2);
+        lq[lqn++] = k;
     }
 
     /** Refaz a luz de blocos numa caixa de raio 15 em volta de (x,y,z). */
     private void relight(int cx, int cy, int cz) {
         int r = 15;
-        int x0 = Math.max(0, cx - r), x1 = Math.min(SX - 1, cx + r);
+        int x0 = cx - r, x1 = cx + r, z0 = cz - r, z1 = cz + r;
         int y0 = Math.max(0, cy - r), y1 = Math.min(SY - 1, cy + r);
-        int z0 = Math.max(0, cz - r), z1 = Math.min(SZ - 1, cz + r);
-        for (int x = x0; x <= x1; x++)
-            for (int z = z0; z <= z1; z++)
-                for (int y = y0; y <= y1; y++) blockLight[idx(x, y, z)] = 0;
-        int n = 0;
-        // fontes dentro da caixa
-        for (int x = x0; x <= x1; x++)
-            for (int z = z0; z <= z1; z++)
-                for (int y = y0; y <= y1; y++) {
-                    int i = idx(x, y, z), l = Block.light(blocks[i] & 0xFF);
-                    if (l > 0) { blockLight[i] = (byte) l; n = push(n, i); }
-                }
+        lqn = 0;
+        // apaga a luz da caixa e anota as fontes que estão nela
+        for (int pcx = x0 >> 4; pcx <= x1 >> 4; pcx++)
+            for (int pcz = z0 >> 4; pcz <= z1 >> 4; pcz++) {
+                Chunk c = chunk(pcx, pcz);
+                if (c == null) continue;
+                int lx0 = Math.max(x0, pcx * 16) - pcx * 16, lx1 = Math.min(x1, pcx * 16 + 15) - pcx * 16;
+                int lz0 = Math.max(z0, pcz * 16) - pcz * 16, lz1 = Math.min(z1, pcz * 16 + 15) - pcz * 16;
+                for (int lx = lx0; lx <= lx1; lx++)
+                    for (int lz = lz0; lz <= lz1; lz++)
+                        for (int y = y0; y <= y1; y++) {
+                            int i = Chunk.idx(lx, y, lz);
+                            int l = Block.light(c.blocks[i] & 0xFF);
+                            c.light[i] = (byte) l;
+                            if (l > 0) push(key(pcx * 16 + lx, y, pcz * 16 + lz));
+                        }
+            }
         // luz que entra pelas bordas da caixa, vinda de fora
-        for (int x = x0 - 1; x <= x1 + 1; x++)
-            for (int z = z0 - 1; z <= z1 + 1; z++)
-                for (int y = y0 - 1; y <= y1 + 1; y++) {
-                    boolean inside = x >= x0 && x <= x1 && y >= y0 && y <= y1 && z >= z0 && z <= z1;
-                    if (inside || !inBounds(x, y, z)) continue;
-                    if (blockLight[idx(x, y, z)] > 1) n = push(n, idx(x, y, z));
+        for (int x = x0 - 1; x <= x1 + 1; x++) {
+            boolean xEdge = x < x0 || x > x1;
+            for (int z = z0 - 1; z <= z1 + 1; z++) {
+                boolean zEdge = z < z0 || z > z1;
+                if (xEdge || zEdge) {
+                    for (int y = y0 - 1; y <= y1 + 1; y++) if (blockLightAt(x, y, z) > 1) push(key(x, y, z));
+                } else {
+                    if (y0 - 1 >= 0 && blockLightAt(x, y0 - 1, z) > 1) push(key(x, y0 - 1, z));
+                    if (y1 + 1 < SY && blockLightAt(x, y1 + 1, z) > 1) push(key(x, y1 + 1, z));
                 }
-        spread(n, x0, x1, y0, y1, z0, z1);
-        for (int x = x0 >> 4; x <= x1 >> 4; x++)
-            for (int z = z0 >> 4; z <= z1 >> 4; z++) markDirty(x, z);
+            }
+        }
+        bfs(x0, x1, y0, y1, z0, z1, false);
+        for (int pcx = x0 >> 4; pcx <= x1 >> 4; pcx++)
+            for (int pcz = z0 >> 4; pcz <= z1 >> 4; pcz++) markDirty(pcx, pcz);
     }
 
-    private int push(int n, int i) {
-        if (n == queue.length) queue = java.util.Arrays.copyOf(queue, n * 2);
-        queue[n] = i;
-        return n + 1;
+    /**
+     * Um pedaço acabou de entrar no mundo: a luz que ele tem na borda passa para os vizinhos já carregados
+     * e a deles passa para ele (a luz só aumenta; nada precisa ser apagado).
+     */
+    private void spillLight(Chunk c) {
+        lqn = 0;
+        int x0 = c.cx * 16, z0 = c.cz * 16;
+        for (int d = 0; d < 4; d++) {
+            int ncx = c.cx + (d == 0 ? 1 : d == 1 ? -1 : 0), ncz = c.cz + (d == 2 ? 1 : d == 3 ? -1 : 0);
+            Chunk n = chunk(ncx, ncz);
+            if (n == null) continue;
+            for (int t = 0; t < 16; t++)
+                for (int y = 0; y < SY; y++) {
+                    int lx = d == 0 ? 15 : d == 1 ? 0 : t, lz = d == 2 ? 15 : d == 3 ? 0 : t;
+                    int nlx = d == 0 ? 0 : d == 1 ? 15 : t, nlz = d == 2 ? 0 : d == 3 ? 15 : t;
+                    if (c.light[Chunk.idx(lx, y, lz)] > 1) push(key(x0 + lx, y, z0 + lz));
+                    if (n.light[Chunk.idx(nlx, y, nlz)] > 1) push(key(ncx * 16 + nlx, y, ncz * 16 + nlz));
+                }
+        }
+        if (lqn > 0) bfs(x0 - 16, x0 + 31, 0, SY - 1, z0 - 16, z0 + 31, true);
+        lqn = 0;
     }
 
     /** Espalha a luz (busca em largura), perdendo 1 nível por bloco, só dentro da caixa. */
-    private void spread(int n, int x0, int x1, int y0, int y1, int z0, int z1) {
+    private void bfs(int x0, int x1, int y0, int y1, int z0, int z1, boolean markWrites) {
         int head = 0;
-        while (head < n) {
-            int i = queue[head++];
-            int l = blockLight[i] - 1;
+        while (head < lqn) {
+            long k = lq[head++];
+            int x = keyX(k), y = keyY(k), z = keyZ(k);
+            Chunk c = chunkAt(x, z);
+            if (c == null) continue;
+            int l = c.light[Chunk.idx(x & 15, y, z & 15)] - 1;
             if (l <= 0) continue;
-            int x = i >> 15, z = (i >> 6) & 511, y = i & 63;
             for (int d = 0; d < 6; d++) {
                 int nx = x + (d == 0 ? 1 : d == 1 ? -1 : 0);
                 int ny = y + (d == 2 ? 1 : d == 3 ? -1 : 0);
                 int nz = z + (d == 4 ? 1 : d == 5 ? -1 : 0);
                 if (nx < x0 || nx > x1 || ny < y0 || ny > y1 || nz < z0 || nz > z1) continue;
-                int j = idx(nx, ny, nz);
-                if (Block.blocksLight(blocks[j] & 0xFF) || blockLight[j] >= l) continue;
-                blockLight[j] = (byte) l;
-                n = push(n, j);
+                Chunk n = (nx >> 4 == c.cx && nz >> 4 == c.cz) ? c : chunkAt(nx, nz);
+                if (n == null) continue;
+                int j = Chunk.idx(nx & 15, ny, nz & 15);
+                if (Block.blocksLight(n.blocks[j] & 0xFF) || n.light[j] >= l) continue;
+                n.light[j] = (byte) l;
+                push(key(nx, ny, nz));
+                if (markWrites) markLazy(n.cx, n.cz);
             }
-            if (head > 1 << 22) { // compacta a fila para não crescer sem fim
-                System.arraycopy(queue, head, queue, 0, n - head);
-                n -= head;
+            if (head > 1 << 16) { // compacta a fila para não crescer sem fim
+                System.arraycopy(lq, head, lq, 0, lqn - head);
+                lqn -= head;
                 head = 0;
             }
         }
+        lqn = 0;
     }
 
     /** 0 = noite, 1 = dia pleno. */
@@ -607,54 +959,101 @@ final class World {
     }
 
     // =====================================================================
-    // geração
+    // geração (só depende da semente e da posição: dá o mesmo resultado em qualquer computador)
     // =====================================================================
-    private void generate() {
-        final int[] heights = new int[SX * SZ];
-        final byte[] biomes = new byte[SX * SZ];
-        IntStream.range(0, SX).parallel().forEach(x -> {
-            for (int z = 0; z < SZ; z++) column(x, z, heights, biomes);
-        });
 
-        Random r = new Random(seed);
-        for (int x = 3; x < SX - 3; x++)
-            for (int z = 3; z < SZ - 3; z++) {
-                int top = heights[x * SZ + z] - 1;
-                int biome = biomes[x * SZ + z];
-                int b = blocks[idx(x, top, z)] & 0xFF;
-                if (top + 6 >= SY || blocks[idx(x, top + 1, z)] != Block.AIR) continue;
+    /** Gera o terreno, as cavernas e a decoração de um pedaço. Pode rodar em qualquer thread. */
+    Chunk generate(int cx, int cz) {
+        Chunk c = new Chunk(cx, cz);
+        int x0 = cx * 16, z0 = cz * 16;
+        int[] heights = new int[256];
+        byte[] biomes = new byte[256];
+        int[] meta = new int[2];
+        for (int lx = 0; lx < 16; lx++)
+            for (int lz = 0; lz < 16; lz++) {
+                column(x0 + lx, z0 + lz, c.blocks, Chunk.idx(lx, 0, lz), meta);
+                heights[lx * 16 + lz] = meta[0];
+                biomes[lx * 16 + lz] = (byte) meta[1];
+            }
+        decorate(c, heights, biomes);
+        return c;
+    }
+
+    /** Sorteio próprio de cada coluna: árvores de um pedaço vizinho chegam iguais nos dois lados da borda. */
+    private Random columnRandom(int x, int z) {
+        long h = (long) x * 0x9E3779B97F4A7C15L ^ (long) z * 0xC2B2AE3D27D4EB4FL ^ ((long) seed << 21) ^ 0x5DEECE66DL;
+        return new Random(h);
+    }
+
+    private static double treeChance(int biome) {
+        return biome == FOREST ? 0.05 : biome == BIRCH_FOREST ? 0.045 : biome == TUNDRA ? 0.006 : biome == MOUNTAINS ? 0.003 : 0.004;
+    }
+
+    /**
+     * Árvores, plantas e cactos. Uma árvore pode ficar em cima da borda do pedaço, então olhamos também as
+     * colunas até 2 blocos fora dele e escrevemos só a parte da árvore que cai dentro. Para todos os pedaços
+     * concordarem sobre a árvore, a decisão usa só o terreno "limpo" (antes de qualquer decoração).
+     */
+    private void decorate(Chunk c, int[] heights, byte[] biomes) {
+        int x0 = c.cx * 16, z0 = c.cz * 16;
+        byte[] terrain = c.blocks.clone();
+        byte[] tmp = new byte[SY];
+        int[] meta = new int[2];
+        for (int x = x0 - 2; x < x0 + 18; x++)
+            for (int z = z0 - 2; z < z0 + 18; z++) {
+                boolean inside = x >= x0 && x < x0 + 16 && z >= z0 && z < z0 + 16;
+                int h, biome;
+                byte[] col;
+                int base;
+                Random r = columnRandom(x, z);
                 double roll = r.nextDouble();
+                if (inside) {
+                    int i = (x - x0) * 16 + (z - z0);
+                    h = heights[i];
+                    biome = biomes[i];
+                    col = terrain;
+                    base = Chunk.idx(x - x0, 0, z - z0);
+                } else {
+                    h = heightAt(x, z);
+                    biome = biomeAt(x, z, h - 1);
+                    if (roll >= treeChance(biome)) continue; // fora do pedaço só interessam as árvores
+                    column(x, z, tmp, 0, meta);
+                    col = tmp;
+                    base = 0;
+                }
+                int top = h - 1;
+                if (top + 6 >= SY || col[base + top + 1] != Block.AIR) continue;
+                int b = col[base + top] & 0xFF;
                 if (b == Block.GRASS || (b == Block.SNOW && biome == TUNDRA)) {
-                    double treeP = biome == FOREST ? 0.05 : biome == BIRCH_FOREST ? 0.045
-                            : biome == TUNDRA ? 0.006 : biome == MOUNTAINS ? 0.003 : 0.004;
-                    if (roll < treeP) {
+                    if (roll < treeChance(biome)) {
                         boolean birch = biome == BIRCH_FOREST || (biome == FOREST && r.nextDouble() < 0.2);
-                        tree(x, top + 1, z, r, birch);
-                    } else if (b == Block.GRASS) {
+                        placeTree(c, x, top + 1, z, r, birch);
+                    } else if (inside && b == Block.GRASS) {
                         double grassP = biome == PLAINS ? 0.16 : 0.08;
                         double flowerP = biome == PLAINS ? 0.025 : 0.01;
                         double k = r.nextDouble();
-                        if (k < flowerP) blocks[idx(x, top + 1, z)] = (byte) (r.nextBoolean() ? Block.FLOWER_YELLOW : Block.FLOWER_RED);
-                        else if (k < flowerP + grassP) blocks[idx(x, top + 1, z)] = (byte) Block.TALL_GRASS;
+                        int pi = Chunk.idx(x - x0, top + 1, z - z0);
+                        if (k < flowerP) c.blocks[pi] = (byte) (r.nextBoolean() ? Block.FLOWER_YELLOW : Block.FLOWER_RED);
+                        else if (k < flowerP + grassP) c.blocks[pi] = (byte) Block.TALL_GRASS;
                     }
-                } else if (b == Block.SAND && biome == DESERT && roll < 0.006) {
+                } else if (inside && b == Block.SAND && biome == DESERT && roll < 0.006) {
                     int hgt = 1 + r.nextInt(3);
-                    for (int i = 1; i <= hgt; i++) blocks[idx(x, top + i, z)] = (byte) Block.CACTUS;
+                    for (int i = 1; i <= hgt; i++) c.blocks[Chunk.idx(x - x0, top + i, z - z0)] = (byte) Block.CACTUS;
                 }
             }
     }
 
-    private void column(int x, int z, int[] heights, byte[] biomes) {
+    /** Coluna (x, z) do terreno: pedra, minérios, solo, água e cavernas, escrita em out a partir de base. meta: {altura, bioma}. */
+    private void column(int x, int z, byte[] out, int base, int[] meta) {
         int h = heightAt(x, z);
         int top = h - 1;
         int biome = biomeAt(x, z, top);
-        heights[x * SZ + z] = h;
-        biomes[x * SZ + z] = (byte) biome;
+        meta[0] = h;
+        meta[1] = biome;
         boolean beach = top <= SEA + 1;
-        boolean underwater = top < SEA - 1;
-        boolean gravelFloor = underwater && noise(x / 9.0, z / 9.0, seed + 70) > 0.62;
-        int base = (x << 15) | (z << 6);
+        boolean gravelFloor = top < SEA - 1 && noise(x / 9.0, z / 9.0, seed + 70) > 0.62;
 
+        for (int y = 0; y < SY; y++) out[base | y] = (byte) Block.AIR;
         for (int y = 0; y <= top; y++) {
             int depth = top - y;
             int b;
@@ -672,25 +1071,24 @@ final class World {
                 else if (biome == MOUNTAINS) b = Block.STONE;
                 else b = Block.DIRT;
             } else b = ore(x, y, z);
-            blocks[base | y] = (byte) b;
+            out[base | y] = (byte) b;
         }
         for (int y = h; y < SEA; y++)
-            blocks[base | y] = (byte) (biome == TUNDRA && y == SEA - 1 ? Block.ICE : Block.WATER);
+            out[base | y] = (byte) (biome == TUNDRA && y == SEA - 1 ? Block.ICE : Block.WATER);
 
         // cavernas: túneis (dois ruídos 3D perto de 0.5 ao mesmo tempo) e salões
         boolean canOpen = top >= SEA + 3; // não abre cavernas debaixo de água
         for (int y = 2; y <= top; y++) {
             int depth = top - y;
             if (depth < 5 && !canOpen) continue;
-            int b = blocks[base | y] & 0xFF;
+            int b = out[base | y] & 0xFF;
             if (b == Block.BEDROCK || Block.isWater(b)) continue;
             double a = noise3(x / 22.0, y / 12.0, z / 22.0, seed + 20) - 0.5;
-            double c = noise3(x / 22.0, y / 12.0, z / 22.0, seed + 21) - 0.5;
-            boolean tunnel = a * a + c * c < 0.0028;
+            double cc = noise3(x / 22.0, y / 12.0, z / 22.0, seed + 21) - 0.5;
+            boolean tunnel = a * a + cc * cc < 0.0028;
             boolean room = y < 28 && noise3(x / 34.0, y / 16.0, z / 34.0, seed + 22) > 0.8;
-            if (tunnel || room) blocks[base | y] = (byte) (y <= 5 ? Block.LAVA : Block.AIR);
+            if (tunnel || room) out[base | y] = (byte) (y <= 5 ? Block.LAVA : Block.AIR);
         }
-        // nada flutuando: se a caverna abriu bem embaixo da superfície, a planta de cima some sozinha
     }
 
     /** Pedra, ou um minério em veios (grupos de 2x2x2) dependendo da profundidade. */
@@ -707,8 +1105,10 @@ final class World {
         return Block.STONE;
     }
 
-    private void tree(int x, int y, int z, Random r, boolean birch) {
+    /** Uma árvore com o tronco em (x, y, z); só entra no pedaço c o que cai dentro dele. */
+    private void placeTree(Chunk c, int x, int y, int z, Random r, boolean birch) {
         int log = birch ? Block.BIRCH_LOG : Block.LOG, leaf = birch ? Block.BIRCH_LEAVES : Block.LEAVES;
+        int x0 = c.cx * 16, z0 = c.cz * 16;
         int h = (birch ? 5 : 4) + r.nextInt(3);
         int top = y + h;
         for (int dy = -2; dy <= 1; dy++) {
@@ -717,12 +1117,16 @@ final class World {
                 for (int dz = -rad; dz <= rad; dz++) {
                     boolean corner = Math.abs(dx) == rad && Math.abs(dz) == rad;
                     if (corner && (dy == 1 || r.nextInt(2) == 0)) continue;
-                    int px = x + dx, py = top + dy, pz = z + dz;
-                    if (inBounds(px, py, pz) && blocks[idx(px, py, pz)] == Block.AIR) blocks[idx(px, py, pz)] = (byte) leaf;
+                    int px = x + dx - x0, py = top + dy, pz = z + dz - z0;
+                    if (px < 0 || px > 15 || pz < 0 || pz > 15 || py < 0 || py >= SY) continue;
+                    int i = Chunk.idx(px, py, pz);
+                    if (c.blocks[i] == Block.AIR) c.blocks[i] = (byte) leaf;
                 }
         }
-        for (int i = 0; i < h; i++) blocks[idx(x, y + i, z)] = (byte) log;
-        if (y - 1 >= 0 && blocks[idx(x, y - 1, z)] == Block.GRASS) blocks[idx(x, y - 1, z)] = (byte) Block.DIRT;
+        int tx = x - x0, tz = z - z0;
+        if (tx < 0 || tx > 15 || tz < 0 || tz > 15) return;
+        for (int i = 0; i < h && y + i < SY; i++) c.blocks[Chunk.idx(tx, y + i, tz)] = (byte) log;
+        if (y - 1 >= 0 && c.blocks[Chunk.idx(tx, y - 1, tz)] == Block.GRASS) c.blocks[Chunk.idx(tx, y - 1, tz)] = (byte) Block.DIRT;
     }
 
     /** Y do chão de terra firme (grama ou neve) se for o topo da coluna, senão -1. Plantas não contam. */
@@ -735,18 +1139,20 @@ final class World {
         return -1;
     }
 
-    /** Ponto de nascimento: terra firme mais perto do centro do mapa. {x, y, z} dos pés. */
+    /** Ponto de nascimento: terra firme mais perto da origem (0, 0). {x, y, z} dos pés. Carrega os pedaços que precisar. */
     double[] findSpawn() {
-        int cx = SX / 2, cz = SZ / 2;
-        for (int r = 0; r < 240; r++)
+        for (int r = 0; r < 600; r++)
             for (int dx = -r; dx <= r; dx++)
                 for (int dz = -r; dz <= r; dz++) {
                     if (Math.abs(dx) != r && Math.abs(dz) != r) continue;
-                    int top = grassTop(cx + dx, cz + dz);
-                    if (top >= 0 && get(cx + dx, top + 1, cz + dz) == Block.AIR || top >= 0 && Block.shape(get(cx + dx, top + 1, cz + dz)) == Block.CROSS)
-                        return new double[] { cx + dx + 0.5, top + 1.01, cz + dz + 0.5 };
+                    if (heightAt(dx, dz) < SEA + 2) continue; // água ou praia baixa: nem vale carregar
+                    ensureChunk(dx >> 4, dz >> 4);
+                    int top = grassTop(dx, dz);
+                    if (top >= 0 && (get(dx, top + 1, dz) == Block.AIR || Block.shape(get(dx, top + 1, dz)) == Block.CROSS))
+                        return new double[] { dx + 0.5, top + 1.01, dz + 0.5 };
                 }
-        return new double[] { cx + 0.5, SY - 1, cz + 0.5 };
+        ensureChunk(0, 0);
+        return new double[] { 0.5, SY - 1, 0.5 };
     }
 
     /**
@@ -770,11 +1176,13 @@ final class World {
             else if (tmy < tmz) { iy += sy; t = tmy; tmy += tdy; }
             else { iz += sz; t = tmz; tmz += tdz; }
             if (t > reach) break;
-            if (!inBounds(ix, iy, iz)) {
+            if (iy < 0 || iy >= SY) {
                 if (iy >= SY && sy > 0) break;
                 continue;
             }
-            int b = blocks[idx(ix, iy, iz)] & 0xFF;
+            Chunk c = chunkAt(ix, iz);
+            if (c == null) continue;
+            int b = c.blocks[Chunk.idx(ix & 15, iy, iz & 15)] & 0xFF;
             if (b != Block.AIR && Block.shape(b) != Block.LIQUID) return new int[] { ix, iy, iz, px, py, pz, (int) (t * 1000) };
         }
         return null;

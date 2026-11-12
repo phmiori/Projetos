@@ -58,6 +58,7 @@ final class Mobs {
         double daylight = w.daylight();
         for (Iterator<Mob> it = list.iterator(); it.hasNext(); ) {
             Mob m = it.next();
+            if (!w.isLoaded((int) Math.floor(m.x), (int) Math.floor(m.z))) { it.remove(); continue; } // o pedaço foi descarregado
             Player p = nearest(players, m.x, m.z);
             m.update(dt, w, p, survival && p.health > 0, rnd);
             if (m.fuseStarted) Sounds.playAt("pavio", m.x, m.y + 1, m.z, listener, 0.9);
@@ -128,7 +129,7 @@ final class Mobs {
     private void spawnPassive(World w, Player p) {
         double a = rnd.nextDouble() * Math.PI * 2, r = 24 + rnd.nextDouble() * 30;
         int x = (int) (p.x + Math.sin(a) * r), z = (int) (p.z + Math.cos(a) * r);
-        if (x < 2 || z < 2 || x >= World.SX - 2 || z >= World.SZ - 2) return;
+        if (!w.isLoaded(x, z)) return;
         int top = w.grassTop(x, z);
         if (top < 0 || w.get(x, top, z) != Block.GRASS) return;
         int type = new int[] { Mob.PIG, Mob.SHEEP, Mob.CHICKEN, Mob.COW }[rnd.nextInt(4)];
@@ -145,7 +146,7 @@ final class Mobs {
         for (int attempt = 0; attempt < 6; attempt++) {
             double a = rnd.nextDouble() * Math.PI * 2, r = 8 + rnd.nextDouble() * 26;
             int x = (int) (p.x + Math.sin(a) * r), z = (int) (p.z + Math.cos(a) * r);
-            if (x < 2 || z < 2 || x >= World.SX - 2 || z >= World.SZ - 2) continue;
+            if (!w.isLoaded(x, z)) continue;
             for (int y = World.SEA - 1; y > 2; y--) {
                 if (!Block.isWater(w.get(x, y, z))) continue;
                 if (!Block.isWater(w.get(x, y - 1, z))) break; // raso demais
@@ -164,7 +165,7 @@ final class Mobs {
         for (int attempt = 0; attempt < 4; attempt++) {
             double a = rnd.nextDouble() * Math.PI * 2, r = 18 + rnd.nextDouble() * 24;
             int x = (int) (p.x + Math.sin(a) * r), z = (int) (p.z + Math.cos(a) * r);
-            if (x < 2 || z < 2 || x >= World.SX - 2 || z >= World.SZ - 2) continue;
+            if (!w.isLoaded(x, z)) continue;
             // procura um lugar com chão firme, duas células livres e escuro
             int y = 2 + rnd.nextInt(World.SY - 4);
             for (int k = 0; k < 12 && y > 1; k++, y--) {

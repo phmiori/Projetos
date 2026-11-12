@@ -64,6 +64,7 @@ public class BlockGame {
     private final Inventory inv = new Inventory();
     private boolean creative;
     private boolean warming; // esperando os pedaços perto do jogador ficarem prontos
+    private double warmTime;
 
     // ---- lobby ----
     private List<Saves.Info> worlds = new ArrayList<>();
@@ -354,6 +355,7 @@ public class BlockGame {
         Runnable ev;
         while ((ev = events.poll()) != null) ev.run();
         netUpdate(dt);
+        tickWorldLoading(dt);
 
         toastTimer -= dt;
         hurtFlash = Math.max(0, hurtFlash - dt);
@@ -390,13 +392,31 @@ public class BlockGame {
                 if (warming) {
                     // espera os pedaços em volta do jogador ficarem prontos antes de liberar o jogo
                     mdx = mdy = 0;
-                    if (renderer.pendingNear(player.x, player.z, 40) == 0) warming = false;
+                    warmTime += dt;
+                    if (renderer.pendingNear(player.x, player.z, 56) == 0 || warmTime > 25) warming = false;
                     break;
                 }
                 gameUpdate(dt);
                 break;
             default:
                 break;
+        }
+    }
+
+    /**
+     * O mundo é infinito: todo quadro carrega (em segundo plano) os pedaços perto de cada jogador e solta os
+     * que ficaram longe. O anfitrião também mantém carregado o entorno dos amigos, onde as criaturas e a água agem.
+     */
+    private void tickWorldLoading(double dt) {
+        if (world != null && player != null) {
+            int radius = (int) Math.ceil((settings.viewDist + 24) / 16.0) + 2;
+            List<double[]> who = new ArrayList<>();
+            who.add(new double[] { player.x, player.z, radius });
+            if (server != null) for (Remote r : remotes.values()) if (r.hasState) who.add(new double[] { r.body.x, r.body.z, 6 });
+            world.updateLoading(who.toArray(new double[0][]), dt);
+        } else if (world == null && lobbyWorld != null && lobbyCam != null) {
+            int radius = (int) Math.ceil((settings.viewDist + 24) / 16.0) + 2;
+            lobbyWorld.updateLoading(new double[][] { { lobbyCam.x, lobbyCam.z, radius } }, dt);
         }
     }
 
@@ -1162,6 +1182,7 @@ public class BlockGame {
     }
 
     private void respawn() {
+        world.ensureAround(info.spawnX, info.spawnZ, 1); // o ponto de renascimento pode estar longe, num pedaço descarregado
         player.x = info.spawnX; player.y = info.spawnY; player.z = info.spawnZ;
         player.vx = player.vy = player.vz = 0;
         player.health = Player.MAX_HEALTH;
@@ -1176,6 +1197,7 @@ public class BlockGame {
     // transições de tela
     // =====================================================================
     private void enterLobby() {
+        if (lastGameWorld != null) { lastGameWorld.close(); lastGameWorld = null; }
         state = State.LOBBY;
         renderer.setWorld(lobbyWorld);
         renderer.breakProgress = 0;
@@ -1217,7 +1239,7 @@ public class BlockGame {
         i.persona = draft;
         final int s = seed;
         startLoading("Gerando o mundo \"" + name + "\"...", () -> {
-            World w = new World(s);
+            World w = new World(s, Saves.chunkStore(i));
             double[] sp = w.findSpawn();
             i.hasPlayer = true;
             i.spawnX = i.px = sp[0];
@@ -1232,14 +1254,13 @@ public class BlockGame {
 
     private void loadWorld(final Saves.Info i) {
         startLoading("Carregando \"" + i.name + "\"...", () -> {
-            byte[] data;
             try {
-                data = Saves.loadBlocks(i);
+                // mundos das versões antigas (512 x 512 fixos) viram pedaços e passam a poder crescer
+                if (Saves.migrateLegacy(i)) System.out.println("Mundo antigo convertido em pedaços: " + i.name);
             } catch (java.io.IOException e) {
                 throw new RuntimeException(e.getMessage(), e);
             }
-            World w = data == null ? new World(i.seed) : new World(i.seed, data);
-            w.loadRotations(Saves.loadRotations(i));
+            World w = new World(i.seed, Saves.chunkStore(i));
             if (!i.hasPlayer) {
                 double[] sp = w.findSpawn();
                 i.hasPlayer = true;
@@ -1259,9 +1280,15 @@ public class BlockGame {
         state = State.LOADING;
     }
 
+    private World lastGameWorld;
+
     private void enterWorld(Saves.Info i, World w) {
         chatLines.clear();
         closeChat();
+        if (lastGameWorld != null && lastGameWorld != w) lastGameWorld.close();
+        lastGameWorld = w;
+        lobbyWorld.clear(); // o cenário do lobby não precisa ficar na memória enquanto se joga
+        w.ensureAround(i.px, i.pz, 2); // o jogador nunca nasce sem chão
         world = w;
         info = i;
         creative = i.creative;
@@ -1300,6 +1327,8 @@ public class BlockGame {
         breakProgress = 0;
         breakY = -1;
         renderer.setWorld(w);
+        warming = true; // o terreno em volta é gerado e montado antes de liberar o jogo
+        warmTime = 0;
         resume();
     }
 
@@ -1500,21 +1529,15 @@ public class BlockGame {
                 i.spawnX = d.readFloat(); i.spawnY = d.readFloat(); i.spawnZ = d.readFloat();
                 myId = d.readInt();
                 String state = d.readUTF();
-                byte[] zipped = new byte[d.readInt()];
-                d.readFully(zipped);
-                byte[] rotBytes = new byte[d.readInt()];
-                d.readFully(rotBytes);
-                byte[] blocks = new byte[World.SX * World.SZ * World.SY];
-                try (java.io.InputStream in = new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(zipped))) {
-                    int off = 0, n;
-                    while (off < blocks.length && (n = in.read(blocks, off, blocks.length - off)) > 0) off += n;
-                }
+                // o amigo gera o terreno sozinho (mesma semente = mesmo mundo); o anfitrião manda só o que foi modificado
+                byte[] changed = new byte[d.readInt()];
+                d.readFully(changed);
+                World.MemoryStore changedChunks = World.importModified(changed);
                 i.persona = joinPersona;
                 i.hasPlayer = true;
                 i.px = i.spawnX; i.py = i.spawnY; i.pz = i.spawnZ;
                 applyState(i, state);
-                World world2 = new World(i.seed, blocks);
-                world2.loadRotations(Saves.rotationsFromBytes(rotBytes));
+                World world2 = new World(i.seed, changedChunks);
                 toHost = c;
                 enterWorld(i, world2);
                 world2.listener = this::onLocalBlock;
@@ -1636,16 +1659,10 @@ public class BlockGame {
                 Remote nr = new Remote(nextRemoteId++, unique, pe);
                 nr.conn = p.from;
                 p.from.tag = nr;
-                // manda o mundo inteiro (compactado) e o estado salvo desse amigo
-                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream(1 << 20);
-                try (java.util.zip.GZIPOutputStream gz = new java.util.zip.GZIPOutputStream(bos, 1 << 16) {
-                    { def.setLevel(java.util.zip.Deflater.BEST_SPEED); }
-                }) {
-                    gz.write(world.blocks);
-                }
+                // manda os pedaços modificados (o terreno o amigo gera sozinho pela semente) e o estado salvo desse amigo
                 p.from.send(new Net.Out(Net.WELCOME).s(info.name).i(info.seed).b(creative).dbl(world.time).i(info.day)
                         .f(info.spawnX).f(info.spawnY).f(info.spawnZ).i(nr.id).s(info.lanPlayers.getOrDefault(unique, ""))
-                        .raw(bos.toByteArray()).raw(Saves.rotationBytes(world.packRotations())));
+                        .raw(world.exportModified()));
                 // quem já está no mundo (o anfitrião e os outros amigos)
                 p.from.send(joinPacket(0, info.persona.name, info.persona));
                 for (Remote o : remotes.values()) p.from.send(joinPacket(o.id, o.name, o.persona));
@@ -1674,6 +1691,7 @@ public class BlockGame {
                 int x = d.readInt(), y = d.readInt(), z = d.readInt(), v = d.readInt();
                 int b = v & 0xFF, rot = (v >> 8) & 3;
                 if (World.inBounds(x, y, z) && b < Block.COUNT) {
+                    world.ensureChunk(x >> 4, z >> 4); // o amigo mexeu longe daqui: carrega o pedaço para valer a mudança
                     if (world.get(x, y, z) == Block.CHEST && b != Block.CHEST) { // baú quebrado por um amigo: o conteúdo cai no chão
                         Inventory c = chests.remove(chestKey(x, y, z));
                         if (c != null) {
@@ -1822,6 +1840,7 @@ public class BlockGame {
                 int b = v & 0xFF, rot = (v >> 8) & 3;
                 if (world != null && World.inBounds(x, y, z) && b < Block.COUNT) {
                     applyingRemote = true;
+                    world.ensureChunk(x >> 4, z >> 4); // pode ser longe do amigo: o pedaço precisa existir para a mudança valer
                     world.setRot(x, y, z, b, rot);
                     applyingRemote = false;
                 }
@@ -2009,8 +2028,7 @@ public class BlockGame {
         snapshotInfo();
         try {
             Saves.saveMeta(info);
-            Saves.saveBlocks(info, world.blocks);
-            Saves.saveRotations(info, world.packRotations());
+            world.saveAll(); // só os pedaços que mudaram desde o último salvamento
         } catch (Exception e) {
             e.printStackTrace();
             toast("Erro ao salvar: " + e.getMessage());
@@ -2028,12 +2046,10 @@ public class BlockGame {
             toast("Erro ao salvar: " + e.getMessage());
             return;
         }
-        final byte[] copy = world.blocks.clone();
-        final int[] rots = world.packRotations();
-        final Saves.Info target = info;
+        final java.util.List<Chunk> changed = world.snapshotModified(); // cópias: o jogo continua mexendo nos originais
+        final World.Store target = world.store;
         lastSave = saver.submit(() -> {
-            Saves.saveBlocks(target, copy);
-            Saves.saveRotations(target, rots);
+            if (target != null) for (Chunk c : changed) target.write(c.cx, c.cz, c.toBytes());
             return null;
         });
     }
@@ -2121,11 +2137,9 @@ public class BlockGame {
             inv.clear();
             // salvar e reler
             saveSync();
-            int n = 0, furn = -1;
-            for (int v : Saves.loadRotations(info)) { n++; if ((v & 0xFFFFFF) == World.idx(x, 61, z + 2)) furn = v >>> 24; }
-            say2("salvo e relido do arquivo: " + n + " direcoes, fornalha = " + furn + " (esperado 3)");
-            World w2 = new World(info.seed, world.blocks.clone());
-            w2.loadRotations(Saves.loadRotations(info));
+            World w2 = new World(info.seed, Saves.chunkStore(info)); // lê de volta do disco
+            w2.ensureAround(x, z, 1);
+            say2("salvo e relido do arquivo: fornalha = " + w2.rotation(x, 61, z + 2) + " (esperado 3)");
             say2("mundo recarregado: fornalha " + w2.rotation(x, 61, z + 2) + ", bau " + w2.rotation(x + 2, 61, z + 2) + ", cama " + w2.rotation(x - 2, 61, z + 2));
             // quebrar um bloco limpa a direção
             world.set(x + 4, 61, z + 2, Block.AIR);
@@ -2158,8 +2172,9 @@ public class BlockGame {
         if (dPhase == 0 && dT > 2) {
             dPhase = 1;
             dX = -1;
-            for (int cx = 0; cx < World.SX && dX < 0; cx++)
-                for (int cz = 0; cz < World.SZ; cz++)
+            if (world.store != null) for (int[] ck : world.store.list()) world.ensureChunk(ck[0], ck[1]); // os pedaços que o anfitrião mexeu
+            for (int cx = (int) player.x - 300; cx < (int) player.x + 300 && dX < 0; cx++)
+                for (int cz = (int) player.z - 300; cz < (int) player.z + 300; cz++)
                     if (world.get(cx, 61, cz) == Block.FURNACE && world.get(cx + 2, 61, cz) == Block.CHEST) { dX = cx; dZ = cz - 2; break; }
             if (dX < 0) { say2("AMIGO: nao achei o palco"); dPhase = 99; return; }
             int x = dX, z = dZ;
@@ -2319,8 +2334,9 @@ public class BlockGame {
         if (benchPhase == 0 && benchT > 2) {
             benchPhase = 1;
             benchX = -1;
-            for (int cx = 0; cx < World.SX && benchX < 0; cx++)
-                for (int cz = 0; cz < World.SZ; cz++)
+            if (world.store != null) for (int[] ck : world.store.list()) world.ensureChunk(ck[0], ck[1]); // os pedaços que o anfitrião mexeu
+            for (int cx = (int) player.x - 300; cx < (int) player.x + 300 && benchX < 0; cx++)
+                for (int cz = (int) player.z - 300; cz < (int) player.z + 300; cz++)
                     if (world.get(cx, 61, cz) == Block.CHEST) { benchX = cx + 3; benchZ = cz - 1; break; }
             if (benchX < 0) { say("AMIGO: nao achei o palco do anfitriao"); benchPhase = 99; return; }
             player.x = benchX + 2.5; player.y = 61.01; player.z = benchZ + 1.5;
@@ -2554,7 +2570,7 @@ public class BlockGame {
 
     private void orbitLobbyCamera() {
         double a = lobbyTime * 0.04, r = 46;
-        double cx = World.SX / 2.0, cz = World.SZ / 2.0;
+        double cx = 256, cz = 256; // o cenário de sempre (o terreno é o mesmo em qualquer ponto da semente)
         lobbyCam.x = cx + Math.sin(a) * r;
         lobbyCam.z = cz + Math.cos(a) * r;
         lobbyCam.y = Math.max(World.SEA, lobbyWorld.heightAt((int) lobbyCam.x, (int) lobbyCam.z)) + 22;

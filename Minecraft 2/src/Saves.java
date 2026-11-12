@@ -10,7 +10,7 @@ import java.util.zip.GZIPOutputStream;
 /**
  * Mundos salvos na pasta "worlds". Cada mundo tem:
  *   meta.properties  — nome, semente, modo, personagem, posição, vida e inventário
- *   blocos.dat.gz    — todos os blocos do mundo, compactados
+ *   chunks/          — os pedaços do mundo que o jogador modificou (o resto o gerador refaz pela semente)
  */
 final class Saves {
     static final File DIR = new File("worlds");
@@ -138,71 +138,75 @@ final class Saves {
         replace(tmp, new File(d, "meta.properties"));
     }
 
-    static void saveBlocks(Info i, byte[] blocks) throws IOException {
-        File d = i.dir();
-        if (!d.exists() && !d.mkdirs()) throw new IOException("não consegui criar " + d);
-        File tmp = new File(d, "blocos.dat.gz.tmp");
-        try (OutputStream out = new GZIPOutputStream(new BufferedOutputStream(new FileOutputStream(tmp)), 1 << 16) {
-            { def.setLevel(Deflater.BEST_SPEED); }
-        }) {
-            out.write(blocks);
-        }
-        replace(tmp, new File(d, "blocos.dat.gz"));
-    }
+    // ------------------------------------------------------------------ pedaços do mundo
 
-    /** Direções dos blocos (World.packRotations) em bytes compactados: o mesmo formato do arquivo e da rede. */
-    static byte[] rotationBytes(int[] packed) {
-        try {
-            ByteArrayOutputStream bos = new ByteArrayOutputStream();
-            try (DataOutputStream out = new DataOutputStream(new GZIPOutputStream(bos))) {
-                out.writeInt(packed.length);
-                for (int v : packed) out.writeInt(v);
+    /** Os pedaços modificados de um mundo, um arquivo cada na pasta "chunks" (os outros o gerador refaz igual). */
+    static final class DiskStore implements World.Store {
+        private final File dir;
+
+        DiskStore(Info i) {
+            dir = new File(i.dir(), "chunks");
+        }
+
+        private File file(int cx, int cz) {
+            return new File(dir, cx + "_" + cz + ".dat");
+        }
+
+        public byte[] read(int cx, int cz) {
+            File f = file(cx, cz);
+            if (!f.exists()) return null;
+            try {
+                return java.nio.file.Files.readAllBytes(f.toPath());
+            } catch (IOException e) {
+                System.out.println("Não consegui ler " + f + ": " + e.getMessage());
+                return null;
             }
-            return bos.toByteArray();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
         }
-    }
 
-    static int[] rotationsFromBytes(byte[] bytes) {
-        if (bytes == null || bytes.length == 0) return new int[0];
-        try (DataInputStream in = new DataInputStream(new GZIPInputStream(new ByteArrayInputStream(bytes)))) {
-            int n = in.readInt();
-            if (n < 0 || n > World.SX * World.SZ * World.SY) return new int[0];
-            int[] out = new int[n];
-            for (int k = 0; k < n; k++) out[k] = in.readInt();
+        public synchronized void write(int cx, int cz, byte[] data) {
+            try {
+                if (!dir.exists() && !dir.mkdirs()) throw new IOException("não consegui criar " + dir);
+                File tmp = new File(dir, cx + "_" + cz + ".tmp");
+                java.nio.file.Files.write(tmp.toPath(), data);
+                replace(tmp, file(cx, cz));
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        public List<int[]> list() {
+            List<int[]> out = new ArrayList<>();
+            String[] names = dir.list();
+            if (names == null) return out;
+            for (String n : names) {
+                if (!n.endsWith(".dat")) continue;
+                String[] p = n.substring(0, n.length() - 4).split("_");
+                try {
+                    if (p.length == 2) out.add(new int[] { Integer.parseInt(p[0]), Integer.parseInt(p[1]) });
+                } catch (NumberFormatException ignored) {
+                }
+            }
             return out;
-        } catch (IOException e) {
-            System.out.println("Direções dos blocos ilegíveis: " + e.getMessage());
-            return new int[0];
         }
     }
 
-    static void saveRotations(Info i, int[] packed) throws IOException {
-        File d = i.dir();
-        if (!d.exists() && !d.mkdirs()) throw new IOException("não consegui criar " + d);
-        File tmp = new File(d, "direcoes.dat.gz.tmp");
-        try (OutputStream out = new FileOutputStream(tmp)) {
-            out.write(rotationBytes(packed));
-        }
-        replace(tmp, new File(d, "direcoes.dat.gz"));
+    static World.Store chunkStore(Info i) {
+        return new DiskStore(i);
     }
 
-    /** Direções dos blocos do mundo (mundos antigos não têm o arquivo: tudo no padrão). */
-    static int[] loadRotations(Info i) {
-        File f = new File(i.dir(), "direcoes.dat.gz");
-        if (!f.exists()) return new int[0];
-        try {
-            return rotationsFromBytes(java.nio.file.Files.readAllBytes(f.toPath()));
-        } catch (IOException e) {
-            return new int[0];
-        }
-    }
+    // ------------------------------------------------------------------ mundos antigos (512 x 512 de tamanho fixo)
 
-    static byte[] loadBlocks(Info i) throws IOException {
+    private static final int OLD_SX = 512, OLD_SZ = 512, OLD_SY = 64;
+
+    /**
+     * Mundos das versões antigas eram um bloco só de 512 x 512 (arquivo blocos.dat.gz). Aqui eles viram
+     * pedaços: o mundo continua igualzinho, e fora daquele quadrado o gerador continua o terreno.
+     * Retorna se havia algo para converter.
+     */
+    static boolean migrateLegacy(Info i) throws IOException {
         File f = new File(i.dir(), "blocos.dat.gz");
-        if (!f.exists()) return null;
-        byte[] data = new byte[World.SX * World.SZ * World.SY];
+        if (!f.exists()) return false;
+        byte[] data = new byte[OLD_SX * OLD_SZ * OLD_SY];
         try (InputStream in = new GZIPInputStream(new BufferedInputStream(new FileInputStream(f)), 1 << 16)) {
             int off = 0;
             while (off < data.length) {
@@ -211,9 +215,41 @@ final class Saves {
                 off += n;
             }
         }
-        return data;
+        // direções dos blocos: cada int é a posição antiga com a direção nos bits 24 e 25
+        java.util.Map<Integer, java.util.Map<Integer, Byte>> rots = new java.util.HashMap<>();
+        File rf = new File(i.dir(), "direcoes.dat.gz");
+        if (rf.exists()) {
+            try (DataInputStream in = new DataInputStream(new GZIPInputStream(new BufferedInputStream(new FileInputStream(rf))))) {
+                int n = in.readInt();
+                for (int k = 0; k < n && k < OLD_SX * OLD_SZ * OLD_SY; k++) {
+                    int v = in.readInt();
+                    int idx = v & 0xFFFFFF, rot = (v >>> 24) & 3;
+                    if (rot == 0) continue;
+                    int x = idx >> 15, z = (idx >> 6) & 511, y = idx & 63;
+                    int ck = (x >> 4) * 64 + (z >> 4);
+                    rots.computeIfAbsent(ck, q -> new java.util.HashMap<>()).put(Chunk.idx(x & 15, y, z & 15), (byte) rot);
+                }
+            } catch (IOException e) {
+                System.out.println("Direções antigas ilegíveis: " + e.getMessage());
+            }
+        }
+        DiskStore store = new DiskStore(i);
+        for (int cx = 0; cx < OLD_SX / 16; cx++)
+            for (int cz = 0; cz < OLD_SZ / 16; cz++) {
+                Chunk c = new Chunk(cx, cz);
+                for (int lx = 0; lx < 16; lx++)
+                    for (int lz = 0; lz < 16; lz++) {
+                        int from = ((cx * 16 + lx) << 15) | ((cz * 16 + lz) << 6);
+                        System.arraycopy(data, from, c.blocks, Chunk.idx(lx, 0, lz), OLD_SY);
+                    }
+                java.util.Map<Integer, Byte> r = rots.get(cx * 64 + cz);
+                if (r != null) c.rot = new java.util.concurrent.ConcurrentHashMap<>(r);
+                store.write(cx, cz, c.toBytes());
+            }
+        replace(f, new File(i.dir(), "blocos.dat.gz.antigo"));
+        if (rf.exists()) replace(rf, new File(i.dir(), "direcoes.dat.gz.antigo"));
+        return true;
     }
-
     static void delete(Info i) {
         deleteRec(i.dir());
     }

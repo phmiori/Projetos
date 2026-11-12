@@ -21,7 +21,16 @@ import static org.lwjgl.opengl.GL33C.*;
 final class GLRenderer {
     private static final int SHADOW_SIZE = 2048;
     private static final int MAX_QUADS = 16 * 16 * 64 * 6; // faces por pedaço (sobra até para muitas escadas)
-    private static final int NCHUNKS = World.CHUNKS_X * World.CHUNKS_Z;
+    /**
+     * O mundo não tem fim, então a placa de vídeo guarda só uma janela de GRID x GRID pedaços em volta da
+     * câmera. Cada pedaço (cx, cz) usa a posição (cx mod GRID, cz mod GRID); quando a câmera anda, as
+     * posições dos pedaços que ficaram para trás são reaproveitadas pelos novos.
+     */
+    private static final int GRID = 64, NCHUNKS = GRID * GRID;
+
+    private static int slot(int cx, int cz) {
+        return ((cz & (GRID - 1)) * GRID) + (cx & (GRID - 1));
+    }
 
     // ---------------------------------------------------------------------------------
     // shaders
@@ -264,7 +273,9 @@ final class GLRenderer {
     private final int[] opaqueVao = new int[NCHUNKS], opaqueVbo = new int[NCHUNKS], opaqueQuads = new int[NCHUNKS];
     private final int[] waterVao = new int[NCHUNKS], waterVbo = new int[NCHUNKS], waterQuads = new int[NCHUNKS];
     private final int[] wantVersion = new int[NCHUNKS], haveVersion = new int[NCHUNKS];
-    private final boolean[] inFlight = new boolean[NCHUNKS];
+    private final int[] slotCx = new int[NCHUNKS], slotCz = new int[NCHUNKS]; // que pedaço ocupa cada posição
+    private final long[] inFlightId = new long[NCHUNKS]; // 0 = não está sendo montado
+    private long nextTaskId = 1;
     private int inFlightCount;
     private final ExecutorService meshPool;
     private final int meshThreads;
@@ -373,12 +384,21 @@ final class GLRenderer {
         generation++;
         for (int i = 0; i < NCHUNKS; i++) {
             deleteChunk(i);
-            wantVersion[i] = 1;
+            slotCx[i] = slotCz[i] = Integer.MIN_VALUE;
+            wantVersion[i] = 0;
             haveVersion[i] = 0;
-            inFlight[i] = false;
+            inFlightId[i] = 0;
         }
         inFlightCount = 0;
         results.clear();
+    }
+
+    /** Esvazia uma posição: apaga a malha da placa de vídeo e esquece o pedaço. */
+    private void releaseSlot(int s) {
+        deleteChunk(s);
+        slotCx[s] = slotCz[s] = Integer.MIN_VALUE;
+        wantVersion[s] = haveVersion[s] = 0;
+        if (inFlightId[s] != 0) { inFlightId[s] = 0; inFlightCount--; }
     }
 
     private void deleteChunk(int i) {
@@ -390,72 +410,114 @@ final class GLRenderer {
 
     /** Quantos pedaços perto da câmera ainda faltam carregar (para a tela de carregamento). */
     int pendingNear(double x, double z, double radius) {
-        int n = 0;
-        for (int i = 0; i < NCHUNKS; i++)
-            if (haveVersion[i] == 0 && chunkDist(i, x, z) < radius) n++;
+        int n = 0, r = (int) Math.ceil(radius / 16) + 1;
+        int pcx = (int) Math.floor(x / 16), pcz = (int) Math.floor(z / 16);
+        for (int dx = -r; dx <= r; dx++)
+            for (int dz = -r; dz <= r; dz++) {
+                int cx = pcx + dx, cz = pcz + dz;
+                double ddx = cx * 16 + 8 - x, ddz = cz * 16 + 8 - z;
+                if (Math.sqrt(ddx * ddx + ddz * ddz) >= radius) continue;
+                int s = slot(cx, cz);
+                if (slotCx[s] != cx || slotCz[s] != cz || haveVersion[s] == 0) n++;
+            }
         return n;
     }
 
     private double chunkDist(int i, double x, double z) {
-        double cx = (i / World.CHUNKS_Z) * 16 + 8 - x, cz = (i % World.CHUNKS_Z) * 16 + 8 - z;
+        double cx = slotCx[i] * 16.0 + 8 - x, cz = slotCz[i] * 16.0 + 8 - z;
         return Math.sqrt(cx * cx + cz * cz);
     }
 
     private void updateChunks(double px, double pz) {
         // blocos mudados pelo jogador: refaz já, nesta thread, para a mudança aparecer no mesmo quadro
         if (world.anyDirty) {
-            world.anyDirty = false;
-            for (int i = 0; i < NCHUNKS; i++)
-                if (world.dirty[i]) {
-                    world.dirty[i] = false;
-                    wantVersion[i]++;
-                    if (haveVersion[i] != 0) {
-                        Mesher.Mesh m = Mesher.build(world, i / World.CHUNKS_Z, i % World.CHUNKS_Z, wantVersion[i]);
-                        upload(m);
-                    }
+            for (long k : world.takeDirty()) {
+                int cx = World.ckeyX(k), cz = World.ckeyZ(k), s = slot(cx, cz);
+                if (slotCx[s] != cx || slotCz[s] != cz) continue; // fora da janela: não tem malha
+                wantVersion[s]++;
+                if (haveVersion[s] != 0) {
+                    Mesher.Mesh m = Mesher.build(world, cx, cz, wantVersion[s]);
+                    if (m != null) upload(m);
                 }
+            }
+            // mudanças sem pressa (a luz que veio de um pedaço novo): as threads de malha refazem, a malha velha fica até lá
+            for (long k : world.takeLazyDirty()) {
+                int cx = World.ckeyX(k), cz = World.ckeyZ(k), s = slot(cx, cz);
+                if (slotCx[s] == cx && slotCz[s] == cz) wantVersion[s]++;
+            }
         }
 
         // resultados prontos das threads de malha
         long budget = System.nanoTime() + 4_000_000L;
         Object[] r;
         while (System.nanoTime() < budget && (r = results.poll()) != null) {
-            int gen = (Integer) r[0];
+            int gen = (Integer) r[0], s = (Integer) r[3];
             Mesher.Mesh m = (Mesher.Mesh) r[1];
-            if (gen != generation) continue;
-            inFlight[m.chunk] = false;
+            long id = (Long) r[2];
+            if (gen != generation || inFlightId[s] != id) continue; // mundo trocado, ou a posição já é de outro pedaço
+            inFlightId[s] = 0;
             inFlightCount--;
-            if (m.version == wantVersion[m.chunk]) upload(m);
+            if (m != null && slotCx[s] == m.cx && slotCz[s] == m.cz && m.version == wantVersion[s]) upload(m);
+        }
+
+        // a janela de pedaços em volta da câmera: o que ficou para trás sai, o que chegou perto entra
+        double limit = viewDist + 24;
+        int R = Math.min(GRID / 2 - 1, (int) Math.ceil(limit / 16) + 1);
+        int pcx = (int) Math.floor(px / 16), pcz = (int) Math.floor(pz / 16);
+        for (int s = 0; s < NCHUNKS; s++) {
+            if (slotCx[s] == Integer.MIN_VALUE) continue;
+            double dx = slotCx[s] - pcx, dz = slotCz[s] - pcz;
+            if (dx * dx + dz * dz > (R + 1.0) * (R + 1.0)) releaseSlot(s);
         }
 
         // agenda os pedaços que faltam, do mais perto para o mais longe
         int free = meshThreads * 2 - inFlightCount;
-        if (free <= 0) return;
-        double limit = viewDist + 24;
         List<double[]> todo = new ArrayList<>();
-        for (int i = 0; i < NCHUNKS; i++) {
-            if (inFlight[i] || haveVersion[i] == wantVersion[i]) continue;
-            double d = chunkDist(i, px, pz);
-            if (d < limit) todo.add(new double[] { d, i });
-        }
+        for (int dx = -R; dx <= R; dx++)
+            for (int dz = -R; dz <= R; dz++) {
+                int cx = pcx + dx, cz = pcz + dz;
+                double ddx = cx * 16 + 8 - px, ddz = cz * 16 + 8 - pz;
+                double d = Math.sqrt(ddx * ddx + ddz * ddz);
+                if (d >= limit) continue;
+                int s = slot(cx, cz);
+                if (slotCx[s] != cx || slotCz[s] != cz) {
+                    if (slotCx[s] != Integer.MIN_VALUE) releaseSlot(s);
+                    slotCx[s] = cx;
+                    slotCz[s] = cz;
+                    wantVersion[s] = 1;
+                    haveVersion[s] = 0;
+                }
+                if (free <= 0 || inFlightId[s] != 0 || haveVersion[s] == wantVersion[s]) continue;
+                if (!world.neighborsLoaded(cx, cz)) continue; // a malha precisa dos 8 vizinhos
+                todo.add(new double[] { d, s });
+            }
+        if (free <= 0 || todo.isEmpty()) return;
         todo.sort((a, b) -> Double.compare(a[0], b[0]));
         final World w = world;
         final int gen = generation;
         for (int k = 0; k < todo.size() && k < free; k++) {
-            final int i = (int) todo.get(k)[1];
-            final int ver = wantVersion[i];
-            inFlight[i] = true;
+            final int s = (int) todo.get(k)[1];
+            final int cx = slotCx[s], cz = slotCz[s], ver = wantVersion[s];
+            final long id = nextTaskId++;
+            inFlightId[s] = id;
             inFlightCount++;
             meshPool.submit(() -> {
-                Mesher.Mesh m = Mesher.build(w, i / World.CHUNKS_Z, i % World.CHUNKS_Z, ver);
-                results.add(new Object[] { gen, m });
+                Mesher.Mesh m = null;
+                try {
+                    m = Mesher.build(w, cx, cz, ver);
+                } catch (RuntimeException e) {
+                    e.printStackTrace();
+                }
+                results.add(new Object[] { gen, m, id, s });
             });
         }
     }
 
     private void upload(Mesher.Mesh m) {
-        shadowDirty = true;
-        int i = m.chunk;
+        // o mapa de sombras só precisa ser refeito se o pedaço está dentro da área que ele cobre
+        double sdx = m.cx * 16 + 8 - shCx, sdz = m.cz * 16 + 8 - shCz, sr = shR * 1.5 + 23;
+        if (!shadowValid || sdx * sdx + sdz * sdz <= sr * sr) shadowDirty = true;
+        int i = slot(m.cx, m.cz);
         haveVersion[i] = m.version;
         int[] vao = { opaqueVao[i], waterVao[i] }, vbo = { opaqueVbo[i], waterVbo[i] };
         int[][] data = { m.opaque, m.water };
@@ -638,7 +700,7 @@ final class GLRenderer {
             if ((opaqueQuads[i] == 0 && waterQuads[i] == 0) || !chunkVisible(i)) continue;
             if (waterQuads[i] > 0) visibleWater.add(i);
             if (opaqueQuads[i] == 0) continue;
-            glUniform3f(uChunk, (i / World.CHUNKS_Z) * 16, 0, (i % World.CHUNKS_Z) * 16);
+            glUniform3f(uChunk, slotCx[i] * 16, 0, slotCz[i] * 16);
             glBindVertexArray(opaqueVao[i]);
             glDrawElements(GL_TRIANGLES, opaqueQuads[i] * 6, GL_UNSIGNED_INT, 0);
         }
@@ -679,7 +741,7 @@ final class GLRenderer {
         glUniform1f(loc(waterProg, "uWaterDrop"), 0.12f);
         int wChunk = loc(waterProg, "uChunk");
         for (int i : visibleWater) {
-            glUniform3f(wChunk, (i / World.CHUNKS_Z) * 16, 0, (i % World.CHUNKS_Z) * 16);
+            glUniform3f(wChunk, slotCx[i] * 16, 0, slotCz[i] * 16);
             glBindVertexArray(waterVao[i]);
             glDrawElements(GL_TRIANGLES, waterQuads[i] * 6, GL_UNSIGNED_INT, 0);
         }
@@ -815,7 +877,7 @@ final class GLRenderer {
         int uChunk = loc(shadowProg, "uChunk");
         for (int i = 0; i < NCHUNKS; i++) {
             if (opaqueQuads[i] == 0 || chunkDist(i, cx, cz) > R * 1.5 + 23) continue;
-            glUniform3f(uChunk, (i / World.CHUNKS_Z) * 16, 0, (i % World.CHUNKS_Z) * 16);
+            glUniform3f(uChunk, slotCx[i] * 16, 0, slotCz[i] * 16);
             glBindVertexArray(opaqueVao[i]);
             glDrawElements(GL_TRIANGLES, opaqueQuads[i] * 6, GL_UNSIGNED_INT, 0);
         }
@@ -823,7 +885,7 @@ final class GLRenderer {
     }
 
     private boolean chunkVisible(int i) {
-        float x0 = (i / World.CHUNKS_Z) * 16, z0 = (i % World.CHUNKS_Z) * 16;
+        float x0 = slotCx[i] * 16, z0 = slotCz[i] * 16;
         float dx = x0 + 8 - camX, dz = z0 + 8 - camZ;
         if (Math.sqrt(dx * dx + dz * dz) > viewDist + 23) return false;
         for (float[] p : planes) {
