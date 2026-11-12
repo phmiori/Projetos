@@ -16,6 +16,7 @@ final class Hand {
     static synchronized void reload() {
         MODELS.clear();
         DROP_MODELS.clear();
+        TOOL_MODELS.clear();
     }
 
     /**
@@ -35,7 +36,8 @@ final class Hand {
     /** Escreve os triângulos (x,y,z,r,g,b) do braço e do item em out. Retorna quantos floats escreveu. */
     static float[] build(float[] out, int[] count, Persona persona, int item, double walkDist, double swing, double light, double charge) {
         // arco: a figura muda conforme a corda é puxada (charge 0..1; 0 = solto)
-        float[] m = item <= 0 ? null : item == Items.BOW ? bowModel(charge <= 0 ? 0 : 1 + Math.min(2, (int) (charge * 3))) : model(item);
+        float[] m = item <= 0 ? null : item == Items.BOW ? bowModel(charge <= 0 ? 0 : 1 + Math.min(2, (int) (charge * 3)))
+                : Items.isTool(item) ? toolModel(item) : model(item);
         int need = 2 * 36 * 6 + (m != null ? m.length : 0);
         if (out.length < need) out = new float[need + 1024];
         int o = 0;
@@ -76,12 +78,13 @@ final class Hand {
             } else {
                 // ferramenta: o cabo (canto de baixo à esquerda do desenho) fica dentro da mão,
                 // e a ponta sobe para a esquerda, em direção ao centro da tela, inclinada para longe
-                t = Tf.mul(arm, Tf.translate(0, 0.02, -0.62));
-                t = Tf.mul(t, Tf.rotX(-0.35));
-                t = Tf.mul(t, Tf.rotY(-0.45));
-                t = Tf.mul(t, Tf.rotZ(Math.PI / 2 - 0.6));
-                t = Tf.mul(t, Tf.scale(0.5));
-                t = Tf.mul(t, Tf.translate(0.36, 0.36, 0));
+                // empunhada: o cabo atravessa o punho fechado (o pomo sobra embaixo da mão) e a figura
+                // fica no plano do braço, com a ponta para a frente e para cima
+                t = Tf.mul(arm, Tf.translate(0, 0.0, -0.6));          // centro do punho
+                t = Tf.mul(t, Tf.rotY(-Math.PI / 2 + 0.8));           // de lado, meio virada para a câmera
+                t = Tf.mul(t, Tf.rotZ(Math.PI / 2 - 0.5));            // inclinação para a frente
+                t = Tf.mul(t, Tf.scale(0.7));
+                t = Tf.mul(t, Tf.translate(0.28, 0.28, 0));           // ponto do cabo que fica dentro da mão
             }
             // tocha e lava brilham sozinhas
             double itemLight = Items.isBlock(item) && Block.light(item) > 0 ? 1.0 : light;
@@ -112,6 +115,18 @@ final class Hand {
         if (m == null) {
             m = flatModel(Items.bowPixels(stage));
             MODELS.put(-1 - stage, m);
+        }
+        return m;
+    }
+
+    private static final Map<Integer, float[]> TOOL_MODELS = new HashMap<>();
+
+    /** Ferramenta em 3D para a mão em primeira pessoa: bem mais grossa, com as laterais sombreadas. */
+    private static synchronized float[] toolModel(int item) {
+        float[] m = TOOL_MODELS.get(item);
+        if (m == null) {
+            m = flatModel(Items.pixels16(item), 3.0);
+            TOOL_MODELS.put(item, m);
         }
         return m;
     }
@@ -208,10 +223,13 @@ final class Hand {
     }
 
     /** Figura 16x16 com espessura de 1 pixel: frente, verso e as bordas onde o vizinho é transparente. */
-    private static float[] flatModel(int[] px) {
+    private static float[] flatModel(int[] px) { return flatModel(px, 0.5); }
+
+    /** thick = espessura em "pixels" (1 = a figura tem a espessura de um pixel). */
+    private static float[] flatModel(int[] px, double thick) {
         float[] buf = new float[256 * 6 * 6 * 6];
         int o = 0;
-        double p = 1 / 16.0, th = p / 2;
+        double p = 1 / 16.0, th = p * thick / 2;
         for (int y = 0; y < 16; y++)
             for (int x = 0; x < 16; x++) {
                 int c = px[y * 16 + x];
