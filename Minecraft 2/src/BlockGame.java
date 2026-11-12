@@ -155,6 +155,22 @@ public class BlockGame {
     private boolean wasInWater;
     private int recipeScroll, paletteScroll;
 
+    // ---- criação por grade: 2x2 no inventário, 3x3 na bancada; a fornalha tem entrada, combustível e resultado ----
+    private final Inventory craftGrid = new Inventory(); // espaços 0..8 (linha * craftSize + coluna)
+    private int craftSize = 2;
+    private final Inventory furnaceInv = new Inventory(); // 0 entrada, 1 combustível, 2 resultado
+    private boolean furnaceOpen;
+    private double furnaceHeat, furnaceHeatMax, furnaceProgress;
+    private static final double SMELT_TIME = 1.2; // segundos por item na fornalha
+    private boolean recipeBook = true, bookOnlyCraftable;
+    private Items.Recipe bookHover; // receita sob o mouse no livro: o desenho aparece apagado na grade
+    // arrastar itens: {área, inventário, espaço} de cada espaço desenhado no último quadro
+    private final List<Object[]> slotHits = new ArrayList<>();
+    private Object[] dragFrom;
+    private int dragStartX, dragStartY;
+    private boolean invRightDown;
+    private final java.util.Set<String> rightVisited = new java.util.HashSet<>();
+
     // ---- multijogador (LAN / Radmin) ----
     private final ConcurrentLinkedQueue<Net.Packet> netInbox = new ConcurrentLinkedQueue<>();
     private Net.Server server;         // este jogo é o anfitrião
@@ -248,6 +264,7 @@ public class BlockGame {
             else if (action == GLFW_RELEASE) {
                 if (b == 1) lHeld = false;
                 if (b == 3) rHeld = false;
+                onMouseUp(b);
             }
         });
         glfwSetCursorPosCallback(window, (w, x, y) -> {
@@ -417,8 +434,35 @@ public class BlockGame {
                 }
                 gameUpdate(dt);
                 break;
+            case INVENTORY:
+                if (furnaceOpen) tickFurnace(dt);
+                break;
             default:
                 break;
+        }
+    }
+
+    /**
+     * Fornalha (enquanto a tela está aberta): com algo que assa na entrada e combustível, enche a seta e, a cada
+     * SMELT_TIME segundos, passa um item para o resultado. Cada combustível assa alguns itens (Items.fuel).
+     */
+    private void tickFurnace(double dt) {
+        int in = furnaceInv.id[0], out = Items.smelt(in);
+        boolean room = furnaceInv.empty(2) || (furnaceInv.id[2] == out && furnaceInv.count[2] < Items.maxStack(out));
+        if (furnaceInv.empty(0) || out == 0 || !room) { furnaceProgress = 0; return; }
+        if (furnaceHeat <= 0) { // acende o próximo combustível
+            int f = furnaceInv.empty(1) ? 0 : Items.fuel(furnaceInv.id[1]);
+            if (f == 0) { furnaceProgress = 0; return; }
+            furnaceInv.set(1, furnaceInv.id[1], furnaceInv.count[1] - 1, furnaceInv.wear[1]);
+            furnaceHeat = furnaceHeatMax = f;
+        }
+        furnaceProgress += dt / SMELT_TIME;
+        if (furnaceProgress >= 1) {
+            furnaceProgress = 0;
+            furnaceInv.set(0, in, furnaceInv.count[0] - 1, furnaceInv.wear[0]);
+            furnaceInv.set(2, out, (furnaceInv.empty(2) ? 0 : furnaceInv.count[2]) + 1);
+            furnaceHeat -= 1;
+            Sounds.play("clique", 0.35);
         }
     }
 
@@ -634,8 +678,10 @@ public class BlockGame {
         if (rPending || (rHeld && coolR <= 0)) {
             coolR = 0.25;
             int aimed = sel == null ? Block.AIR : world.get(sel[0], sel[1], sel[2]);
-            if (rPending && (aimed == Block.TABLE || aimed == Block.FURNACE) && !keys[KeyEvent.VK_SHIFT]) {
-                openInventory();
+            if (rPending && aimed == Block.TABLE && !keys[KeyEvent.VK_SHIFT]) {
+                openCrafting(3); // bancada: grade 3x3
+            } else if (rPending && aimed == Block.FURNACE && !keys[KeyEvent.VK_SHIFT]) {
+                openFurnace();
             } else if (rPending && aimed == Block.BED && !keys[KeyEvent.VK_SHIFT]) {
                 useBed(sel[0], sel[1], sel[2]);
                 swing = 0.3;
@@ -1178,18 +1224,6 @@ public class BlockGame {
         if (below != Block.AIR) Sounds.play(stepSound(below), 0.4);
     }
 
-    /** Há uma bancada ou fornalha a até 4 blocos do jogador? */
-    private boolean nearStation(int station) {
-        if (station == Items.HAND || creative) return true;
-        int want = station == Items.TABLE ? Block.TABLE : Block.FURNACE;
-        int px = (int) Math.floor(player.x), py = (int) Math.floor(player.y), pz = (int) Math.floor(player.z);
-        for (int dx = -4; dx <= 4; dx++)
-            for (int dy = -2; dy <= 3; dy++)
-                for (int dz = -4; dz <= 4; dz++)
-                    if (world.get(px + dx, py + dy, pz + dz) == want) return true;
-        return false;
-    }
-
     private void respawn() {
         world.ensureAround(info.spawnX, info.spawnZ, 1); // o ponto de renascimento pode estar longe, num pedaço descarregado
         player.x = info.spawnX; player.y = info.spawnY; player.z = info.spawnZ;
@@ -1480,7 +1514,22 @@ public class BlockGame {
         capture();
     }
 
+    /** Tecla E: inventário com a grade de criação 2x2. */
     private void openInventory() {
+        openCrafting(2);
+    }
+
+    /** Inventário com a grade de criação (3 = bancada). */
+    private void openCrafting(int size) {
+        craftSize = size;
+        furnaceOpen = false;
+        state = State.INVENTORY;
+        releaseMouse();
+    }
+
+    private void openFurnace() {
+        furnaceOpen = true;
+        furnaceProgress = 0;
         state = State.INVENTORY;
         releaseMouse();
     }
@@ -1493,12 +1542,34 @@ public class BlockGame {
         }
         chest = null;
         chestKey = null;
+        // o que ficou na grade, na fornalha ou preso no mouse volta para a mochila (se não couber, cai no chão)
+        for (int i = 0; i < 9; i++) giveBack(craftGrid, i, true);
+        for (int i = 0; i < 3; i++) giveBack(furnaceInv, i, true);
+        furnaceOpen = false;
+        furnaceHeat = furnaceHeatMax = furnaceProgress = 0;
         if (cursorCount > 0) {
             int left = returnCursor();
-            if (left > 0) toast(left + " " + Items.name(cursorId) + " descartado(s): inventário cheio");
+            if (left > 0) dropNearPlayer(cursorId, left, cursorWear);
             cursorId = cursorCount = cursorWear = 0;
         }
+        dragFrom = null;
+        invRightDown = false;
         resume();
+    }
+
+    /** Devolve o conteúdo de um espaço (da grade ou da fornalha) à mochila; o que não couber cai no chão (ou some). */
+    private void giveBack(Inventory src, int i, boolean dropRest) {
+        if (src.empty(i)) return;
+        int id = src.id[i], n = src.count[i], w = src.wear[i];
+        src.set(i, 0, 0);
+        int left = inv.addRange(id, n, w, 0, Inventory.SIZE);
+        if (left > 0 && dropRest && world != null && player != null) dropNearPlayer(id, left, w);
+    }
+
+    private void dropNearPlayer(int id, int n, int w) {
+        if (world == null || player == null || n <= 0) return;
+        drops.spawn(id, n, w, player.x, player.y + 1.2, player.z, Math.sin(player.yaw) * 2, 2, Math.cos(player.yaw) * 2, 1.0);
+        toast(n + " " + Items.name(id) + " caiu no chão: inventário cheio");
     }
 
     /** Devolve o item preso no mouse ao inventário (mantendo o desgaste de ferramentas). Retorna o que sobrou. */
@@ -1525,6 +1596,12 @@ public class BlockGame {
     private void closeCursorItem() {
         if (cursorCount > 0 && world != null) returnCursor();
         cursorId = cursorCount = cursorWear = 0;
+        if (world != null) { // saindo com a grade ou a fornalha cheias: os itens voltam para a mochila antes de salvar
+            for (int i = 0; i < 9; i++) giveBack(craftGrid, i, false);
+            for (int i = 0; i < 3; i++) giveBack(furnaceInv, i, false);
+        }
+        craftGrid.clear();
+        furnaceInv.clear();
     }
 
     private void quit() {
@@ -2660,7 +2737,7 @@ public class BlockGame {
                 break;
             case PAUSED: drawHud(g, cw, ch, false); drawPause(g, cw, ch); break;
             case SETTINGS: drawSettings(g, cw, ch); break;
-            case INVENTORY: drawHud(g, cw, ch, false); drawInventory(g, cw, ch); break;
+            case INVENTORY: drawInventory(g, cw, ch); break; // a tela já mostra a barra rápida
             case DEAD: drawDead(g, cw, ch); break;
         }
         String soundWarning = Sounds.takeWarning();
@@ -2698,80 +2775,107 @@ public class BlockGame {
         }
         // a mira e a mão 3D são desenhadas pela placa de vídeo
 
-        // barra rápida
-        int n = Inventory.HOTBAR, size = 50;
-        int x0 = (cw - n * size) / 2, y0 = ch - size - 12;
+        // barra rápida: moldura de pedra, espaços afundados e o escolhido com borda dourada
+        int n = Inventory.HOTBAR, size = 52, fr = 6;
+        int x0 = (cw - n * size) / 2, y0 = ch - size - 14;
+        Ui.hotbarFrame(g, x0 - fr, y0 - fr, n * size + fr * 2 - 4, size + fr * 2 - 4);
         for (int i = 0; i < n; i++) {
             int x = x0 + i * size;
-            g.setColor(new Color(0, 0, 0, 150));
-            g.fillRect(x, y0, size - 2, size - 2);
-            drawItem(g, inv.id[i], inv.count[i], inv.wear[i], x + 4, y0 + 4, size - 10, !creative);
-            if (i == slot) {
-                g.setColor(Color.WHITE);
-                g.setStroke(new BasicStroke(3));
-                g.drawRect(x - 1, y0 - 1, size - 1, size - 1);
-            }
+            Ui.slot(g, x, y0, size - 4, false, false);
+            drawItem(g, inv.id[i], inv.count[i], inv.wear[i], x + 5, y0 + 5, size - 14, !creative);
+            g.setFont(Ui.SMALL);
+            g.setColor(new Color(255, 255, 255, 70));
+            g.drawString(String.valueOf(i + 1), x + 4, y0 + 13);
         }
+        int sx0 = x0 + slot * size;
+        g.setColor(new Color(0, 0, 0, 160));
+        g.setStroke(new BasicStroke(5f));
+        g.drawRect(sx0 - 3, y0 - 3, size + 1, size + 1);
+        g.setColor(new Color(240, 200, 100));
+        g.setStroke(new BasicStroke(3f));
+        g.drawRect(sx0 - 3, y0 - 3, size + 1, size + 1);
+        g.setColor(new Color(255, 245, 200, 90));
+        g.setStroke(new BasicStroke(1f));
+        g.drawRect(sx0 - 1, y0 - 1, size - 3, size - 3);
+        int top = y0 - fr; // topo da moldura: o resto do HUD fica acima dela
         if (slotNameTimer > 0 && !inv.empty(slot)) {
             int a = (int) (255 * Math.min(1, slotNameTimer));
-            Ui.centered(g, new Font(Font.SANS_SERIF, Font.BOLD, 15), Items.name(inv.id[slot]), cx, y0 - (creative ? 12 : 58),
-                    new Color(255, 255, 255, a));
+            String nm = Items.name(inv.id[slot]);
+            Font f = new Font(Font.SERIF, Font.BOLD, 17);
+            g.setFont(f);
+            int tw = g.getFontMetrics().stringWidth(nm) + 24, ty = top - (creative ? 12 : 62);
+            g.setColor(new Color(10, 10, 14, (int) (120 * a / 255.0)));
+            g.fillRoundRect(cx - tw / 2, ty - 18, tw, 25, 10, 10);
+            Ui.centered(g, f, nm, cx, ty, new Color(245, 232, 205, a));
         }
 
         // vida, fome e ar (sobrevivência)
         if (!creative) {
+            int rowY = top - 24;
             for (int i = 0; i < 10; i++) {
                 double f = Math.max(0, Math.min(1, (player.health - i * 2) / 2));
                 f = f >= 1 ? 1 : (f > 0 ? 0.5 : 0);
-                Ui.heart(g, x0 + i * 21, y0 - 26, 18, f);
+                Ui.heart(g, x0 + i * 21, rowY, 18, f);
             }
             int armor = inv.armorPoints(); // barra de armadura: 10 ícones = 20 pontos
             for (int i = 0; i < 10 && armor > 0; i++)
-                drawArmorIcon(g, x0 + i * 21, y0 - 47, armor >= i * 2 + 2 ? 1 : armor > i * 2 ? 0.5 : 0);
+                drawArmorIcon(g, x0 + i * 21, rowY - 21, armor >= i * 2 + 2 ? 1 : armor > i * 2 ? 0.5 : 0);
+            int right = x0 + n * size - 4;
             for (int i = 0; i < 10; i++) {
                 double f = Math.max(0, Math.min(1, (player.food - i * 2) / 2));
-                drawFood(g, x0 + n * size - 22 - i * 21, y0 - 26, f >= 1 ? 1 : (f > 0 ? 0.5 : 0));
+                drawFood(g, right - 20 - i * 21, rowY, f >= 1 ? 1 : (f > 0 ? 0.5 : 0));
             }
             if (player.headInWater || player.air < Player.MAX_AIR) {
                 int bubbles = (int) Math.ceil(player.air);
                 for (int i = 0; i < 10; i++) {
-                    int bx = x0 + n * size - 20 - i * 21;
+                    int bx = right - 18 - i * 21;
                     if (i < bubbles) {
                         g.setColor(new Color(120, 190, 255, 230));
-                        g.fillOval(bx, y0 - 48, 16, 16);
+                        g.fillOval(bx, rowY - 22, 16, 16);
                         g.setColor(Color.WHITE);
-                        g.fillOval(bx + 4, y0 - 44, 4, 4);
+                        g.fillOval(bx + 4, rowY - 18, 4, 4);
                     }
                     g.setColor(new Color(0, 40, 90, 200));
-                    g.drawOval(bx, y0 - 48, 16, 16);
+                    g.drawOval(bx, rowY - 22, 16, 16);
                 }
             }
         }
 
         drawChat(g, cw, ch);
 
-        // informações
-        g.setFont(Ui.INFO);
-        int ty = 20;
-        String lan = server != null ? "   LAN: anfitrião, " + (remotes.size() + 1) + " jogadores" : toHost != null ? "   LAN: " + (remotes.size() + 1) + " jogadores" : "";
-        Ui.shadow(g, String.format("FPS %.0f   %s — %s   (%s)%s", fps, info.name, info.persona.name,
-                creative ? "Criativo" : "Sobrevivência", lan), 10, ty, Color.WHITE);
+        // informações: duas linhas numa caixa escura no canto
         if (active) drawNameTags(g);
         int px = (int) Math.floor(player.x), pz = (int) Math.floor(player.z);
         int biome = world.biomeAt(px, pz, world.heightAt(px, pz) - 1);
-        Ui.shadow(g, String.format("Dia %d, %s   %s   X %.0f  Y %.0f  Z %.0f%s", info.day, clock(), World.BIOME_NAMES[biome],
-                player.x, player.y, player.z, player.flying ? "   [voando]" : ""), 10, ty += 18, Color.WHITE);
+        String lan = server != null ? "  ·  LAN: anfitrião, " + (remotes.size() + 1) + " jogadores" : toHost != null ? "  ·  LAN: " + (remotes.size() + 1) + " jogadores" : "";
+        String l1 = String.format("%s  ·  %s  ·  %s%s", info.name, info.persona.name, creative ? "Criativo" : "Sobrevivência", lan);
+        String l2 = String.format("Dia %d, %s  ·  %s  ·  X %.0f  Y %.0f  Z %.0f%s  ·  %.0f FPS", info.day, clock(), World.BIOME_NAMES[biome],
+                player.x, player.y, player.z, player.flying ? "  ·  voando" : "", fps);
+        Font infoFont = new Font(Font.SANS_SERIF, Font.BOLD, 13);
+        g.setFont(infoFont);
+        java.awt.FontMetrics fm = g.getFontMetrics();
+        int bw = Math.max(fm.stringWidth(l1), fm.stringWidth(l2)) + 20;
+        Ui.hudBox(g, 8, 8, bw, 44);
+        Ui.shadow(g, l1, 18, 26, new Color(245, 232, 205));
+        Ui.shadow(g, l2, 18, 44, new Color(220, 220, 225));
         if (help && active) {
-            String[] lines = {
-                    "WASD mover   Espaço pular/nadar   Ctrl correr   Mouse olhar   E inventário e receitas",
-                    creative ? "Esq. quebrar/bater   Dir. colocar/comer   Meio copiar bloco   1-9/roda escolher"
-                             : "Segure esq. para quebrar (ferramentas aceleram)   Esq. bate em criaturas   Dir. colocar ou comer",
-                    "Dir. numa bancada/fornalha abre as receitas, num baú abre o baú   " + (creative ? "Espaço 2x voar   " : "") + "T chat   Esc pausar   F1 esconder ajuda",
-                    "Q joga o item fora (Ctrl+Q a pilha)   Dir. na cama dorme e marca o renascimento   Pederneira acende a dinamite",
-                    "Enxada na terra faz terra arada, onde se plantam sementes   Dir. com armadura na mão veste",
-                    "Arco: segure o botão esquerdo para puxar e solte para atirar (precisa de flechas)"
-            };
-            for (String l : lines) Ui.shadow(g, l, 10, ty += 18, Color.WHITE);
+            String[][] lines = {
+                    { "WASD", "mover" }, { "Espaço", creative ? "pular  ·  2x voa" : "pular / nadar" }, { "Ctrl", "correr" },
+                    { "E", "inventário e criação" }, { "Dir. na bancada", "grade 3x3" }, { "Dir. na fornalha", "assar" },
+                    { creative ? "Meio" : "Segure esq.", creative ? "copiar bloco" : "quebrar" }, { "Dir.", "colocar / comer / vestir" },
+                    { "Q", "jogar fora (Ctrl+Q: a pilha)" }, { "T", "chat" }, { "Esc", "pausar" }, { "F1", "esconder esta ajuda" } };
+            g.setFont(Ui.SMALL);
+            fm = g.getFontMetrics();
+            int kw = 0, vw = 0;
+            for (String[] l : lines) { kw = Math.max(kw, fm.stringWidth(l[0])); vw = Math.max(vw, fm.stringWidth(l[1])); }
+            int hy = 60, hh = lines.length * 17 + 12;
+            Ui.hudBox(g, 8, hy, kw + vw + 34, hh);
+            int yy = hy + 19;
+            for (String[] l : lines) {
+                Ui.shadow(g, l[0], 18, yy, new Color(240, 200, 110));
+                Ui.shadow(g, l[1], 18 + kw + 12, yy, new Color(225, 225, 230));
+                yy += 17;
+            }
         }
     }
 
@@ -2782,7 +2886,7 @@ public class BlockGame {
         g.setFont(CHAT_FONT);
         java.awt.FontMetrics fm = g.getFontMetrics();
         int w = Math.min(560, cw / 2 - 30), lh = 20, x = 10;
-        int y = ch - 110; // acima da barra rápida e da vida
+        int y = ch - 150; // acima da barra rápida, da vida e da armadura
         if (chatOpen) {
             g.setColor(new Color(0, 0, 0, 170));
             g.fillRect(x, y, w, 24);
@@ -3247,164 +3351,356 @@ public class BlockGame {
 
     private void drawInventory(Graphics2D g, int cw, int ch) {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setColor(new Color(0, 0, 0, 120));
+        g.setColor(new Color(0, 0, 0, 140));
         g.fillRect(0, 0, cw, ch);
+        slotHits.clear();
 
-        int sz = 50, sg = 4, step = sz + sg, cols = 9;
-        int gridW = cols * step - sg, leftW = 150;
-        int sectionH = 4 * step;
-        int pw = 28 + leftW + 24 + gridW + 28;
-        int ph = 64 + 3 * step + 16 + step + 40 + sectionH + 26;
-        int px = (cw - pw) / 2, py = Math.max(4, (ch - ph) / 2);
-        Ui.panel(g, px, py, pw, ph);
-        Ui.centered(g, Ui.BIG, chest != null ? "Baú" : "Inventário de " + info.persona.name, px + pw / 2, py + 36, Color.WHITE);
+        final int sz = 48, gap = 4, step = sz + gap, cols = 9, pad = 24;
+        int gridW = cols * step - gap;
+        int mainW = gridW + pad * 2;
+        int topH = chest != null || furnaceOpen ? 36 + 3 * step : 4 * step - gap + 6;
+        int mainH = pad + topH + 30 + 3 * step - gap + 12 + sz + pad;
+        // painel ao lado: paleta de todos os itens (criativo) ou livro de receitas (sobrevivência)
+        boolean side = chest == null && !furnaceOpen && (creative || recipeBook);
+        int sideW = !side ? 0 : creative ? gridW + pad * 2 : 5 * step - gap + pad * 2;
+        int totalW = mainW + (side ? 14 + sideW : 0);
+        int px = Math.max(4, (cw - totalW) / 2), py = Math.max(4, (ch - mainH) / 2);
+        int ix = px + pad, iy = py + pad;
 
-        // personagem e lixeira
-        int lx = px + 28;
-        g.setColor(new Color(255, 255, 255, 14));
-        g.fillRoundRect(lx, py + 56, leftW, 3 * step + 16 + step, 12, 12);
-        int pxo = lx + 66, pyo = py + 66;
-        info.persona.draw(g, pxo, pyo, 4);
-        // armadura: 4 espaços à esquerda do personagem; a peça vestida aparece pintada por cima dele
-        int[][] zone = { { 4, 0, 8, 3 }, { 0, 8, 16, 5 }, { 4, 20, 8, 7 }, { 4, 27, 8, 4 } }; // x, y, largura, altura em "pixels" do boneco
-        for (int k = 0; k < Inventory.ARMOR; k++) {
-            int a = Inventory.SIZE + k, ax = lx + 6, ay = py + 62 + k * 40;
-            slotBox(g, inv, a, ax, ay, 36);
-            if (inv.empty(a)) {
-                java.awt.Composite old = g.getComposite();
-                g.setComposite(java.awt.AlphaComposite.getInstance(java.awt.AlphaComposite.SRC_OVER, 0.22f));
-                g.drawImage(Items.icon(Items.armor(k, 1)), ax + 5, ay + 5, 26, 26, null);
-                g.setComposite(old);
-                if (ui.hover(new Rectangle(ax, ay, 36, 36)) && cursorCount == 0) tooltip = "Espaço de armadura: " + ARMOR_SLOT[k];
-            } else {
-                Color c = new Color(Items.armorColor(inv.id[a]));
-                g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 220));
-                g.fillRect(pxo + zone[k][0] * 4, pyo + zone[k][1] * 4, zone[k][2] * 4, zone[k][3] * 4);
-                if (k == 1) g.fillRect(pxo + 16, pyo + 52, 32, 28); // o resto do tronco
-                if (k == 0) { g.fillRect(pxo + 16, pyo + 12, 4, 12); g.fillRect(pxo + 44, pyo + 12, 4, 12); } // laterais do capacete
-            }
+        bookHover = null;
+        if (side) {
+            int sx = px + mainW + 14;
+            if (creative) drawPalette(g, sx, py, sideW, mainH, step, sz);
+            else drawRecipeBook(g, sx, py, sideW, mainH, step, sz);
         }
-        Rectangle trash = new Rectangle(lx + (leftW - sz) / 2, py + 56 + 3 * step + 16 + step - sz - 26, sz, sz);
-        boolean th = ui.hover(trash);
-        g.setColor(th ? new Color(160, 50, 50, 220) : new Color(90, 30, 30, 200));
-        g.fillRect(trash.x, trash.y, sz, sz);
-        g.setColor(new Color(255, 255, 255, 150));
-        g.drawRect(trash.x, trash.y, sz, sz);
-        Ui.centered(g, Ui.BIG, "X", trash.x + sz / 2, trash.y + 33, new Color(255, 200, 200));
-        Ui.centered(g, Ui.SMALL, "Descartar", trash.x + sz / 2, trash.y + sz + 17, Ui.TEXT_DIM);
-        ui.region(trash, (b, s) -> { cursorId = cursorCount = cursorWear = 0; });
-        if (th && cursorCount > 0) tooltip = "Descartar " + cursorCount + " " + Items.name(cursorId);
+        Ui.stonePanel(g, px, py, mainW, mainH);
+
+        if (chest != null) {
+            Ui.stoneTitle(g, "Baú", px + mainW / 2, iy + 18, gridW);
+            for (int i = 0; i < Inventory.CHEST; i++) slotBox(g, chest, i, ix + (i % cols) * step, iy + 34 + (i / cols) * step, sz);
+        } else if (furnaceOpen) {
+            drawFurnaceTop(g, ix, iy, gridW, sz, step);
+        } else {
+            drawCraftTop(g, ix, iy, gridW, sz, step);
+        }
 
         // mochila (9..35) e barra rápida (0..8)
-        int gx = lx + leftW + 24, gy = py + 56;
+        int by = iy + topH + 30;
+        g.setFont(Ui.STONE_LABEL);
+        Ui.shadow(g, "Inventário", ix, by - 9, Ui.STONE_TEXT);
         for (int r = 0; r < 3; r++)
             for (int c = 0; c < cols; c++)
-                slotBox(g, inv, Inventory.HOTBAR + r * cols + c, gx + c * step, gy + r * step, sz);
-        int hy = gy + 3 * step + 16;
-        for (int c = 0; c < cols; c++) slotBox(g, inv, c, gx + c * step, hy, sz);
+                slotBox(g, inv, Inventory.HOTBAR + r * cols + c, ix + c * step, by + r * step, sz);
+        int hy = by + 3 * step - gap + 12;
+        g.setColor(new Color(0, 0, 0, 90));
+        g.fillRect(ix, hy - 8, gridW, 2);
+        for (int c = 0; c < cols; c++) slotBox(g, inv, c, ix + c * step, hy, sz);
 
-        // seção de baixo: paleta (criativo) ou receitas (sobrevivência), com rolagem pela roda do mouse
-        int sy = hy + step + 14;
-        g.setFont(Ui.BUTTON);
-        int sx = px + 28, sw = pw - 56;
-        Shape oldClip = g.getClip();
-        if (chest != null) {
-            Ui.shadow(g, "Dentro do baú  —  clique pega e solta; Shift+clique manda direto para o outro lado", sx, sy + 16, Color.WHITE);
-            sy += 26;
-            int ox = sx + (sw - gridW) / 2;
-            for (int i = 0; i < Inventory.CHEST; i++) slotBox(g, chest, i, ox + (i % cols) * step, sy + (i / cols) * step, sz);
-        } else if (creative) {
-            int rows = (ALL_ITEMS.length + cols - 1) / cols;
-            paletteScroll = Math.max(0, Math.min(paletteScroll, rows - 4));
-            Ui.shadow(g, "Todos os itens — esquerdo pega a pilha, direito pega 1  (role o mouse: "
-                    + (paletteScroll + 1) + "-" + Math.min(rows, paletteScroll + 4) + " de " + rows + ")", sx, sy + 16, Color.WHITE);
-            sy += 26;
-            int ox = sx + (sw - gridW) / 2;
-            for (int i = paletteScroll * cols; i < Math.min(ALL_ITEMS.length, (paletteScroll + 4) * cols); i++) {
-                final int it = ALL_ITEMS[i];
-                int x = ox + (i % cols) * step, y = sy + (i / cols - paletteScroll) * step;
-                Rectangle r = new Rectangle(x, y, sz, sz);
-                boolean hv = ui.hover(r);
-                g.setColor(hv ? new Color(255, 255, 255, 60) : new Color(0, 0, 0, 120));
-                g.fillRect(x, y, sz, sz);
-                drawItem(g, it, 1, 0, x + 5, y + 5, sz - 10, false);
-                if (hv) tooltip = Items.name(it);
-                ui.region(r, (btn, shift) -> {
-                    if (btn == 1) { cursorId = it; cursorCount = Items.maxStack(it); cursorWear = 0; }
-                    else if (btn == 3) {
-                        if (cursorCount > 0 && cursorId == it) cursorCount = Math.min(Items.maxStack(it), cursorCount + 1);
-                        else { cursorId = it; cursorCount = 1; cursorWear = 0; }
-                    }
-                });
-            }
-        } else {
-            // receitas: as que dá para fazer agora primeiro
-            List<Items.Recipe> list = new ArrayList<>(Arrays.asList(Items.RECIPES));
-            final boolean[] here = { true, nearStation(Items.TABLE), nearStation(Items.FURNACE) };
-            list.sort((a, b) -> Integer.compare(rank(b, here), rank(a, here)));
-            int visible = sectionH / 42;
-            recipeScroll = Math.max(0, Math.min(recipeScroll, list.size() - visible));
-            Ui.shadow(g, "Criar itens  (role o mouse: " + (recipeScroll + 1) + "-" + Math.min(list.size(), recipeScroll + visible)
-                    + " de " + list.size() + ")   " + (here[1] ? "Bancada por perto" : "Sem bancada") + " · "
-                    + (here[2] ? "Fornalha por perto" : "Sem fornalha"), sx, sy + 16, Color.WHITE);
-            sy += 26;
-            for (int k = recipeScroll; k < Math.min(list.size(), recipeScroll + visible); k++) {
-                final Items.Recipe rc = list.get(k);
-                boolean has = inv.canCraft(rc), station = here[rc.station], ok = has && station;
-                g.setColor(new Color(255, 255, 255, ok ? 24 : 10));
-                g.fillRoundRect(sx, sy, sw, 36, 10, 10);
-                drawItem(g, rc.out, rc.outCount, 0, sx + 6, sy + 2, 32, true);
-                g.setFont(Ui.LABEL);
-                Ui.shadow(g, rc.outCount + " " + Items.name(rc.out), sx + 46, sy + 16, ok ? Color.WHITE : new Color(255, 255, 255, 120));
-                g.setFont(Ui.SMALL);
-                Ui.shadow(g, rc.describe() + (rc.station != Items.HAND ? "   ·   " + Items.STATION_NAMES[rc.station] : ""),
-                        sx + 46, sy + 31, station ? (has ? new Color(200, 235, 190) : new Color(255, 255, 255, 110))
-                                : new Color(255, 170, 150, 170));
-                String label = ok ? "Criar" : !station ? "Precisa " + Items.STATION_NAMES[rc.station].toLowerCase() : "Faltam itens";
-                ui.button(g, sx + sw - 170, sy + 3, 164, 30, label, ok, ok, () -> {
-                    if (!inv.craft(rc)) toast("Sem espaço no inventário");
-                    else toast("+" + rc.outCount + " " + Items.name(rc.out));
-                });
-                sy += 42;
-            }
+        String foot = chest != null ? "Arraste ou clique para mover  ·  Shift+clique manda para o outro lado  ·  E ou Esc fecha"
+                : furnaceOpen ? "Coloque o que vai assar em cima e o combustível embaixo (carvão, madeira, graveto)  ·  E ou Esc fecha"
+                : "Arraste os itens para a grade: o desenho decide o que sai  ·  botão direito arrastando solta um por espaço  ·  E ou Esc fecha";
+        Ui.centered(g, Ui.SMALL, foot, cw / 2, Math.min(ch - 6, py + mainH + 20), Ui.TEXT_DIM);
+
+        // botão direito arrastando: solta um item em cada espaço por onde o mouse passa
+        if (invRightDown && cursorCount > 0) {
+            Object[] hit = slotAt(ui.mouseX, ui.mouseY);
+            if (hit != null && rightVisited.add(slotKey(hit))) clickSlot((Inventory) hit[1], (Integer) hit[2], 3, false);
         }
-        g.setClip(oldClip);
-
-        Ui.centered(g, Ui.SMALL, "Shift+clique move entre a barra e a mochila  ·  roda do mouse rola a lista  ·  E ou Esc fecha",
-                px + pw / 2, py + ph - 8, Ui.TEXT_DIM);
 
         // item no cursor e dica
-        if (cursorCount > 0) drawItem(g, cursorId, cursorCount, cursorWear, ui.mouseX - 20, ui.mouseY - 20, 40, true);
-        else if (tooltip != null) {
-            g.setFont(Ui.LABEL);
-            int tw = g.getFontMetrics().stringWidth(tooltip) + 16;
-            g.setColor(new Color(10, 10, 20, 230));
-            g.fillRoundRect(ui.mouseX + 14, ui.mouseY - 30, tw, 26, 8, 8);
-            g.setColor(Color.WHITE);
-            g.drawString(tooltip, ui.mouseX + 22, ui.mouseY - 12);
-        }
+        if (cursorCount > 0) drawItem(g, cursorId, cursorCount, cursorWear, ui.mouseX - 22, ui.mouseY - 22, 44, true);
+        else if (tooltip != null) drawTooltip(g, tooltip, cw);
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
     }
 
-    /** Ordem das receitas: dá para fazer (2), tem a estação mas faltam itens (1), falta a estação (0). */
-    private int rank(Items.Recipe r, boolean[] here) {
-        if (!here[r.station]) return 0;
-        return inv.canCraft(r) ? 2 : 1;
+    private void drawTooltip(Graphics2D g, String text, int cw) {
+        g.setFont(Ui.LABEL);
+        int tw = g.getFontMetrics().stringWidth(text) + 18;
+        int x = Math.min(ui.mouseX + 16, cw - tw - 4), y = ui.mouseY - 34;
+        g.setColor(new Color(16, 10, 22, 240));
+        g.fillRect(x, y, tw, 28);
+        g.setColor(new Color(110, 70, 160));
+        g.drawRect(x + 1, y + 1, tw - 3, 25);
+        g.setColor(Color.WHITE);
+        g.drawString(text, x + 9, y + 19);
     }
 
+    /** Parte de cima do inventário: armadura, personagem e a grade de criação (2x2, ou 3x3 na bancada). */
+    private void drawCraftTop(Graphics2D g, int ix, int iy, int gridW, int sz, int step) {
+        // armadura: 4 espaços em coluna; a peça vestida aparece pintada por cima do personagem
+        int[][] zone = { { 4, 0, 8, 3 }, { 0, 8, 16, 5 }, { 4, 20, 8, 7 }, { 4, 27, 8, 4 } }; // x, y, largura, altura em "pixels" do boneco
+        int winX = ix + step + 4, winW = 132, winH = 4 * step - 4;
+        Ui.well(g, winX, iy, winW, winH);
+        int scale = 5, pxo = winX + (winW - 16 * scale) / 2, pyo = iy + (winH - 32 * scale) / 2;
+        g.setColor(new Color(255, 230, 190, 18)); // luz atrás do personagem
+        g.fillOval(winX + 10, iy + 20, winW - 20, winH - 40);
+        info.persona.draw(g, pxo, pyo, scale);
+        for (int k = 0; k < Inventory.ARMOR; k++) {
+            int a = Inventory.SIZE + k, ax = ix, ay = iy + k * step;
+            slotBox(g, inv, a, ax, ay, sz);
+            if (inv.empty(a)) {
+                java.awt.Composite old = g.getComposite();
+                g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.2f));
+                g.drawImage(Items.icon(Items.armor(k, 1)), ax + 7, ay + 7, sz - 14, sz - 14, null);
+                g.setComposite(old);
+                if (ui.hover(new Rectangle(ax, ay, sz, sz)) && cursorCount == 0) tooltip = "Espaço de armadura: " + ARMOR_SLOT[k];
+            } else {
+                Color c = new Color(Items.armorColor(inv.id[a]));
+                g.setColor(new Color(c.getRed(), c.getGreen(), c.getBlue(), 220));
+                g.fillRect(pxo + zone[k][0] * scale, pyo + zone[k][1] * scale, zone[k][2] * scale, zone[k][3] * scale);
+                if (k == 1) g.fillRect(pxo + 4 * scale, pyo + 13 * scale, 8 * scale, 7 * scale); // o resto do tronco
+                if (k == 0) { g.fillRect(pxo + 4 * scale, pyo + 3 * scale, scale, 3 * scale); g.fillRect(pxo + 11 * scale, pyo + 3 * scale, scale, 3 * scale); }
+            }
+        }
+
+        // grade de criação
+        int rx = winX + winW + 18, rw = ix + gridW - rx;
+        Ui.stoneTitle(g, craftSize == 3 ? "Bancada" : "Criação", rx + rw / 2, iy + 20, rw);
+        int n = craftSize, gs = n == 3 ? 44 : sz, gstep = gs + 4, gw = n * gstep - 4;
+        int groupW = gw + 12 + 38 + 12 + 56;
+        int gx = rx + (rw - groupW) / 2, gy = iy + 36 + (n == 3 ? 0 : 10);
+        for (int y = 0; y < n; y++)
+            for (int x = 0; x < n; x++) slotBox(g, craftGrid, y * n + x, gx + x * gstep, gy + y * gstep, gs);
+        // receita apontada no livro: o desenho aparece apagado na grade vazia
+        if (bookHover != null && gridEmpty()) {
+            java.awt.Composite old = g.getComposite();
+            g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.35f));
+            Items.Recipe r = bookHover;
+            if (r.shapeless) {
+                for (int k = 0; k < r.cells.length && k < n * n; k++)
+                    drawItem(g, r.cells[k], 1, 0, gx + (k % n) * gstep + 5, gy + (k / n) * gstep + 5, gs - 10, false);
+            } else if (r.w <= n && r.h <= n) {
+                for (int y = 0; y < r.h; y++)
+                    for (int x = 0; x < r.w; x++)
+                        if (r.at(x, y) != 0) drawItem(g, r.at(x, y), 1, 0, gx + x * gstep + 5, gy + y * gstep + 5, gs - 10, false);
+            }
+            g.setComposite(old);
+            if (r.needsTable() && n < 3) Ui.centered(g, Ui.SMALL, "Precisa da bancada (3x3)", gx + gw / 2, gy + gw + 18, new Color(255, 160, 140));
+        }
+        int ax = gx + gw + 12, ay = gy + gw / 2 - 14;
+        final Items.Recipe match = Items.match(gridCells(), n);
+        Ui.arrow(g, ax, ay, 38, 28, match != null ? 1 : 0);
+        // resultado: clique pega uma vez (no mouse); Shift+clique faz o máximo direto para a mochila
+        int ox = ax + 38 + 12, oy = gy + gw / 2 - 28;
+        Rectangle res = new Rectangle(ox, oy, 56, 56);
+        boolean hv = ui.hover(res);
+        Ui.slot(g, ox, oy, 56, hv, false);
+        g.setColor(match != null ? new Color(232, 190, 90) : new Color(90, 80, 70));
+        g.setStroke(new BasicStroke(2f));
+        g.drawRect(ox - 2, oy - 2, 59, 59);
+        if (match != null) {
+            drawItem(g, match.out, match.outCount, 0, ox + 6, oy + 6, 44, true);
+            if (hv) tooltip = Items.name(match.out) + "  (clique cria; Shift+clique cria tudo o que der)";
+        }
+        ui.region(res, (b, shift) -> {
+            if (match == null) return;
+            if (shift) { int k = 0; while (k < 64 && craftOnce(false)) k++; }
+            else craftOnce(true);
+        });
+        // livro de receitas
+        if (!creative) {
+            Rectangle book = new Rectangle(ix + gridW - 44, iy + 4 * step - 4 - 44, 44, 44);
+            boolean bh = ui.hover(book);
+            Ui.slot(g, book.x, book.y, 44, bh, recipeBook);
+            Ui.bookIcon(g, book.x + 2, book.y + 2, 40, recipeBook);
+            if (bh) tooltip = recipeBook ? "Fechar o livro de receitas" : "Abrir o livro de receitas";
+            ui.region(book, (b, s) -> recipeBook = !recipeBook);
+        }
+    }
+
+    /** Fornalha: entrada, chama, combustível, seta de progresso e resultado. */
+    private void drawFurnaceTop(Graphics2D g, int ix, int iy, int gridW, int sz, int step) {
+        Ui.stoneTitle(g, "Fornalha", ix + gridW / 2, iy + 18, gridW);
+        int groupW = sz + 34 + 50 + 34 + 56;
+        int fx = ix + (gridW - groupW) / 2, top = iy + 36, bottom = iy + 36 + 3 * step - 4;
+        int mid = (top + bottom) / 2;
+        slotBox(g, furnaceInv, 0, fx, top, sz);
+        double fill = furnaceHeatMax > 0 ? Math.max(0, (furnaceHeat - furnaceProgress) / furnaceHeatMax) : 0;
+        Ui.flame(g, fx + sz / 2 - 13, mid - 14, 28, fill);
+        slotBox(g, furnaceInv, 1, fx, bottom - sz, sz);
+        int ax = fx + sz + 34;
+        Ui.arrow(g, ax, mid - 14, 50, 28, furnaceProgress);
+        int ox = ax + 50 + 34;
+        g.setColor(new Color(232, 190, 90));
+        g.setStroke(new BasicStroke(2f));
+        g.drawRect(ox - 2, mid - 30, 59, 59);
+        slotBox(g, furnaceInv, 2, ox, mid - 28, 56);
+        // o que dá para assar e queimar (para quem não sabe)
+        int in = furnaceInv.id[0];
+        String hint = furnaceInv.empty(0) ? "Minério, areia, pedregulho, tronco ou carne crua em cima"
+                : Items.smelt(in) == 0 ? Items.name(in) + " não assa"
+                : furnaceInv.empty(1) && furnaceHeat <= 0 ? "Falta combustível embaixo"
+                : "Vira " + Items.name(Items.smelt(in));
+        Ui.centered(g, Ui.SMALL, hint, ix + gridW / 2, bottom + 2 + 14, Ui.STONE_DIM);
+    }
+
+    /** Livro de receitas: todas as receitas; clique monta o desenho na grade com os itens da mochila. */
+    private void drawRecipeBook(Graphics2D g, int x, int y, int w, int h, int step, int sz) {
+        Ui.stonePanel(g, x, y, w, h);
+        Ui.stoneTitle(g, "Receitas", x + w / 2, y + 42, w - 40);
+        // filtro
+        Rectangle f = new Rectangle(x + 24, y + 58, w - 48, 24);
+        boolean fh = ui.hover(f);
+        Ui.slot(g, f.x, f.y + 2, 20, fh, false);
+        if (bookOnlyCraftable) { g.setColor(new Color(232, 190, 90)); g.fillRect(f.x + 5, f.y + 7, 10, 10); }
+        g.setFont(Ui.SMALL);
+        Ui.shadow(g, "Só o que dá para fazer agora", f.x + 28, f.y + 17, fh ? Color.WHITE : Ui.STONE_TEXT);
+        ui.region(f, (b, s) -> { bookOnlyCraftable = !bookOnlyCraftable; recipeScroll = 0; });
+
+        List<Items.Recipe> list = new ArrayList<>();
+        for (Items.Recipe r : Items.RECIPES) if (!bookOnlyCraftable || inv.timesCraftable(r) > 0) list.add(r);
+        // primeiro as que dá para fazer nesta grade, depois as que precisam de itens, por fim as da bancada
+        list.sort((a, b) -> Integer.compare(bookRank(b), bookRank(a)));
+        int colsB = 5, listY = y + 92, listH = h - 92 - 40;
+        int rows = Math.max(1, listH / step), total = (list.size() + colsB - 1) / colsB;
+        recipeScroll = Math.max(0, Math.min(recipeScroll, Math.max(0, total - rows)));
+        int lx = x + (w - (colsB * step - 4)) / 2;
+        for (int i = recipeScroll * colsB; i < Math.min(list.size(), (recipeScroll + rows) * colsB); i++) {
+            final Items.Recipe r = list.get(i);
+            int cx = lx + (i % colsB) * step, cy = listY + (i / colsB - recipeScroll) * step;
+            Rectangle cell = new Rectangle(cx, cy, sz, sz);
+            boolean hv = ui.hover(cell);
+            Ui.slot(g, cx, cy, sz, hv, false);
+            int rank = bookRank(r);
+            g.setColor(rank == 3 ? new Color(90, 200, 90, 70) : rank == 0 ? new Color(200, 50, 40, 60) : new Color(0, 0, 0, 0));
+            g.fillRect(cx + 2, cy + 2, sz - 4, sz - 4);
+            if (rank < 2) {
+                java.awt.Composite old = g.getComposite();
+                g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.45f));
+                drawItem(g, r.out, r.outCount, 0, cx + 5, cy + 5, sz - 10, true);
+                g.setComposite(old);
+            } else drawItem(g, r.out, r.outCount, 0, cx + 5, cy + 5, sz - 10, true);
+            if (hv) {
+                bookHover = r;
+                tooltip = r.outCount + " " + Items.name(r.out) + ":  " + r.describe() + (r.needsTable() ? "  (bancada)" : "");
+            }
+            ui.region(cell, (b, shift) -> fillGrid(r, shift));
+        }
+        g.setFont(Ui.SMALL);
+        Ui.centered(g, Ui.SMALL, "Clique monta a receita na grade (Shift: o máximo)", x + w / 2, y + h - 34, Ui.STONE_DIM);
+        Ui.centered(g, Ui.SMALL, "Role o mouse: " + (total == 0 ? 0 : recipeScroll + 1) + "-" + Math.min(total, recipeScroll + rows) + " de " + total + " linhas",
+                x + w / 2, y + h - 17, Ui.STONE_DIM);
+    }
+
+    /** 3 = dá para fazer nesta grade; 2 = cabe na grade mas faltam itens; 1 = tem os itens mas precisa da bancada; 0 = nada. */
+    private int bookRank(Items.Recipe r) {
+        boolean fits = !r.needsTable() || craftSize >= 3, has = inv.timesCraftable(r) > 0;
+        return fits ? (has ? 3 : 2) : (has ? 1 : 0);
+    }
+
+    /** Paleta do modo criativo: todos os itens; esquerdo pega a pilha, direito pega 1. */
+    private void drawPalette(Graphics2D g, int x, int y, int w, int h, int step, int sz) {
+        Ui.stonePanel(g, x, y, w, h);
+        Ui.stoneTitle(g, "Todos os itens", x + w / 2, y + 42, w - 40);
+        int cols = 9, listY = y + 62, rows = Math.max(1, (h - 62 - 44) / step);
+        int total = (ALL_ITEMS.length + cols - 1) / cols;
+        paletteScroll = Math.max(0, Math.min(paletteScroll, Math.max(0, total - rows)));
+        int lx = x + (w - (cols * step - 4)) / 2;
+        for (int i = paletteScroll * cols; i < Math.min(ALL_ITEMS.length, (paletteScroll + rows) * cols); i++) {
+            final int it = ALL_ITEMS[i];
+            int cx = lx + (i % cols) * step, cy = listY + (i / cols - paletteScroll) * step;
+            Rectangle r = new Rectangle(cx, cy, sz, sz);
+            boolean hv = ui.hover(r);
+            Ui.slot(g, cx, cy, sz, hv, false);
+            drawItem(g, it, 1, 0, cx + 5, cy + 5, sz - 10, false);
+            if (hv) tooltip = Items.name(it);
+            ui.region(r, (btn, shift) -> {
+                if (btn == 1) { cursorId = it; cursorCount = Items.maxStack(it); cursorWear = 0; }
+                else if (btn == 3) {
+                    if (cursorCount > 0 && cursorId == it) cursorCount = Math.min(Items.maxStack(it), cursorCount + 1);
+                    else { cursorId = it; cursorCount = 1; cursorWear = 0; }
+                }
+            });
+        }
+        Ui.centered(g, Ui.SMALL, "Esquerdo pega a pilha, direito pega 1  ·  role o mouse (" + (paletteScroll + 1) + "-"
+                + Math.min(total, paletteScroll + rows) + " de " + total + ")", x + w / 2, y + h - 20, Ui.STONE_DIM);
+    }
+
+    private int[] gridCells() {
+        int n = craftSize;
+        int[] c = new int[n * n];
+        for (int i = 0; i < n * n; i++) c[i] = craftGrid.empty(i) ? 0 : craftGrid.id[i];
+        return c;
+    }
+
+    private boolean gridEmpty() {
+        for (int i = 0; i < 9; i++) if (!craftGrid.empty(i)) return false;
+        return true;
+    }
+
+    /**
+     * Cria uma vez o que a grade forma, gastando um item de cada espaço usado. toCursor: o resultado vai para o
+     * mouse (somando à pilha que já está nele); senão vai direto para a mochila. Retorna se criou.
+     */
+    private boolean craftOnce(boolean toCursor) {
+        Items.Recipe r = Items.match(gridCells(), craftSize);
+        if (r == null) return false;
+        int max = Items.maxStack(r.out);
+        if (toCursor) {
+            if (cursorCount > 0 && (cursorId != r.out || max == 1 || cursorCount + r.outCount > max)) return false;
+            if (cursorCount == 0) { cursorId = r.out; cursorCount = r.outCount; cursorWear = 0; }
+            else cursorCount += r.outCount;
+        } else {
+            if (inv.roomFor(r.out) < r.outCount) { toast("Sem espaço no inventário"); return false; }
+            inv.add(r.out, r.outCount);
+        }
+        for (int i = 0; i < craftSize * craftSize; i++)
+            if (!craftGrid.empty(i)) craftGrid.set(i, craftGrid.id[i], craftGrid.count[i] - 1, craftGrid.wear[i]);
+        Sounds.play("colocar", 0.35);
+        return true;
+    }
+
+    /** Livro: monta a receita na grade com itens da mochila (1 de cada, ou o máximo com Shift). */
+    private void fillGrid(Items.Recipe r, boolean max) {
+        if (r.needsTable() && craftSize < 3) { toast("Essa receita precisa da grade 3x3 da bancada"); return; }
+        for (int i = 0; i < 9; i++) giveBack(craftGrid, i, true); // o que estava na grade volta para a mochila
+        int times = inv.timesCraftable(r);
+        if (times < 1) { toast("Faltam itens: " + r.describe()); return; }
+        int sets = max ? Math.min(times, 64) : 1;
+        int n = craftSize;
+        if (r.shapeless) {
+            for (int k = 0; k < r.cells.length; k++) { inv.remove(r.cells[k], sets); craftGrid.set(k, r.cells[k], sets); }
+        } else {
+            for (int y = 0; y < r.h; y++)
+                for (int x = 0; x < r.w; x++)
+                    if (r.at(x, y) != 0) { inv.remove(r.at(x, y), sets); craftGrid.set(y * n + x, r.at(x, y), sets); }
+        }
+        Sounds.play("clique", 0.4);
+    }
+
+    /** Espaço desenhado no último quadro que contém o ponto: {área, inventário, índice}, ou null. */
+    private Object[] slotAt(int x, int y) {
+        for (int i = slotHits.size() - 1; i >= 0; i--) if (((Rectangle) slotHits.get(i)[0]).contains(x, y)) return slotHits.get(i);
+        return null;
+    }
+
+    private static String slotKey(Object[] hit) {
+        return System.identityHashCode(hit[1]) + ":" + hit[2];
+    }
+
+    /** Soltou o botão do mouse no inventário: arrastar a pilha até outro espaço a coloca lá. */
+    private void onMouseUp(int button) {
+        if (state != State.INVENTORY) return;
+        if (button == 3) { invRightDown = false; return; }
+        if (button != 1) return;
+        Object[] from = dragFrom;
+        dragFrom = null;
+        if (from == null || cursorCount == 0) return;
+        int dx = ui.mouseX - dragStartX, dy = ui.mouseY - dragStartY;
+        if (dx * dx + dy * dy < 64) return; // foi só um clique: a pilha fica no mouse
+        Object[] to = slotAt(ui.mouseX, ui.mouseY);
+        if (to == null || slotKey(to).equals(slotKey(from))) return;
+        clickSlot((Inventory) to[1], (Integer) to[2], 1, false);
+    }
     private static final String[] ARMOR_SLOT = { "capacete", "peitoral", "calças", "botas" };
 
     /** Um espaço de inventário na tela; target é o inventário do jogador ou o baú aberto. */
     private void slotBox(Graphics2D g, final Inventory target, final int i, int x, int y, int sz) {
         Rectangle r = new Rectangle(x, y, sz, sz);
         boolean hv = ui.hover(r);
-        g.setColor(hv ? new Color(255, 255, 255, 60) : new Color(0, 0, 0, 120));
-        g.fillRect(x, y, sz, sz);
-        if (target == inv && i == slot) {
-            g.setColor(new Color(255, 255, 255, 170));
-            g.drawRect(x, y, sz - 1, sz - 1);
-        }
+        Ui.slot(g, x, y, sz, hv, target == inv && i == slot);
         drawItem(g, target.id[i], target.count[i], target.wear[i], x + 5, y + 5, sz - 10, true);
+        slotHits.add(new Object[] { r, target, i });
         if (hv && !target.empty(i)) {
             int id = target.id[i];
             tooltip = Items.name(id);
@@ -3420,7 +3716,12 @@ public class BlockGame {
     private void quickMove(Inventory target, int i) {
         if (target.empty(i)) return;
         int item = target.id[i], n = target.count[i], w = target.wear[i], left;
-        if (chest != null) left = target == chest ? inv.addRange(item, n, w, 0, Inventory.SIZE) : chest.addRange(item, n, w, 0, Inventory.CHEST);
+        if (target == craftGrid || target == furnaceInv) left = inv.addRange(item, n, w, 0, Inventory.SIZE); // de volta à mochila
+        else if (furnaceOpen && target == inv && i < Inventory.SIZE && (Items.smelt(item) != 0 || Items.fuel(item) != 0)) {
+            // da mochila para a fornalha: o que assa vai para cima, o combustível para baixo
+            int dest = Items.smelt(item) != 0 && (furnaceInv.empty(0) || furnaceInv.id[0] == item) ? 0 : 1;
+            left = furnaceInv.addRange(item, n, w, dest, dest + 1);
+        } else if (chest != null) left = target == chest ? inv.addRange(item, n, w, 0, Inventory.SIZE) : chest.addRange(item, n, w, 0, Inventory.CHEST);
         else if (i >= Inventory.SIZE) left = inv.addRange(item, n, w, 0, Inventory.SIZE);
         else if (Items.isArmor(item) && inv.empty(Inventory.SIZE + Items.armorPiece(item))) {
             inv.set(Inventory.SIZE + Items.armorPiece(item), item, 1, w);
@@ -3431,6 +3732,18 @@ public class BlockGame {
 
     private void clickSlot(final Inventory inv, int i, int button, boolean shift) {
         if (button == 1 && shift && cursorCount == 0) { quickMove(inv, i); return; }
+        // resultado da fornalha: só se tira, nunca se coloca
+        if (inv == furnaceInv && i == 2) {
+            if (inv.empty(i)) return;
+            int id = inv.id[i], n = inv.count[i];
+            if (cursorCount == 0) { cursorId = id; cursorCount = n; cursorWear = 0; inv.set(i, 0, 0); }
+            else if (cursorId == id && Items.maxStack(id) > 1) {
+                int k = Math.min(n, Items.maxStack(id) - cursorCount);
+                cursorCount += k;
+                inv.set(i, id, n - k);
+            }
+            return;
+        }
         // espaços de armadura só aceitam a peça certa
         if (inv == this.inv && i >= Inventory.SIZE && cursorCount > 0
                 && !(Items.isArmor(cursorId) && Items.armorPiece(cursorId) == i - Inventory.SIZE)) return;
@@ -3684,6 +3997,17 @@ public class BlockGame {
                 slotNameTimer = 2;
             }
             return;
+        }
+        if (state == State.INVENTORY) { // começo de um arrastar
+            dragFrom = button == 1 ? slotAt(x, y) : null;
+            dragStartX = x;
+            dragStartY = y;
+            if (button == 3) {
+                invRightDown = true;
+                rightVisited.clear();
+                Object[] s = slotAt(x, y);
+                if (s != null && cursorCount > 0) rightVisited.add(slotKey(s)); // o clique já solta 1 aqui
+            }
         }
         boolean hit = ui.dispatch(x, y, button, shift);
         if (hit) Sounds.play("clique", 0.5);

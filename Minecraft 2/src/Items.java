@@ -137,17 +137,39 @@ final class Items {
 
     // ------------------------------------------------------------------ receitas
 
-    static final int HAND = 0, TABLE = 1, FURNACE = 2;
-    static final String[] STATION_NAMES = { "Mão", "Bancada", "Fornalha" };
-
+    /**
+     * Receita montada na grade de criação. Com forma, o desenho importa: os itens precisam estar nessa
+     * posição uns em relação aos outros (em qualquer lugar da grade, e pode ser espelhado da esquerda para
+     * a direita). Sem forma, só os ingredientes importam. A grade do inventário é 2x2; a da bancada é 3x3.
+     */
     static final class Recipe {
-        final int station, out, outCount;
-        final int[] in; // pares: item, quantidade
-        Recipe(int station, int out, int outCount, int... in) {
-            this.station = station; this.out = out; this.outCount = outCount; this.in = in;
+        final int out, outCount, w, h;
+        /** Com forma: w*h itens linha por linha (0 = espaço vazio). Sem forma: os ingredientes, um por espaço. */
+        final int[] cells;
+        final boolean shapeless;
+
+        Recipe(int out, int outCount, int w, int h, int[] cells, boolean shapeless) {
+            this.out = out; this.outCount = outCount; this.w = w; this.h = h; this.cells = cells; this.shapeless = shapeless;
+        }
+
+        /** Precisa da grade 3x3 da bancada? */
+        boolean needsTable() { return shapeless ? cells.length > 4 : w > 2 || h > 2; }
+
+        /** Item da posição (x, y) do desenho, ou 0. */
+        int at(int x, int y) { return cells[y * w + x]; }
+
+        /** O que a receita gasta: pares (item, quantidade). */
+        int[] ingredients() {
+            java.util.LinkedHashMap<Integer, Integer> m = new java.util.LinkedHashMap<>();
+            for (int c : cells) if (c != 0) m.merge(c, 1, Integer::sum);
+            int[] out = new int[m.size() * 2];
+            int i = 0;
+            for (java.util.Map.Entry<Integer, Integer> e : m.entrySet()) { out[i++] = e.getKey(); out[i++] = e.getValue(); }
+            return out;
         }
 
         String describe() {
+            int[] in = ingredients();
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < in.length; i += 2) {
                 if (i > 0) sb.append(" + ");
@@ -157,70 +179,155 @@ final class Items {
         }
     }
 
+    /** Receita com forma: linhas separadas por '|', e depois pares (letra, item). Espaço = vazio. */
+    private static Recipe shaped(int out, int count, String rows, Object... key) {
+        String[] r = rows.split("\\|", -1);
+        int h = r.length, w = 0;
+        for (String s : r) w = Math.max(w, s.length());
+        int[] cells = new int[w * h];
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < r[y].length(); x++) {
+                char c = r[y].charAt(x);
+                if (c == ' ') continue;
+                int item = 0;
+                for (int k = 0; k < key.length; k += 2) if ((Character) key[k] == c) item = (Integer) key[k + 1];
+                if (item == 0) throw new IllegalArgumentException("letra sem item na receita: " + c);
+                cells[y * w + x] = item;
+            }
+        return new Recipe(out, count, w, h, cells, false);
+    }
+
+    private static Recipe shapeless(int out, int count, int... items) {
+        return new Recipe(out, count, items.length, 1, items, true);
+    }
+
     static final Recipe[] RECIPES;
     static {
         java.util.List<Recipe> r = new java.util.ArrayList<>();
-        // na mão
-        r.add(new Recipe(HAND, Block.PLANKS, 4, Block.LOG, 1));
-        r.add(new Recipe(HAND, Block.PLANKS, 4, Block.BIRCH_LOG, 1));
-        r.add(new Recipe(HAND, STICK, 4, Block.PLANKS, 2));
-        r.add(new Recipe(HAND, Block.TABLE, 1, Block.PLANKS, 4));
-        r.add(new Recipe(HAND, Block.TORCH, 4, COAL, 1, STICK, 1));
-        // na bancada
-        r.add(new Recipe(TABLE, Block.FURNACE, 1, Block.COBBLE, 8));
-        int[] mats = { Block.PLANKS, Block.COBBLE, IRON_INGOT, CRYSTAL };
+        int P = Block.PLANKS, S = STICK;
+        // cabem na grade 2x2 do inventário
+        r.add(shapeless(Block.PLANKS, 4, Block.LOG));
+        r.add(shapeless(Block.PLANKS, 4, Block.BIRCH_LOG));
+        r.add(shaped(STICK, 4, "P|P", 'P', P));
+        r.add(shaped(Block.TABLE, 1, "PP|PP", 'P', P));
+        r.add(shaped(Block.TORCH, 4, "C|S", 'C', COAL, 'S', S));
+        r.add(shapeless(FLINT_STEEL, 1, IRON_INGOT, FLINT));
+        r.add(shaped(Block.STONE_BRICK, 4, "SS|SS", 'S', Block.STONE));
+        r.add(shaped(Block.SANDSTONE, 1, "SS|SS", 'S', Block.SAND));
+        r.add(shaped(Block.BRICK, 4, "DS|SD", 'D', Block.DIRT, 'S', Block.SAND));
+        for (int m = 0; m < Block.SHAPE_MATS.length; m++) { // laje deitada <-> laje em pé
+            r.add(shapeless(Block.vslab(m, 0), 1, Block.slab(m, 0)));
+            r.add(shapeless(Block.slab(m, 0), 1, Block.vslab(m, 0)));
+        }
+        r.add(shapeless(IRON_INGOT, 9, Block.IRON_BLOCK));
+        r.add(shapeless(GOLD_INGOT, 9, Block.GOLD_BLOCK));
+        // precisam da bancada (3x3)
+        r.add(shaped(Block.FURNACE, 1, "CCC|C C|CCC", 'C', Block.COBBLE));
+        r.add(shaped(Block.CHEST, 1, "PPP|P P|PPP", 'P', P));
+        int[] mats = { P, Block.COBBLE, IRON_INGOT, CRYSTAL };
         for (int m = 0; m < 4; m++) {
-            r.add(new Recipe(TABLE, tool(PICK, m), 1, mats[m], 3, STICK, 2));
-            r.add(new Recipe(TABLE, tool(AXE, m), 1, mats[m], 3, STICK, 2));
-            r.add(new Recipe(TABLE, tool(SHOVEL, m), 1, mats[m], 1, STICK, 2));
-            r.add(new Recipe(TABLE, tool(SWORD, m), 1, mats[m], 2, STICK, 1));
-            r.add(new Recipe(TABLE, tool(HOE, m), 1, mats[m], 2, STICK, 2));
+            int M = mats[m];
+            r.add(shaped(tool(PICK, m), 1, "MMM| S | S ", 'M', M, 'S', S));
+            r.add(shaped(tool(AXE, m), 1, "MM|MS| S", 'M', M, 'S', S));
+            r.add(shaped(tool(SHOVEL, m), 1, "M|S|S", 'M', M, 'S', S));
+            r.add(shaped(tool(SWORD, m), 1, "M|M|S", 'M', M, 'S', S));
+            r.add(shaped(tool(HOE, m), 1, "MM| S| S", 'M', M, 'S', S));
         }
-        r.add(new Recipe(HAND, FLINT_STEEL, 1, IRON_INGOT, 1, FLINT, 1));
-        r.add(new Recipe(TABLE, Block.CHEST, 1, Block.PLANKS, 8));
-        r.add(new Recipe(TABLE, BREAD, 1, WHEAT, 3));
-        r.add(new Recipe(TABLE, BOW, 1, STICK, 3, STRING, 3));
-        r.add(new Recipe(TABLE, ARROW, 4, STICK, 1, FLINT, 1, FEATHER, 1));
-        int[] armorMats = { LEATHER, IRON_INGOT, CRYSTAL }, armorCost = { 5, 8, 7, 4 };
-        for (int m = 0; m < 3; m++)
-            for (int p = 0; p < 4; p++) r.add(new Recipe(TABLE, armor(p, m), 1, armorMats[m], armorCost[p]));
-        r.add(new Recipe(TABLE, Block.STONE_BRICK, 4, Block.STONE, 4));
-        r.add(new Recipe(TABLE, Block.SANDSTONE, 1, Block.SAND, 4));
-        r.add(new Recipe(TABLE, Block.BRICK, 4, Block.DIRT, 2, Block.SAND, 2));
-        r.add(new Recipe(TABLE, Block.IRON_BLOCK, 1, IRON_INGOT, 9));
-        r.add(new Recipe(TABLE, Block.GOLD_BLOCK, 1, GOLD_INGOT, 9));
-        r.add(new Recipe(TABLE, IRON_INGOT, 9, Block.IRON_BLOCK, 1));
-        r.add(new Recipe(TABLE, GOLD_INGOT, 9, Block.GOLD_BLOCK, 1));
-        // escadas, lajes e porta
-        for (int m = 0; m < Block.SHAPE_MATS.length; m++) {
-            r.add(new Recipe(TABLE, Block.stair(m, 0, 0), 4, Block.SHAPE_MATS[m], 6));
-            r.add(new Recipe(TABLE, Block.slab(m, 0), 6, Block.SHAPE_MATS[m], 3));
+        r.add(shaped(BREAD, 1, "WWW", 'W', WHEAT));
+        r.add(shaped(BOW, 1, " TS|T S| TS", 'T', S, 'S', STRING));
+        r.add(shaped(ARROW, 4, "F|T|E", 'F', FLINT, 'T', S, 'E', FEATHER));
+        int[] armorMats = { LEATHER, IRON_INGOT, CRYSTAL };
+        for (int m = 0; m < 3; m++) {
+            int L = armorMats[m];
+            r.add(shaped(armor(HELMET, m), 1, "LLL|L L", 'L', L));
+            r.add(shaped(armor(CHESTPLATE, m), 1, "L L|LLL|LLL", 'L', L));
+            r.add(shaped(armor(LEGGINGS, m), 1, "LLL|L L|L L", 'L', L));
+            r.add(shaped(armor(BOOTS, m), 1, "L L|L L", 'L', L));
         }
-        r.add(new Recipe(TABLE, Block.door(0, 0, 0), 3, Block.PLANKS, 6));
-        for (int m = 0; m < Block.SHAPE_MATS.length; m++) {
-            r.add(new Recipe(TABLE, Block.vslab(m, 0), 6, Block.SHAPE_MATS[m], 3));
-            r.add(new Recipe(HAND, Block.vslab(m, 0), 1, Block.slab(m, 0), 1));
-            r.add(new Recipe(HAND, Block.slab(m, 0), 1, Block.vslab(m, 0), 1));
+        r.add(shaped(Block.IRON_BLOCK, 1, "III|III|III", 'I', IRON_INGOT));
+        r.add(shaped(Block.GOLD_BLOCK, 1, "III|III|III", 'I', GOLD_INGOT));
+        for (int m = 0; m < Block.SHAPE_MATS.length; m++) { // escadas e lajes
+            int M = Block.SHAPE_MATS[m];
+            r.add(shaped(Block.stair(m, 0, 0), 4, "M  |MM |MMM", 'M', M));
+            r.add(shaped(Block.slab(m, 0), 6, "MMM", 'M', M));
+            r.add(shaped(Block.vslab(m, 0), 6, "M|M|M", 'M', M));
         }
-        r.add(new Recipe(TABLE, Block.FENCE, 3, Block.PLANKS, 4, STICK, 2));
-        r.add(new Recipe(TABLE, Block.BED, 1, Block.WOOL, 3, Block.PLANKS, 3));
-        r.add(new Recipe(TABLE, Block.TNT, 1, GUNPOWDER, 4, Block.SAND, 4));
-        r.add(new Recipe(TABLE, Block.GLASS_PANE, 16, Block.GLASS, 6));
-        // na fornalha (o carvão, o graveto ou as tábuas são o combustível)
-        r.add(new Recipe(FURNACE, IRON_INGOT, 1, Block.IRON_ORE, 1, COAL, 1));
-        r.add(new Recipe(FURNACE, GOLD_INGOT, 1, Block.GOLD_ORE, 1, COAL, 1));
-        r.add(new Recipe(FURNACE, Block.GLASS, 2, Block.SAND, 2, COAL, 1));
-        r.add(new Recipe(FURNACE, Block.STONE, 2, Block.COBBLE, 2, COAL, 1));
-        r.add(new Recipe(FURNACE, COOKED_MEAT, 1, RAW_MEAT, 1, STICK, 1));
-        r.add(new Recipe(FURNACE, COOKED_PORK, 1, RAW_PORK, 1, STICK, 1));
-        r.add(new Recipe(FURNACE, COOKED_MUTTON, 1, RAW_MUTTON, 1, STICK, 1));
-        r.add(new Recipe(FURNACE, COOKED_CHICKEN, 1, RAW_CHICKEN, 1, STICK, 1));
-        r.add(new Recipe(FURNACE, COOKED_FISH, 1, RAW_FISH, 1, STICK, 1));
-        r.add(new Recipe(FURNACE, COAL, 1, Block.LOG, 1, Block.PLANKS, 1));
-        r.add(new Recipe(FURNACE, COAL, 1, Block.BIRCH_LOG, 1, Block.PLANKS, 1));
+        r.add(shaped(Block.door(0, 0, 0), 3, "PP|PP|PP", 'P', P));
+        r.add(shaped(Block.FENCE, 3, "PSP|PSP", 'P', P, 'S', S));
+        r.add(shaped(Block.BED, 1, "WWW|PPP", 'W', Block.WOOL, 'P', P));
+        r.add(shaped(Block.TNT, 1, "GSG|SGS|GSG", 'G', GUNPOWDER, 'S', Block.SAND));
+        r.add(shaped(Block.GLASS_PANE, 16, "GGG|GGG", 'G', Block.GLASS));
         RECIPES = r.toArray(new Recipe[0]);
     }
 
+    /**
+     * Procura a receita que bate com a grade (size x size, ids linha por linha; 0 = vazio).
+     * O desenho pode estar em qualquer canto da grade e espelhado. Retorna null se nada bate.
+     */
+    static Recipe match(int[] grid, int size) {
+        int minX = size, minY = size, maxX = -1, maxY = -1, n = 0;
+        for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+                if (grid[y * size + x] != 0) {
+                    n++;
+                    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
+                    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
+                }
+        if (n == 0) return null;
+        int w = maxX - minX + 1, h = maxY - minY + 1;
+        for (Recipe r : RECIPES) {
+            if (r.shapeless) {
+                if (r.cells.length != n) continue;
+                int[] a = new int[n], b = r.cells.clone();
+                int k = 0;
+                for (int c : grid) if (c != 0) a[k++] = c;
+                java.util.Arrays.sort(a);
+                java.util.Arrays.sort(b);
+                if (java.util.Arrays.equals(a, b)) return r;
+                continue;
+            }
+            if (r.w != w || r.h != h) continue;
+            for (int mirror = 0; mirror < 2; mirror++) {
+                boolean ok = true;
+                for (int y = 0; y < h && ok; y++)
+                    for (int x = 0; x < w && ok; x++) {
+                        int want = r.at(mirror == 0 ? x : w - 1 - x, y);
+                        if (grid[(minY + y) * size + minX + x] != want) ok = false;
+                    }
+                if (ok) return r;
+            }
+        }
+        return null;
+    }
+
+    // ------------------------------------------------------------------ fornalha
+
+    /** O que o item vira na fornalha (0 = não assa). */
+    static int smelt(int id) {
+        switch (id) {
+            case Block.IRON_ORE: return IRON_INGOT;
+            case Block.GOLD_ORE: return GOLD_INGOT;
+            case Block.SAND: return Block.GLASS;
+            case Block.COBBLE: return Block.STONE;
+            case Block.LOG: case Block.BIRCH_LOG: return COAL;
+            case RAW_MEAT: return COOKED_MEAT;
+            case RAW_PORK: return COOKED_PORK;
+            case RAW_MUTTON: return COOKED_MUTTON;
+            case RAW_CHICKEN: return COOKED_CHICKEN;
+            case RAW_FISH: return COOKED_FISH;
+            default: return 0;
+        }
+    }
+
+    /** Quantos itens um combustível assa (0 = não queima). */
+    static int fuel(int id) {
+        switch (id) {
+            case COAL: return 8;
+            case Block.LOG: case Block.BIRCH_LOG: case Block.PLANKS: return 2;
+            case STICK: return 1;
+            default: return 0;
+        }
+    }
     // ------------------------------------------------------------------ ícones
 
     private static final BufferedImage[] ICONS = new BufferedImage[LAST + 1];

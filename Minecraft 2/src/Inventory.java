@@ -99,21 +99,35 @@ final class Inventory {
         return false;
     }
 
-    boolean canCraft(Items.Recipe r) {
-        for (int i = 0; i < r.in.length; i += 2) if (countOf(r.in[i]) < r.in[i + 1]) return false;
-        return true;
+    /** Tem os ingredientes da receita (quantas vezes ela pode ser feita com o que há na mochila)? */
+    int timesCraftable(Items.Recipe r) {
+        int[] in = r.ingredients();
+        int times = Integer.MAX_VALUE;
+        for (int i = 0; i < in.length; i += 2) times = Math.min(times, countOf(in[i]) / in[i + 1]);
+        return times == Integer.MAX_VALUE ? 0 : times;
     }
 
+    /** Faz a receita direto com os itens da mochila (usado pelos testes automáticos). */
     boolean craft(Items.Recipe r) {
-        if (!canCraft(r)) return false;
-        for (int i = 0; i < r.in.length; i += 2) remove(r.in[i], r.in[i + 1]);
+        if (timesCraftable(r) < 1) return false;
+        int[] in = r.ingredients();
+        for (int i = 0; i < in.length; i += 2) remove(in[i], in[i + 1]);
         int left = add(r.out, r.outCount);
         if (left > 0) { // sem espaço: devolve os ingredientes
             remove(r.out, r.outCount - left);
-            for (int i = 0; i < r.in.length; i += 2) add(r.in[i], r.in[i + 1]);
+            for (int i = 0; i < in.length; i += 2) add(in[i], in[i + 1]);
             return false;
         }
         return true;
+    }
+
+    /** Quantos itens deste tipo ainda cabem na mochila (0..35). */
+    int roomFor(int item) {
+        int max = Items.maxStack(item), room = 0;
+        for (int i = 0; i < SIZE; i++)
+            if (empty(i)) room += max;
+            else if (id[i] == item && max > 1) room += max - count[i];
+        return room;
     }
 
     /** Move a pilha entre a barra rápida e a mochila (Shift+clique). */
