@@ -361,16 +361,52 @@ final class Mob extends Entity {
         MODELS[SKELETON] = join(body, idle);
         SKELETON_AIM = join(body, aiming);
         int cow = 0x5A3C28, cowD = 0x3E2A1C, patch = 0xECE8E0, muzzle = 0xD8C4B4;
-        MODELS[COW] = new Box[] {
-                leg(-0.22, 0.3, 0.38, 0.22, 0.6, 0.22, cowD, 1), leg(0.22, 0.3, 0.38, 0.22, 0.6, 0.22, cowD, 2),
-                leg(-0.22, 0.3, -0.38, 0.22, 0.6, 0.22, cowD, 2), leg(0.22, 0.3, -0.38, 0.22, 0.6, 0.22, cowD, 1),
-                b(0, 0.92, 0, 0.72, 0.64, 1.2, cow),
-                b(0.15, 1.0, -0.1, 0.74, 0.36, 0.44, patch), b(-0.2, 0.86, 0.3, 0.74, 0.3, 0.3, patch),
-                b(0, 1.12, 0.74, 0.5, 0.5, 0.42, cow),
-                b(0, 1.0, 0.97, 0.34, 0.2, 0.06, muzzle),
-                b(-0.3, 1.38, 0.72, 0.1, 0.14, 0.1, 0xE8E0D0), b(0.3, 1.38, 0.72, 0.1, 0.14, 0.1, 0xE8E0D0),
-                b(0, 0.58, -0.3, 0.3, 0.1, 0.3, 0xE8B0B0),
-                eye(-0.14, 1.2, 0.955, 0.08, 0x202020), eye(0.14, 1.2, 0.955, 0.08, 0x202020) };
+        int hoof = 0x2A1C12, pinkC = 0xE8B0B0, pinkD2 = 0xC98A8A, cream = 0xE8E0D0, hornTip = 0xBDB5A0;
+        java.util.List<Box> cw = new java.util.ArrayList<>();
+        // pernas: coxa, joelho, canela (meia clara nas duas da frente e na traseira esquerda) e casco, balançando no quadril
+        double[][] cowLegs = { { -0.22, 0.38, 1 }, { 0.22, 0.38, 2 }, { -0.22, -0.38, 2 }, { 0.22, -0.38, 1 } };
+        for (int li = 0; li < 4; li++) {
+            double lx = cowLegs[li][0], lz = cowLegs[li][1];
+            int ph = (int) cowLegs[li][2];
+            boolean sock = li != 3;
+            cw.add(legp(lx, 0.5, lz, 0.25, 0.2, 0.25, cow, ph, 0.6));
+            cw.add(legp(lx, 0.37, lz, 0.2, 0.06, 0.2, cowD, ph, 0.6));
+            cw.add(legp(lx, 0.22, lz, 0.17, 0.24, 0.17, sock ? cream : cowD, ph, 0.6));
+            cw.add(legp(lx, 0.05, lz + 0.01, 0.2, 0.1, 0.2, hoof, ph, 0.6));
+        }
+        // tronco e manchas
+        cw.add(b(0, 0.92, 0, 0.72, 0.64, 1.2, cow));
+        cw.add(b(0, 1.245, 0, 0.3, 0.02, 1.0, cowD));                        // faixa da coluna
+        cw.add(b(0, 1.2, 0.34, 0.5, 0.1, 0.3, cow));                          // cernelha (ombro)
+        cw.add(b(0, 0.595, 0.1, 0.5, 0.02, 0.8, cream));                      // barriga clara
+        cw.add(b(0.365, 0.98, -0.12, 0.02, 0.36, 0.44, patch)); cw.add(b(0.2, 1.25, -0.12, 0.34, 0.02, 0.44, patch));
+        cw.add(b(-0.365, 0.9, -0.38, 0.02, 0.32, 0.36, patch)); cw.add(b(-0.2, 1.25, -0.4, 0.3, 0.02, 0.3, patch));
+        cw.add(b(-0.365, 1.05, 0.3, 0.02, 0.2, 0.24, patch));
+        cw.add(b(0.365, 0.82, 0.34, 0.02, 0.2, 0.22, patch));
+        // cauda com tufo e úbere com tetas
+        cw.add(b(0, 0.98, -0.62, 0.07, 0.5, 0.07, cowD)); cw.add(b(0, 0.7, -0.62, 0.11, 0.14, 0.11, hoof));
+        cw.add(b(0, 0.58, -0.3, 0.3, 0.1, 0.3, pinkC));
+        for (double tx : new double[] { -0.08, 0.08 }) for (double tz : new double[] { -0.2, -0.38 }) cw.add(b(tx, 0.5, tz, 0.05, 0.07, 0.05, pinkD2));
+        // pescoço e cabeça
+        cw.add(b(0, 1.1, 0.5, 0.4, 0.4, 0.3, cow));
+        cw.add(b(0, 1.12, 0.74, 0.5, 0.5, 0.42, cow));
+        cw.add(b(0, 1.16, 0.955, 0.14, 0.36, 0.01, patch));                  // mancha na testa
+        cw.add(b(0, 1.0, 0.96, 0.34, 0.22, 0.1, muzzle));                    // focinho
+        cw.add(b(-0.07, 1.0, 1.012, 0.05, 0.04, 0.01, 0x7A5A4A)); cw.add(b(0.07, 1.0, 1.012, 0.05, 0.04, 0.01, 0x7A5A4A)); // narinas
+        cw.add(b(0, 0.92, 1.012, 0.2, 0.02, 0.01, 0x7A5A4A));                // boca
+        for (double ex : new double[] { -0.14, 0.14 }) {
+            cw.add(b(ex, 1.2, 0.953, 0.1, 0.08, 0.01, 0xF0F0F0));
+            cw.add(eye(ex, 1.2, 0.96, 0.06, 0x202020));
+        }
+        // orelhas com o interior rosado, chifres em duas partes e topete
+        for (int side = -1; side <= 1; side += 2) {
+            cw.add(b(side * 0.31, 1.2, 0.62, 0.14, 0.08, 0.16, cowD));
+            cw.add(b(side * 0.31, 1.2, 0.66, 0.1, 0.05, 0.1, pinkD2));
+            cw.add(b(side * 0.27, 1.39, 0.72, 0.1, 0.08, 0.1, cream));
+            cw.add(b(side * 0.31, 1.47, 0.72, 0.07, 0.1, 0.07, hornTip));
+        }
+        cw.add(b(0, 1.4, 0.7, 0.2, 0.06, 0.14, cowD));
+        MODELS[COW] = cw.toArray(new Box[0]);
         int cr = 0x4EB04A, crD = 0x3A8A38, crL = 0x74C86E, crFace = 0x101410;
         MODELS[CREEPER] = new Box[] {
                 leg(-0.15, 0.18, 0.2, 0.26, 0.36, 0.26, crD, 1), leg(0.15, 0.18, 0.2, 0.26, 0.36, 0.26, crD, 2),
@@ -399,14 +435,41 @@ final class Mob extends Entity {
                 b(0, 1.1, 0.58, 0.46, 0.14, 0.34, wool),
                 eye(-0.1, 0.98, 0.815, 0.07, 0x202020), eye(0.1, 0.98, 0.815, 0.07, 0x202020) };
         int white = 0xF4F4F0;
-        MODELS[CHICKEN] = new Box[] {
-                leg(-0.08, 0.13, 0, 0.06, 0.26, 0.06, 0xE0A020, 1), leg(0.08, 0.13, 0, 0.06, 0.26, 0.06, 0xE0A020, 2),
-                b(0, 0.42, -0.02, 0.36, 0.32, 0.46, white),
-                b(-0.2, 0.44, -0.02, 0.04, 0.22, 0.34, 0xE6E6E0), b(0.2, 0.44, -0.02, 0.04, 0.22, 0.34, 0xE6E6E0),
-                b(0, 0.64, 0.2, 0.24, 0.3, 0.2, white),
-                b(0, 0.62, 0.34, 0.12, 0.08, 0.1, 0xF0A020),
-                b(0, 0.82, 0.2, 0.06, 0.08, 0.14, 0xD02828),
-                eye(-0.08, 0.7, 0.305, 0.05, 0x202020), eye(0.08, 0.7, 0.305, 0.05, 0x202020) };
+        int feather = 0xE6E6E0, featherD = 0xC8C8C0, beakC = 0xF0A020, beakD = 0xD08A18, legC2 = 0xE0A020, redC = 0xD02828, redD = 0xA81C1C;
+        java.util.List<Box> ck = new java.util.ArrayList<>();
+        // pernas: penas da coxa, canela e pé com três dedos na frente e um atrás (balançam no quadril)
+        for (int side = -1; side <= 1; side += 2) {
+            int ph = side < 0 ? 1 : 2;
+            double lx = side * 0.08;
+            ck.add(legp(lx, 0.22, 0, 0.11, 0.1, 0.13, white, ph, 0.26));
+            ck.add(legp(lx, 0.11, 0, 0.05, 0.2, 0.05, legC2, ph, 0.26));
+            ck.add(legp(lx, 0.17, -0.03, 0.03, 0.04, 0.03, beakD, ph, 0.26));       // esporão
+            for (int t = -1; t <= 1; t++) ck.add(legp(lx + t * 0.04, 0.012, 0.07, 0.03, 0.025, 0.11, legC2, ph, 0.26));
+            ck.add(legp(lx, 0.012, -0.05, 0.03, 0.025, 0.06, legC2, ph, 0.26));
+        }
+        // corpo: peito estufado, costas cinzentas, asas em camadas e cauda em leque
+        ck.add(b(0, 0.42, -0.02, 0.36, 0.32, 0.46, white));
+        ck.add(b(0, 0.38, 0.2, 0.3, 0.26, 0.06, white));
+        ck.add(b(0, 0.595, -0.04, 0.3, 0.03, 0.36, feather));
+        for (int side = -1; side <= 1; side += 2) {
+            ck.add(b(side * 0.2, 0.46, -0.02, 0.04, 0.22, 0.34, feather));
+            ck.add(b(side * 0.21, 0.4, -0.08, 0.03, 0.14, 0.26, featherD));
+            ck.add(b(side * 0.215, 0.31, -0.14, 0.02, 0.06, 0.18, featherD));
+        }
+        ck.add(b(0, 0.6, -0.3, 0.08, 0.22, 0.06, white));
+        ck.add(b(-0.07, 0.58, -0.29, 0.06, 0.18, 0.05, feather)); ck.add(b(0.07, 0.58, -0.29, 0.06, 0.18, 0.05, feather));
+        ck.add(b(0, 0.72, -0.31, 0.05, 0.08, 0.05, featherD));
+        // pescoço, cabeça, bico, crista, barbela e olhos
+        ck.add(b(0, 0.54, 0.16, 0.18, 0.14, 0.16, white));
+        ck.add(b(0, 0.64, 0.2, 0.24, 0.3, 0.2, white));
+        ck.add(b(0, 0.64, 0.335, 0.1, 0.04, 0.1, beakC));
+        ck.add(b(0, 0.6, 0.32, 0.08, 0.03, 0.08, beakD));
+        ck.add(b(0, 0.82, 0.2, 0.06, 0.08, 0.14, redC));
+        ck.add(b(0, 0.88, 0.17, 0.05, 0.06, 0.05, redC)); ck.add(b(0, 0.87, 0.24, 0.05, 0.05, 0.05, redC));
+        ck.add(b(0, 0.54, 0.31, 0.05, 0.09, 0.03, redD));
+        ck.add(b(-0.125, 0.62, 0.2, 0.01, 0.07, 0.07, redC)); ck.add(b(0.125, 0.62, 0.2, 0.01, 0.07, 0.07, redC));
+        ck.add(eye(-0.08, 0.7, 0.305, 0.05, 0x202020)); ck.add(eye(0.08, 0.7, 0.305, 0.05, 0x202020));
+        MODELS[CHICKEN] = ck.toArray(new Box[0]);
         int skin = 0x93A890, skinD = 0x7A8D77, bone2 = 0xC9D4C2, rag = 0x5E4A66, ragD = 0x4A3A52, ragL = 0x6F5878, stain = 0x3E5A3A;
         int pants = 0x3E3A36, pantsD = 0x34302C, boot = 0x26221F, hair = 0x6E7E6A, teeth = 0xDAD8C4, mouth = 0x3A2A2A;
         java.util.List<Box> z = new java.util.ArrayList<>();
@@ -489,50 +552,52 @@ final class Mob extends Entity {
         z.add(b(0.06, 1.6, 0.247, 0.03, 0.025, 0.01, teeth));
         MODELS[ZOMBIE] = z.toArray(new Box[0]);
         int sp = 0x2E2626, spH = 0x3C3030;
-        int spL = 0x4A3C3C, spH2 = 0x453636, spLeg = 0x241C1C, spRed = 0xB02020, spFang = 0xE0D4B8;
+        // tarântula marrom-avermelhada: corpo alto, pernas longas com faixas escuras e cerdas
+        int spM = 0x5A2A22, spLt = 0x7A3C30, spDk = 0x2A1210, spBand = 0x3A1812, spBr = 0x1A0C0A;
         java.util.List<Box> spider = new java.util.ArrayList<>();
-        // abdômen: placa superior, ampulheta vermelha, faixas, barriga e fiandeira
-        spider.add(b(0, 0.5, -0.45, 0.64, 0.55, 0.76, sp));
-        spider.add(b(0, 0.79, -0.48, 0.5, 0.04, 0.6, spH));
-        spider.add(b(0, 0.815, -0.3, 0.16, 0.01, 0.1, spRed));
-        spider.add(b(0, 0.815, -0.4, 0.06, 0.01, 0.1, spRed));
-        spider.add(b(0, 0.815, -0.5, 0.16, 0.01, 0.1, spRed));
-        for (double fz : new double[] { -0.3, -0.5, -0.7 }) spider.add(b(0, 0.46, fz, 0.66, 0.06, 0.08, spH));
-        spider.add(b(0, 0.24, -0.45, 0.5, 0.04, 0.66, 0x1C1616));
-        spider.add(b(0, 0.38, -0.88, 0.2, 0.16, 0.1, 0x1E1818));
-        spider.add(b(-0.05, 0.36, -0.94, 0.05, 0.07, 0.06, spH));
-        spider.add(b(0.05, 0.36, -0.94, 0.05, 0.07, 0.06, spH));
-        // cefalotórax e cabeça
-        spider.add(b(0, 0.45, 0.05, 0.52, 0.4, 0.5, spH));
-        spider.add(b(0, 0.67, 0.05, 0.4, 0.04, 0.4, spL));
-        spider.add(b(0, 0.46, 0.42, 0.42, 0.34, 0.26, spH2));
-        spider.add(b(0, 0.64, 0.42, 0.3, 0.03, 0.2, spL));
-        // oito olhos: dois grandes, dois médios, quatro pequenos
-        spider.add(eye(-0.13, 0.52, 0.555, 0.1, 0xFF2020));
-        spider.add(eye(0.13, 0.52, 0.555, 0.1, 0xFF2020));
-        spider.add(eye(-0.05, 0.57, 0.555, 0.06, 0xFF2020));
-        spider.add(eye(0.05, 0.57, 0.555, 0.06, 0xFF2020));
-        spider.add(eye(-0.17, 0.59, 0.555, 0.05, 0xFF5030));
-        spider.add(eye(0.17, 0.59, 0.555, 0.05, 0xFF5030));
-        spider.add(eye(-0.07, 0.46, 0.555, 0.04, 0xFF5030));
-        spider.add(eye(0.07, 0.46, 0.555, 0.04, 0xFF5030));
-        // quelíceras com presas e pedipalpos
-        for (int side = -1; side <= 1; side += 2) {
-            spider.add(b(side * 0.08, 0.33, 0.575, 0.08, 0.14, 0.07, 0x5A4030));
-            spider.add(b(side * 0.08, 0.22, 0.58, 0.035, 0.1, 0.035, spFang));
-            spider.add(b(side * 0.22, 0.38, 0.5, 0.07, 0.08, 0.24, spH));
-            spider.add(b(side * 0.22, 0.38, 0.64, 0.09, 0.09, 0.06, spH2));
+        // abdômen alto com desenho mais claro
+        spider.add(b(0, 0.74, -0.45, 0.6, 0.56, 0.8, spM));
+        spider.add(b(0, 1.03, -0.45, 0.5, 0.03, 0.66, spLt));
+        spider.add(b(0, 0.74, -0.45, 0.62, 0.1, 0.8, spBand));
+        spider.add(b(0, 0.92, -0.45, 0.62, 0.06, 0.12, spBand));
+        spider.add(b(0, 0.56, -0.45, 0.62, 0.06, 0.12, spBand));
+        spider.add(b(0, 1.04, -0.35, 0.18, 0.02, 0.12, spLt));
+        spider.add(b(0, 1.04, -0.55, 0.12, 0.02, 0.16, spLt));
+        spider.add(b(0, 0.55, -0.9, 0.2, 0.18, 0.1, spDk));
+        for (double bz : new double[] { -0.2, -0.4, -0.6, -0.78 }) {
+            spider.add(b(-0.31, 0.98, bz, 0.03, 0.06, 0.02, spBr)); spider.add(b(0.31, 0.98, bz, 0.03, 0.06, 0.02, spBr));
         }
-        // oito pernas articuladas: segmento alto para fora, joelho e canela descendo até o pé
+        // cefalotórax e cabeça escura
+        spider.add(b(0, 0.64, 0.08, 0.5, 0.38, 0.5, spM));
+        spider.add(b(0, 0.85, 0.08, 0.4, 0.04, 0.4, spLt));
+        spider.add(b(0, 0.64, 0.08, 0.52, 0.08, 0.2, spBand));
+        spider.add(b(0, 0.6, 0.44, 0.42, 0.3, 0.24, spDk));
+        spider.add(b(0, 0.78, 0.44, 0.3, 0.04, 0.2, spM));
+        for (double ex : new double[] { -0.12, 0.12 }) spider.add(eye(ex, 0.64, 0.565, 0.08, 0xC02818));
+        for (double ex : new double[] { -0.05, 0.05 }) spider.add(eye(ex, 0.7, 0.565, 0.05, 0xC02818));
+        spider.add(eye(-0.17, 0.7, 0.565, 0.04, 0x8A2014)); spider.add(eye(0.17, 0.7, 0.565, 0.04, 0x8A2014));
+        for (int side = -1; side <= 1; side += 2) {
+            spider.add(b(side * 0.09, 0.44, 0.58, 0.1, 0.18, 0.08, spBand));              // quelíceras
+            spider.add(b(side * 0.09, 0.32, 0.59, 0.04, 0.12, 0.04, spBr));               // presas
+            spider.add(b(side * 0.09, 0.25, 0.6, 0.02, 0.05, 0.02, 0xD8C8B0));
+            spider.add(b(side * 0.24, 0.52, 0.52, 0.07, 0.08, 0.26, spM));                // pedipalpos
+            spider.add(b(side * 0.24, 0.5, 0.67, 0.08, 0.1, 0.06, spDk));
+            for (double bz : new double[] { 0.0, 0.18, 0.36 }) spider.add(b(side * 0.27, 0.86, bz, 0.03, 0.05, 0.02, spBr)); // cerdas
+        }
+        // oito pernas longas: sobem até o joelho alto e descem em degraus até o chão; as da frente apontam para frente
+        double[][] seg = { // distância lateral, altura, comprimento, altura da peça, cor (0 base, 1 faixa, 2 escuro), cerda?
+                { 0.36, 0.62, 0.24, 0.12, 0, 0 }, { 0.56, 0.72, 0.2, 0.12, 0, 0 }, { 0.72, 0.84, 0.14, 0.12, 1, 1 },
+                { 0.82, 0.88, 0.1, 0.14, 2, 0 }, { 0.94, 0.76, 0.12, 0.18, 0, 1 }, { 1.04, 0.6, 0.12, 0.18, 1, 1 },
+                { 1.14, 0.44, 0.12, 0.18, 0, 1 }, { 1.24, 0.28, 0.12, 0.18, 1, 1 }, { 1.3, 0.1, 0.1, 0.2, 2, 0 } };
+        int[] segC = { spM, spBand, spDk };
+        double[] legZ = { 0.3, 0.12, -0.08, -0.28 }, legFan = { 0.55, 0.18, -0.18, -0.55 };
         for (int side = -1; side <= 1; side += 2)
-            for (int i = 0; i < 4; i++) {
-                double lz = 0.32 - i * 0.18;
-                int ph = (i % 2) + 1;
-                spider.add(leg(side * 0.42, 0.6, lz, 0.32, 0.08, 0.08, spLeg, ph));
-                spider.add(leg(side * 0.62, 0.6, lz, 0.1, 0.1, 0.1, spH, ph));
-                spider.add(leg(side * 0.62, 0.34, lz, 0.08, 0.56, 0.08, spLeg, ph));
-                spider.add(leg(side * 0.66, 0.04, lz, 0.12, 0.06, 0.1, 0x161111, ph));
-            }
+            for (int i = 0; i < 4; i++)
+                for (double[] sg : seg) {
+                    double sx = sg[0] * 0.85, lz = legZ[i] + legFan[i] * sx, th = sg[1] > 0.5 ? 0.1 : 0.08;
+                    spider.add(leg(side * sx, sg[1], lz, sg[2], sg[3], th, segC[(int) sg[4]], i + 1));
+                    if (sg[5] > 0) spider.add(leg(side * sx, sg[1] + sg[3] / 2 + 0.02, lz, 0.025, 0.05, 0.025, spBr, i + 1));
+                }
         MODELS[SPIDER] = spider.toArray(new Box[0]);
         int scale = 0xE48A3A, belly = 0xF2D2A0, fin = 0xC0602A;
         MODELS[FISH] = new Box[] {
@@ -558,7 +623,7 @@ final class Mob extends Entity {
             double ox = 0, oz = 0;
             double angle = bx.leg == 0 ? 0 : (bx.leg == 1 ? 1 : -1) * swing * 0.7;
             boolean spiderLeg = type == SPIDER && bx.leg != 0;
-            if (spiderLeg) { oz = Math.sin(walk * 7 + bx.cz * 9) * 0.12 * Math.min(1, swing * 3 + 0.05); angle = 0; }
+            if (spiderLeg) { oz = Math.sin(walk * 7 + bx.leg * 2.0) * 0.12 * Math.min(1, swing * 3 + 0.05); angle = 0; }
             double hx = bx.sx / 2 * swell, hy = bx.sy / 2, hz = bx.sz / 2 * swell;
             // 8 cantos da caixa, com a perna girando em volta do topo
             double[][] c = CORNERS;
