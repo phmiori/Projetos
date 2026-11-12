@@ -278,22 +278,86 @@ final class Mob extends Entity {
     private static final Box[] SKELETON_AIM;
     static {
         int bone = 0xDCDCD0, boneD = 0xA9A99C, bowC = 0x7A5630;
-        Box[] body = {
-                leg(-0.1, 0.4, 0, 0.11, 0.8, 0.11, bone, 1), leg(0.1, 0.4, 0, 0.11, 0.8, 0.11, bone, 2),
-                b(0, 0.84, 0, 0.34, 0.08, 0.16, boneD),
-                b(0, 1.15, 0, 0.08, 0.6, 0.08, bone),
-                b(0, 1.02, 0.01, 0.34, 0.06, 0.18, boneD), b(0, 1.16, 0.01, 0.38, 0.06, 0.2, bone), b(0, 1.3, 0.01, 0.38, 0.06, 0.2, boneD),
-                b(0, 1.44, 0, 0.5, 0.08, 0.16, bone),
-                b(0, 1.74, 0, 0.44, 0.44, 0.44, bone),
-                eye(-0.1, 1.78, 0.225, 0.1, 0x181818), eye(0.1, 1.78, 0.225, 0.1, 0x181818),
-                b(0, 1.62, 0.225, 0.2, 0.05, 0.02, 0x303030) };
-        Box[] idle = {
-                leg(-0.29, 1.12, 0, 0.09, 0.66, 0.09, bone, 2), leg(0.29, 1.12, 0, 0.09, 0.66, 0.09, bone, 1),
-                b(-0.29, 0.95, 0.12, 0.04, 0.62, 0.05, bowC) };
+        int boneS = 0x8E8E82, dark = 0x181818, innerD = 0x2A2A26, toothC = 0xF0F0E0;
+        java.util.List<Box> bd = new java.util.ArrayList<>();
+        // pernas: fêmur, joelho, tíbia, perônio, pé e dedos (balançam em volta do quadril)
+        for (int side = -1; side <= 1; side += 2) {
+            int ph = side < 0 ? 1 : 2;
+            double lx = side * 0.1;
+            bd.add(legp(lx, 0.62, 0, 0.11, 0.36, 0.11, bone, ph, 0.8));
+            bd.add(legp(lx, 0.43, 0.01, 0.14, 0.1, 0.14, boneD, ph, 0.8));
+            bd.add(legp(lx, 0.2, 0, 0.08, 0.36, 0.08, bone, ph, 0.8));
+            bd.add(legp(lx + side * 0.05, 0.2, -0.02, 0.035, 0.34, 0.04, boneS, ph, 0.8));
+            bd.add(legp(lx, 0.03, 0.06, 0.12, 0.06, 0.2, bone, ph, 0.8));
+            for (int t = -1; t <= 1; t++) bd.add(legp(lx + t * 0.04, 0.025, 0.19, 0.03, 0.04, 0.08, boneD, ph, 0.8));
+        }
+        // pélvis e coluna
+        bd.add(b(0, 0.84, 0, 0.34, 0.08, 0.16, boneD));
+        bd.add(b(-0.15, 0.9, 0, 0.06, 0.12, 0.14, bone)); bd.add(b(0.15, 0.9, 0, 0.06, 0.12, 0.14, bone));
+        bd.add(b(0, 0.86, -0.07, 0.1, 0.1, 0.04, boneS));
+        bd.add(b(0, 1.15, -0.02, 0.08, 0.6, 0.08, bone));
+        for (double vy : new double[] { 0.98, 1.08, 1.18, 1.28, 1.38 }) bd.add(b(0, vy, -0.055, 0.06, 0.04, 0.04, boneD));
+        // caixa torácica: vazio escuro por dentro, esterno e quatro pares de costelas
+        bd.add(b(0, 1.18, 0, 0.3, 0.36, 0.16, innerD));
+        bd.add(b(0, 1.2, 0.1, 0.05, 0.36, 0.03, bone));
+        for (double ry : new double[] { 1.02, 1.12, 1.22, 1.32 }) {
+            double w = ry > 1.25 ? 1.0 : (ry > 1.1 ? 0.95 : 0.85);
+            for (int side = -1; side <= 1; side += 2) {
+                bd.add(b(side * 0.12, ry, 0.09, 0.1 * w + 0.04, 0.05, 0.035, bone));
+                bd.add(b(side * 0.19 * w, ry, 0, 0.04, 0.05, 0.18, bone));
+                bd.add(b(side * 0.12, ry, -0.09, 0.1 * w + 0.04, 0.05, 0.035, boneD));
+            }
+        }
+        // ombros: clavícula, juntas e omoplatas
+        bd.add(b(0, 1.44, 0, 0.5, 0.08, 0.16, bone));
+        bd.add(b(-0.29, 1.42, 0, 0.12, 0.12, 0.12, boneD)); bd.add(b(0.29, 1.42, 0, 0.12, 0.12, 0.12, boneD));
+        bd.add(b(-0.12, 1.3, -0.08, 0.12, 0.2, 0.03, boneS)); bd.add(b(0.12, 1.3, -0.08, 0.12, 0.2, 0.03, boneS));
+        // pescoço e crânio
+        bd.add(b(0, 1.52, 0, 0.08, 0.08, 0.08, boneD));
+        bd.add(b(0, 1.74, 0, 0.44, 0.44, 0.44, bone));
+        bd.add(b(0, 1.965, 0, 0.03, 0.01, 0.44, boneS));                      // sutura do topo
+        bd.add(b(0.1, 1.9, 0.223, 0.025, 0.1, 0.01, boneS)); bd.add(b(0.13, 1.84, 0.223, 0.05, 0.025, 0.01, boneS)); // rachaduras
+        bd.add(b(0, 1.84, 0.225, 0.44, 0.04, 0.02, boneD));                   // arcada
+        bd.add(b(-0.1, 1.78, 0.222, 0.13, 0.13, 0.012, dark)); bd.add(b(0.1, 1.78, 0.222, 0.13, 0.13, 0.012, dark)); // órbitas
+        bd.add(eye(-0.1, 1.77, 0.232, 0.045, 0x9ADCE8)); bd.add(eye(0.1, 1.77, 0.232, 0.045, 0x9ADCE8)); // brilho frio
+        bd.add(b(0, 1.7, 0.222, 0.06, 0.08, 0.012, dark));                    // nariz
+        bd.add(b(-0.16, 1.69, 0.23, 0.1, 0.05, 0.02, bone)); bd.add(b(0.16, 1.69, 0.23, 0.1, 0.05, 0.02, bone)); // maçãs do rosto
+        bd.add(b(0, 1.6, 0.222, 0.24, 0.07, 0.012, dark));                    // boca
+        for (int t = -2; t <= 2; t++) {
+            bd.add(b(t * 0.045, 1.625, 0.228, 0.03, 0.035, 0.01, toothC));
+            bd.add(b(t * 0.045, 1.572, 0.228, 0.03, 0.03, 0.01, toothC));
+        }
+        bd.add(b(-0.225, 1.76, 0, 0.012, 0.1, 0.14, boneD)); bd.add(b(0.225, 1.76, 0, 0.012, 0.1, 0.14, boneD)); // têmporas
+        Box[] body = bd.toArray(new Box[0]);
+        // braços soltos: úmero, cotovelo, antebraço, mão e dedos (balançam em volta do ombro); o arco fica na mão esquerda
+        java.util.List<Box> id = new java.util.ArrayList<>();
+        for (int side = -1; side <= 1; side += 2) {
+            int ph = side < 0 ? 2 : 1;
+            double ax = side * 0.29;
+            id.add(legp(ax, 1.28, 0, 0.08, 0.34, 0.08, bone, ph, 1.45));
+            id.add(legp(ax, 1.1, 0, 0.11, 0.08, 0.11, boneD, ph, 1.45));
+            id.add(legp(ax, 0.9, 0, 0.075, 0.32, 0.075, bone, ph, 1.45));
+            id.add(legp(ax, 0.72, 0.01, 0.09, 0.08, 0.06, boneD, ph, 1.45));
+            for (int t = -1; t <= 1; t++) id.add(legp(ax + t * 0.03, 0.65, 0.02, 0.022, 0.1, 0.025, bone, ph, 1.45));
+        }
+        id.add(b(-0.29, 0.95, 0.12, 0.04, 0.5, 0.05, bowC));                  // arco: haste e pontas
+        id.add(b(-0.29, 1.24, 0.14, 0.04, 0.12, 0.05, bowC)); id.add(b(-0.29, 0.66, 0.14, 0.04, 0.12, 0.05, bowC));
+        id.add(b(-0.29, 0.95, 0.16, 0.05, 0.14, 0.06, 0x4A3420));
+        id.add(b(-0.29, 0.95, 0.09, 0.01, 0.74, 0.01, 0xC8C8C0));
+        Box[] idle = id.toArray(new Box[0]);
+        // mirando: braço do arco esticado e braço da corda dobrado, com arco, corda e flecha completos
         Box[] aiming = {
-                b(-0.29, 1.4, 0.3, 0.09, 0.09, 0.62, bone), b(0.29, 1.4, 0.12, 0.09, 0.09, 0.3, bone),
-                b(-0.29, 1.4, 0.62, 0.04, 0.74, 0.05, bowC),
-                b(-0.2, 1.4, 0.42, 0.025, 0.025, 0.62, 0xC8C8C0) };
+                b(-0.29, 1.4, 0.1, 0.09, 0.09, 0.22, bone), b(-0.29, 1.4, 0.23, 0.11, 0.11, 0.07, boneD),
+                b(-0.29, 1.4, 0.42, 0.08, 0.08, 0.3, bone), b(-0.29, 1.4, 0.6, 0.1, 0.1, 0.07, boneD),
+                b(0.29, 1.4, 0.1, 0.09, 0.09, 0.22, bone), b(0.29, 1.4, 0.23, 0.11, 0.11, 0.07, boneD),
+                b(0.08, 1.4, 0.2, 0.36, 0.08, 0.08, bone), b(-0.12, 1.4, 0.2, 0.09, 0.09, 0.09, boneD),
+                b(-0.29, 1.4, 0.64, 0.05, 0.14, 0.06, 0x4A3420),
+                b(-0.29, 1.58, 0.64, 0.04, 0.22, 0.05, bowC), b(-0.29, 1.76, 0.6, 0.04, 0.1, 0.05, bowC),
+                b(-0.29, 1.22, 0.64, 0.04, 0.22, 0.05, bowC), b(-0.29, 1.04, 0.6, 0.04, 0.1, 0.05, bowC),
+                b(-0.29, 1.4, 0.58, 0.01, 0.78, 0.01, 0xC8C8C0),
+                b(-0.2, 1.4, 0.42, 0.025, 0.025, 0.62, 0xC8C8C0),
+                b(-0.2, 1.4, 0.76, 0.045, 0.045, 0.06, 0x808080),
+                b(-0.2, 1.43, 0.14, 0.01, 0.05, 0.06, 0xE0E0E0), b(-0.2, 1.4, 0.14, 0.05, 0.01, 0.06, 0xE0E0E0) };
         MODELS[SKELETON] = join(body, idle);
         SKELETON_AIM = join(body, aiming);
         int cow = 0x5A3C28, cowD = 0x3E2A1C, patch = 0xECE8E0, muzzle = 0xD8C4B4;
