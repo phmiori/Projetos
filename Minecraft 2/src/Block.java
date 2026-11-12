@@ -175,6 +175,8 @@ final class Block {
     static boolean falls(int b) { return b == SAND || b == GRAVEL; }
     static boolean isLeaves(int b) { return b == LEAVES || b == BIRCH_LEAVES; }
     static boolean isLog(int b) { return b == LOG || b == BIRCH_LOG; }
+    /** Blocos que guardam para onde estão virados (cubos e a cama): a frente aponta para quem os colocou. */
+    static boolean rotatable(int b) { return b > AIR && b < COUNT && (SHAPE[b] == CUBE || b == BED); }
     static boolean isSapling(int b) { return b == SAPLING || b == BIRCH_SAPLING; }
     static boolean isWheat(int b) { return b >= WHEAT && b < WHEAT + 3; }
     static int mixedLower(int b) { return (b - MIXED_SLAB_BASE) / 5; }

@@ -96,6 +96,7 @@ final class Mesher {
                     if (shape == Block.MODEL) {
                         // escadas, lajes, portas: cada caixa com suas faces, luz da própria célula, sem oclusão
                         int s = w.skyLight(x, y, z), l = w.blockLightAt(x, y, z);
+                        int mrot = Block.rotatable(b) ? w.rotation(x, y, z) : 0; // a cama
                         for (float[] box : Block.renderBoxes(w, x, y, z, b)) {
                             int texBlock = box.length > 6 ? (int) box[6] : b; // lajes empilhadas: textura de cada metade
                             p0[0] = Math.round(box[0] * 16); p0[1] = Math.round(box[1] * 16); p0[2] = Math.round(box[2] * 16);
@@ -105,10 +106,15 @@ final class Mesher {
                                 int axis = n[0] != 0 ? 0 : n[1] != 0 ? 1 : 2;
                                 boolean onEdge = n[axis] > 0 ? p1[axis] == 16 : p0[axis] == 0;
                                 if (onEdge && Block.opaqueCube(at(B, x + n[0], y + n[1], z + n[2]))) continue;
-                                int layer = texBlock * 6 + f;
+                                int lf = mrot == 0 ? f : localFace(f, mrot);
+                                int layer = texBlock * 6 + lf;
                                 for (int k = 0; k < 4; k++) {
                                     int[] c = boxCorner(f, k, p0, p1);
-                                    int[] r = R[f], u = U[f];
+                                    int[] r = R[lf], u = U[lf];
+                                    if (mrot != 0) { // o canto, visto no desenho original do bloco
+                                        int[] q = unrotate(c[0] - 8, c[2] - 8, mrot);
+                                        c = new int[] { q[0] + 8, c[1], q[1] + 8 };
+                                    }
                                     int tu = (c[0] - 8) * r[0] + (c[1] - 8) * r[1] + (c[2] - 8) * r[2] + 8;
                                     int tv = (c[0] - 8) * u[0] + (c[1] - 8) * u[1] + (c[2] - 8) * u[2] + 8;
                                     opaque.add(pos(ox + c[0], oy + c[1], oz + c[2]), layer | s << 10 | l << 14, uv(tu, tv, f, 0, k));
@@ -118,6 +124,7 @@ final class Mesher {
                         continue;
                     }
 
+                    int rot = Block.rotatable(b) ? w.rotation(x, y, z) : 0;
                     for (int f = 0; f < 6; f++) {
                         int[] n = N[f];
                         int nb = at(B, x + n[0], y + n[1], z + n[2]);
@@ -139,7 +146,7 @@ final class Mesher {
                             sky[k] = (ns + cnt / 2) / cnt;
                             blk[k] = (nl + cnt / 2) / cnt;
                         }
-                        int layer = b * 6 + f; // uma textura por face
+                        int layer = b * 6 + (rot == 0 ? f : localFace(f, rot)); // uma textura por face
                         IntList out = Block.isWater(b) ? water : opaque;
                         // altura da superfície da água: 0 = cheia (há água em cima), 1..8 = nível 0..7
                         int surface = 0;
@@ -153,7 +160,7 @@ final class Mesher {
                             int pz = (1 + n[2] + SR[k] * r[2] + SU[k] * u[2]) * 8;
                             out.add(pos(ox + px, oy + py, oz + pz),
                                     layer | sky[k] << 10 | blk[k] << 14 | flags << 18 | surface << 22,
-                                    uv(SR[k] > 0 ? 16 : 0, SU[k] > 0 ? 16 : 0, f, occ[k], k));
+                                    rot != 0 && (f == 2 || f == 3) ? topUv(f, k, rot, occ[k]) : uv(SR[k] > 0 ? 16 : 0, SU[k] > 0 ? 16 : 0, f, occ[k], k));
                         }
                     }
                 }
@@ -172,11 +179,34 @@ final class Mesher {
         return c;
     }
 
+    /** Direção (0 +Z, 1 -X, 2 -Z, 3 +X) de cada face lateral, e a face de cada direção. */
+    private static final int[] FACE_DIR = { 3, 1, -1, -1, 0, 2 }, DIR_FACE = { 4, 1, 5, 0 };
+
+    /** Qual face da textura aparece na face f de um bloco virado para rot (a frente da textura é a +Z). */
+    private static int localFace(int f, int rot) {
+        int d = FACE_DIR[f];
+        return d < 0 ? f : DIR_FACE[(d - rot) & 3];
+    }
+
+    /** Ponto (x, z) em relação ao centro do bloco, desfeita a rotação rot: onde ele ficava na textura original. */
+    private static int[] unrotate(int x, int z, int rot) {
+        for (int i = 0; i < rot; i++) { int t = x; x = z; z = -t; }
+        return new int[] { x, z };
+    }
+
     /** Folga de 4 blocos (64/16) em x e z: algo pode sair um pouco do pedaço (tocha na parede da borda). */
     static final int POS_BIAS = 64;
 
     private static int pos(int x, int y, int z) {
         return (x + POS_BIAS) | y << 9 | (z + POS_BIAS) << 20;
+    }
+
+    /** Topo e base de um bloco virado: a textura gira junto. */
+    private static int topUv(int f, int k, int rot, int occ) {
+        int[] r = R[f], u = U[f];
+        int cx = SR[k] * r[0] + SU[k] * u[0], cz = SR[k] * r[2] + SU[k] * u[2];
+        int[] q = unrotate(cx, cz, rot);
+        return uv(q[0] * r[0] + q[1] * r[2] > 0 ? 16 : 0, q[0] * u[0] + q[1] * u[2] > 0 ? 16 : 0, f, occ, k);
     }
 
     private static int uv(int u, int v, int face, int occ, int corner) {

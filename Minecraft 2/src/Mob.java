@@ -419,13 +419,46 @@ final class Mob extends Entity {
                 b(0, 1.36, 0.255, 0.12, 0.2, 0.02, crFace),
                 b(-0.1, 1.3, 0.255, 0.08, 0.14, 0.02, crFace), b(0.1, 1.3, 0.255, 0.08, 0.14, 0.02, crFace) };
         int pink = 0xF0A6B0, pinkD = 0xD27C8A;
-        MODELS[PIG] = new Box[] {
-                leg(-0.2, 0.18, 0.3, 0.22, 0.36, 0.22, pinkD, 1), leg(0.2, 0.18, 0.3, 0.22, 0.36, 0.22, pinkD, 2),
-                leg(-0.2, 0.18, -0.3, 0.22, 0.36, 0.22, pinkD, 2), leg(0.2, 0.18, -0.3, 0.22, 0.36, 0.22, pinkD, 1),
-                b(0, 0.6, 0, 0.62, 0.5, 1.0, pink),
-                b(0, 0.7, 0.62, 0.5, 0.48, 0.42, pink),
-                b(0, 0.62, 0.86, 0.26, 0.17, 0.08, pinkD),
-                eye(-0.13, 0.78, 0.84, 0.08, 0x202020), eye(0.13, 0.78, 0.84, 0.08, 0x202020) };
+        int pinkL = 0xF8C0C8, pinkS = 0xE0909C, hoofP = 0x5A3A3A, snoutP = 0xE89AA6;
+        java.util.List<Box> pg = new java.util.ArrayList<>();
+        // pernas: coxa, canela mais escura e casco (balançam no quadril)
+        double[][] pigLegs = { { -0.2, 0.3, 1 }, { 0.2, 0.3, 2 }, { -0.2, -0.3, 2 }, { 0.2, -0.3, 1 } };
+        for (double[] pl : pigLegs) {
+            int ph = (int) pl[2];
+            pg.add(legp(pl[0], 0.3, pl[1], 0.23, 0.12, 0.23, pink, ph, 0.36));
+            pg.add(legp(pl[0], 0.17, pl[1], 0.18, 0.14, 0.18, pinkD, ph, 0.36));
+            pg.add(legp(pl[0], 0.04, pl[1] + 0.01, 0.2, 0.08, 0.2, hoofP, ph, 0.36));
+        }
+        // corpo: lombo, traseiro mais cheio, barriga clara, manchas e rabo enrolado
+        pg.add(b(0, 0.6, 0, 0.62, 0.5, 1.0, pink));
+        pg.add(b(0, 0.58, -0.32, 0.66, 0.46, 0.34, pink));
+        pg.add(b(0, 0.355, 0, 0.5, 0.02, 0.9, pinkL));
+        pg.add(b(0.316, 0.64, 0.1, 0.02, 0.2, 0.3, pinkS)); pg.add(b(0.15, 0.855, 0.1, 0.2, 0.02, 0.3, pinkS));
+        pg.add(b(-0.316, 0.58, -0.3, 0.02, 0.18, 0.22, pinkS));
+        pg.add(b(0, 0.66, -0.52, 0.05, 0.05, 0.07, pinkD));
+        pg.add(b(0.04, 0.72, -0.55, 0.05, 0.07, 0.05, pinkD));
+        pg.add(b(0, 0.78, -0.54, 0.05, 0.04, 0.05, pinkD));
+        // pescoço e cabeça
+        pg.add(b(0, 0.68, 0.4, 0.44, 0.4, 0.2, pink));
+        pg.add(b(0, 0.7, 0.62, 0.5, 0.48, 0.42, pink));
+        pg.add(b(-0.2, 0.66, 0.832, 0.08, 0.08, 0.01, 0xF4A6B0)); pg.add(b(0.2, 0.66, 0.832, 0.08, 0.08, 0.01, 0xF4A6B0)); // bochechas
+        // focinho com narinas e boca
+        pg.add(b(0, 0.62, 0.86, 0.26, 0.17, 0.08, pinkD));
+        pg.add(b(0, 0.62, 0.9, 0.3, 0.2, 0.04, snoutP));
+        pg.add(b(-0.06, 0.62, 0.925, 0.05, 0.07, 0.01, 0x8A4A56)); pg.add(b(0.06, 0.62, 0.925, 0.05, 0.07, 0.01, 0x8A4A56));
+        pg.add(b(0, 0.525, 0.88, 0.2, 0.02, 0.06, 0x8A4A56));
+        // olhos com branco e sobrancelha; orelhas caídas
+        for (double ex : new double[] { -0.13, 0.13 }) {
+            pg.add(b(ex, 0.78, 0.832, 0.1, 0.08, 0.01, 0xF4F0F0));
+            pg.add(eye(ex, 0.78, 0.84, 0.08, 0x202020));
+            pg.add(b(ex, 0.845, 0.832, 0.12, 0.02, 0.01, pinkD));
+        }
+        for (int side = -1; side <= 1; side += 2) {
+            pg.add(b(side * 0.18, 0.96, 0.58, 0.14, 0.06, 0.16, pinkD));
+            pg.add(b(side * 0.24, 0.9, 0.58, 0.04, 0.1, 0.14, pinkD));
+            pg.add(b(side * 0.18, 0.99, 0.58, 0.08, 0.01, 0.1, pinkS));
+        }
+        MODELS[PIG] = pg.toArray(new Box[0]);
         int wool = 0xEDEDE6, face = 0xC8B8A6, legC = 0x8A7E72;
         MODELS[SHEEP] = new Box[] {
                 leg(-0.18, 0.24, 0.3, 0.2, 0.48, 0.2, legC, 1), leg(0.18, 0.24, 0.3, 0.2, 0.48, 0.2, legC, 2),
@@ -600,12 +633,34 @@ final class Mob extends Entity {
                 }
         MODELS[SPIDER] = spider.toArray(new Box[0]);
         int scale = 0xE48A3A, belly = 0xF2D2A0, fin = 0xC0602A;
-        MODELS[FISH] = new Box[] {
-                b(0, 0.18, 0, 0.18, 0.22, 0.5, scale),
-                b(0, 0.1, 0.02, 0.16, 0.06, 0.4, belly),
-                leg(0, 0.18, -0.33, 0.04, 0.24, 0.16, fin, 1),
-                b(0, 0.33, -0.02, 0.03, 0.08, 0.18, fin),
-                eye(-0.091, 0.22, 0.17, 0.05, 0x101010), eye(0.091, 0.22, 0.17, 0.05, 0x101010) };
+        int scaleL = 0xF0A050, scaleD = 0xB86A2A, finD = 0x9A4A1E;
+        java.util.List<Box> fs = new java.util.ArrayList<>();
+        // corpo afinando até o pedúnculo, com costas claras, barriga e duas faixas escuras
+        fs.add(b(0, 0.18, 0.02, 0.18, 0.22, 0.3, scale));
+        fs.add(b(0, 0.17, 0.2, 0.15, 0.18, 0.14, scale));
+        fs.add(b(0, 0.18, -0.2, 0.14, 0.17, 0.14, scale));
+        fs.add(b(0, 0.18, -0.3, 0.07, 0.1, 0.1, scaleD));
+        fs.add(b(0, 0.1, 0.02, 0.16, 0.06, 0.4, belly));
+        fs.add(b(0, 0.295, 0.05, 0.1, 0.02, 0.22, scaleL));
+        fs.add(b(0, 0.18, -0.06, 0.186, 0.226, 0.04, scaleD));
+        fs.add(b(0, 0.18, 0.1, 0.186, 0.226, 0.04, scaleD));
+        // cauda em três partes (batem juntas), nadadeiras dorsal, peitorais, pélvicas e anal
+        fs.add(legp(0, 0.18, -0.37, 0.03, 0.26, 0.1, fin, 1, 0.18));
+        fs.add(legp(0, 0.28, -0.43, 0.03, 0.1, 0.06, finD, 1, 0.18));
+        fs.add(legp(0, 0.08, -0.43, 0.03, 0.1, 0.06, finD, 1, 0.18));
+        fs.add(b(0, 0.33, -0.02, 0.03, 0.08, 0.18, fin));
+        fs.add(b(0, 0.345, 0.1, 0.02, 0.1, 0.04, finD));
+        fs.add(b(-0.115, 0.12, 0.06, 0.03, 0.06, 0.1, fin)); fs.add(b(0.115, 0.12, 0.06, 0.03, 0.06, 0.1, fin));
+        fs.add(b(-0.04, 0.04, 0.0, 0.03, 0.05, 0.06, fin)); fs.add(b(0.04, 0.04, 0.0, 0.03, 0.05, 0.06, fin));
+        fs.add(b(0, 0.05, -0.15, 0.03, 0.05, 0.1, fin));
+        // guelras, boca e olhos
+        fs.add(b(-0.092, 0.17, 0.12, 0.01, 0.15, 0.03, scaleD)); fs.add(b(0.092, 0.17, 0.12, 0.01, 0.15, 0.03, scaleD));
+        fs.add(b(0, 0.13, 0.275, 0.06, 0.02, 0.02, 0x4A2A1A));
+        for (int side = -1; side <= 1; side += 2) {
+            fs.add(b(side * 0.079, 0.2, 0.2, 0.02, 0.06, 0.06, 0xF4F4F0));
+            fs.add(b(side * 0.087, 0.2, 0.205, 0.015, 0.035, 0.035, 0x101010));
+        }
+        MODELS[FISH] = fs.toArray(new Box[0]);
     }
 
     /**

@@ -113,3 +113,49 @@ Testes automáticos, rodando o jogo de verdade numa cópia do mundo salvo (`-Dbe
 - Durante os testes automáticos a janela do jogo ignora teclado e mouse de propósito (só com `-Dbench.arrows`).
   No jogo normal isso não se aplica.
 - Itens no chão continuam locais de cada jogador, como antes.
+
+---
+
+# Complemento: direção dos blocos e itens no chão em rede
+
+## Direção dos blocos
+- Todo bloco inteiro (e a cama) guarda para onde está virado: a **frente** aponta para quem o colocou.
+  Isso vale para fornalha, bancada, baú, cama, dinamite e qualquer bloco cujo PNG tenha uma face "frente" diferente das outras.
+- **Tecla R** gira o bloco mirado um quarto de volta (nova; as outras teclas não mudaram).
+- Como os 170 tipos de bloco já estão usados, a direção não é um bloco novo: o mundo guarda um mapa à parte
+  (`World.rotations`) e o desenho (`Mesher`) escolhe a face certa da textura. Topo e base da textura giram junto
+  (o travesseiro da cama aponta para o lado certo).
+- Fornalha, bancada e baú passaram a ter só a frente desenhada; os outros lados são lisos. Isso vale para texturas
+  novas. **Quem já tem `fornalha.png`, `bancada.png` ou `bau.png` na pasta `textures` continua com o desenho antigo
+  nos quatro lados** (o jogo nunca troca PNGs que já existem). Para ganhar a frente, apague esses arquivos.
+- Salvo em `direcoes.dat.gz`, ao lado de `blocos.dat.gz`. Mundos antigos não têm o arquivo e abrem com tudo no padrão.
+- Em rede: o pacote de bloco leva a direção junto, e quem entra recebe todas as direções do mundo.
+
+## Itens no chão em rede
+- O anfitrião passou a mandar nos itens: só ele cria, remove e decide quem pegou. Todos veem os itens que
+  qualquer jogador solta (bloco quebrado, tecla Q, morte, criatura, baú, explosão) e a queda é a mesma.
+- O amigo pede ao anfitrião para criar o que ele solta. Quando chega perto de um item, o anfitrião oferece e o
+  amigo responde se coube no inventário; o que não coube continua no chão. Isso evita item duplicado.
+- Criaturas mortas pelo amigo agora soltam o item no chão (como já acontecia com o anfitrião), em vez de ir direto
+  para o inventário dele; baús quebrados por um amigo e flechas recolhidas também.
+- Versão da rede: **6**.
+
+## Arquivos
+`src/World.java`, `src/Block.java`, `src/Mesher.java`, `src/Textures.java`, `src/Saves.java`, `src/Net.java`,
+`src/Drops.java` (reescrito), `src/BlockGame.java`, `src/Hand.java` (sem mudanças nesta etapa).
+
+## Testes (jogo real, cópia do mundo salvo, dois jogos na mesma máquina)
+| Teste | Resultado |
+| --- | --- |
+| Fornalha colocada olhando para +Z | Direção 2 (frente para o jogador); com R, direção 3 |
+| Baú olhando para +X, cama olhando para -X, bancada olhando para -Z | Direções 1, 3 e 0 |
+| Salvar e reabrir | Arquivo com as 3 direções; mundo recarregado com os mesmos valores |
+| Quebrar o bloco | Direção volta a 0 |
+| Captura de tela | Fecho do baú no lado certo; travesseiro da cama na ponta oposta ao jogador |
+| Amigo entra | Recebe as direções da fornalha, do baú e da cama |
+| Anfitrião coloca bloco virado depois | Amigo vê a direção certa |
+| Anfitrião solta 5 pedregulhos | Amigo vê o item; ao chegar perto, pega 5 e o item some nos dois |
+| Amigo solta 3 areias | Aparece para o amigo e para o anfitrião; o anfitrião pega 3 |
+| Teste do arco repetido | Tudo igual ao anterior |
+
+Não testado: duas máquinas de verdade, nem a conferência por olho humano da sensação de colocar blocos com o mouse.

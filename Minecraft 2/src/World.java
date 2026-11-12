@@ -17,6 +17,12 @@ final class World {
     final byte[] blockLight = new byte[SX * SZ * SY];
     /** Y do bloco mais alto que bloqueia a luz em cada coluna (-1 se nenhum). */
     final byte[] skyTop = new byte[SX * SZ];
+    /**
+     * Para onde cada bloco está virado (0 +Z, 1 -X, 2 -Z, 3 +X: a direção da "frente"). Só entram os que não
+     * estão no padrão (0). Os blocos continuam um byte só, por isso a direção fica à parte.
+     */
+    private final java.util.concurrent.ConcurrentHashMap<Integer, Byte> rotations = new java.util.concurrent.ConcurrentHashMap<>();
+    private int pendingRot;
     final int seed;
     double time = DAY_LENGTH * 0.3; // começa de manhã
 
@@ -64,11 +70,64 @@ final class World {
         return x >= 0 && z >= 0 && y >= 0 && x < SX && z < SZ && y < SY;
     }
 
+    /** Direção da frente do bloco (0 +Z, 1 -X, 2 -Z, 3 +X). */
+    int rotation(int x, int y, int z) {
+        if (rotations.isEmpty()) return 0;
+        Byte r = rotations.get(idx(x, y, z));
+        return r == null ? 0 : r;
+    }
+
+    private void storeRot(int i, int rot) {
+        if (rot == 0) { if (!rotations.isEmpty()) rotations.remove(i); }
+        else rotations.put(i, (byte) rot);
+    }
+
+    /** Põe um bloco já virado para a direção rot; se o bloco já é esse, só gira. */
+    void setRot(int x, int y, int z, int b, int rot) {
+        if (!inBounds(x, y, z)) return;
+        rot = Block.rotatable(b) ? rot & 3 : 0;
+        int i = idx(x, y, z);
+        if ((blocks[i] & 0xFF) == b) {
+            if (rotation(x, y, z) == rot) return;
+            storeRot(i, rot);
+            if (!trackChanges) return;
+            if (listener != null) listener.changed(x, y, z, b);
+            markDirty(x >> 4, z >> 4);
+            return;
+        }
+        pendingRot = rot;
+        set(x, y, z, b);
+        pendingRot = 0;
+    }
+
+    /** Direções guardadas no formato do arquivo: cada int é a posição do bloco com a direção nos bits 24 e 25. */
+    int[] packRotations() {
+        int[] out = new int[rotations.size()];
+        int n = 0;
+        for (java.util.Map.Entry<Integer, Byte> e : rotations.entrySet()) {
+            if (n >= out.length) break;
+            out[n++] = e.getKey() | (e.getValue() & 3) << 24;
+        }
+        return n == out.length ? out : java.util.Arrays.copyOf(out, n);
+    }
+
+    void loadRotations(int[] packed) {
+        rotations.clear();
+        if (packed == null) return;
+        for (int v : packed) {
+            int i = v & 0xFFFFFF, rot = (v >>> 24) & 3;
+            if (rot != 0 && Block.rotatable(blocks[i] & 0xFF)) rotations.put(i, (byte) rot);
+        }
+    }
+
     void set(int x, int y, int z, int b) {
         if (!inBounds(x, y, z)) return;
         int old = blocks[idx(x, y, z)] & 0xFF;
         if (old == b) return;
         blocks[idx(x, y, z)] = (byte) b;
+        int rot = pendingRot;
+        pendingRot = 0; // vale só para este bloco (set é chamado de novo para plantas que caem)
+        storeRot(idx(x, y, z), rot);
         if (!trackChanges) return;
         if (listener != null) listener.changed(x, y, z, b); // multijogador: avisa a rede
 

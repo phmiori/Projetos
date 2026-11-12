@@ -128,7 +128,8 @@ final class Textures {
         int[][] t = new int[Block.COUNT * FACES][];
         for (int b = 0; b < Block.COUNT; b++) {
             int[] side = t3[b * 3], top = t3[b * 3 + 1], bottom = t3[b * 3 + 2];
-            t[b * 6] = side; t[b * 6 + 1] = side; t[b * 6 + 4] = side; t[b * 6 + 5] = side;
+            int[] front = t3.length > Block.COUNT * 3 && t3[Block.COUNT * 3 + b] != null ? t3[Block.COUNT * 3 + b] : side; // frente própria, se tiver
+            t[b * 6] = side; t[b * 6 + 1] = side; t[b * 6 + 4] = front; t[b * 6 + 5] = side;
             t[b * 6 + 2] = top;
             t[b * 6 + 3] = bottom;
         }
@@ -290,6 +291,8 @@ final class Textures {
                     + "As 4 células dos cantos não são usadas (podem ficar transparentes).\r\n"
                     + "Veja _modelo_faces.png: é um guia com o nome de cada face.\r\n"
                     + "Uma imagem quadrada também funciona: a mesma textura vai para as 6 faces.\r\n\r\n"
+                    + "A frente (a célula \"frente\") fica virada para quem colocou o bloco; a tecla R gira o bloco mirado.\r\n"
+                    + "Para a fornalha, a bancada e o baú ganharem a frente desenhada, apague o arquivo deles (fornalha.png, bancada.png, bau.png).\r\n\r\n"
                     + "Arquivos: " + fileList() + "\r\n"
                     + "Escadas e lajes usam a textura do material (tabuas, pedregulho, tijolos_pedra, tijolos, arenito).\r\n"
                     + "A porta tem duas: porta_baixo e porta_cima (a janela é transparente).\r\n\r\n"
@@ -614,8 +617,21 @@ final class Textures {
                 mul(rgb(98, 64, 40), (((int) gx) % 4 < 2 ? 0.78 : 1.06) * (0.86 + 0.28 * rnd(x, y, S, 112))));
         int[][] wheat = { wheat(S, 0), wheat(S, 1), wheat(S, 2) };
 
-        int[][] t = new int[Block.COUNT * 3][];
-        set(t, Block.CHEST, chestSide, chestTop, chestTop);
+        // fornalha, bancada e baú: só a frente tem o desenho (boca da fornalha, ferramentas, fecho); os lados são lisos
+        int[] furnacePlain = make(S, (gx, gy, x, y) -> cobbleF[y * S + x]);
+        int[] tablePlain = make(S, (gx, gy, x, y) -> gy < 2.5 ? mul(planksF[y * S + x], 0.7) : planksF[y * S + x]);
+        int[] chestPlain = make(S, (gx, gy, x, y) -> {
+            double f = 0.9 + 0.16 * rnd(x, y, S, 110);
+            if (gx < 1 || gx >= 15 || gy < 1 || gy >= 15) return mul(rgb(72, 48, 22), f);
+            if (gy >= 5 && gy < 6) return mul(rgb(60, 40, 18), f);
+            return mul(rgb(162, 114, 50), ((int) gy) % 4 == 0 ? f * 0.86 : f);
+        });
+
+        int[][] t = new int[Block.COUNT * 3 + Block.COUNT][];
+        t[Block.COUNT * 3 + Block.FURNACE] = furnaceSide;
+        t[Block.COUNT * 3 + Block.TABLE] = tableSide;
+        t[Block.COUNT * 3 + Block.CHEST] = chestSide;
+        set(t, Block.CHEST, chestPlain, chestTop, chestTop);
         set(t, Block.FARMLAND, dirt, farmTop, dirt);
         for (int s = 0; s < 3; s++) set(t, Block.WHEAT + s, wheat[s], wheat[s], wheat[s]);
         set(t, Block.TNT, tntSide, tntTop, tntTop);
@@ -630,8 +646,8 @@ final class Textures {
         set(t, Block.SANDSTONE, sandstoneSide, sandstoneTop, sandstoneTop);
         set(t, Block.GLASS, glass, glass, glass);
         set(t, Block.TORCH, torch, torch, torch);
-        set(t, Block.TABLE, tableSide, tableTop, planks);
-        set(t, Block.FURNACE, furnaceSide, furnaceTop, furnaceTop);
+        set(t, Block.TABLE, tablePlain, tableTop, planks);
+        set(t, Block.FURNACE, furnacePlain, furnaceTop, furnaceTop);
         set(t, Block.BIRCH_LOG, birchSide, birchTop, birchTop);
         set(t, Block.BIRCH_LEAVES, birchLeaves, birchLeaves, birchLeaves);
         set(t, Block.CACTUS, cactusSide, cactusTop, cactusTop);

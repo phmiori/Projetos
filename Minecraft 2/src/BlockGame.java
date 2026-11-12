@@ -112,6 +112,26 @@ public class BlockGame {
     static final String GAME_VERSION = "Update 5";
     /** Flechas no mundo, e há quanto tempo o jogador segura o disparo do arco (BOW_FULL = força máxima). */
     private final Arrows arrows = new Arrows();
+    /** Itens no chão no multijogador: o anfitrião cria, remove e decide quem pegou; os amigos recebem cópias. */
+    private final Drops.Sync dropSync = new Drops.Sync() {
+        @Override public boolean isMirror() { return toHost != null; }
+        @Override public void spawned(Drops.Drop d) { if (server != null) server.broadcast(dropPacket(d), null); }
+        @Override public void gone(Drops.Drop d) { if (server != null) server.broadcast(new Net.Out(Net.DROP_GONE).i(d.id), null); }
+        @Override public void changed(Drops.Drop d) { if (server != null) server.broadcast(new Net.Out(Net.DROP_SET).i(d.id).i(d.count), null); }
+        @Override public void request(Drops.Drop d) {
+            if (toHost != null) toHost.send(new Net.Out(Net.DROP_REQ).i(d.item).i(d.count).i(d.wear)
+                    .f(d.x).f(d.y).f(d.z).f(d.vx).f(d.vy).f(d.vz).f(d.delay));
+        }
+        @Override public void offer(Remote r, Drops.Drop d) {
+            r.conn.send(new Net.Out(Net.DROP_OFFER).i(d.id).i(d.item).i(d.count).i(d.wear));
+        }
+    };
+    { drops.sync = dropSync; }
+    private double netDropTimer;
+
+    private static Net.Out dropPacket(Drops.Drop d) {
+        return new Net.Out(Net.DROP_NEW).i(d.id).i(d.item).i(d.count).i(d.wear).f(d.x).f(d.y).f(d.z).f(d.vx).f(d.vy).f(d.vz).f(d.phase);
+    }
     private double bowCharge;
     private static final double BOW_FULL = 1.0;
     /** Baús do mundo ("x,y,z" -> conteúdo) e o que está aberto na tela (null = inventário comum). */
@@ -266,7 +286,7 @@ public class BlockGame {
     /** -Dbench=1: sem limite de quadros nem VSync, e o FPS vai para o console (para medir otimizações). */
     private static final boolean BENCH = System.getProperty("bench") != null;
     /** Teste automático das flechas: ignora teclado e mouse de verdade e não toma o foco nem o cursor. */
-    private static final boolean NO_INPUT = BENCH && System.getProperty("bench.arrows") != null;
+    private static final boolean NO_INPUT = BENCH && (System.getProperty("bench.arrows") != null || System.getProperty("bench.drops") != null);
 
     void run() {
         if (BENCH) {
@@ -337,6 +357,8 @@ public class BlockGame {
 
         toastTimer -= dt;
         hurtFlash = Math.max(0, hurtFlash - dt);
+        if (BENCH && System.getProperty("bench.drops") != null && world != null && player != null && !warming && state != State.LOADING)
+            benchDrops(dt);
         if (BENCH && System.getProperty("bench.arrows") != null && world != null && player != null && !warming && state != State.LOADING)
             benchArrows(dt);
         slotNameTimer -= dt;
@@ -388,6 +410,7 @@ public class BlockGame {
         if (world.time >= World.DAY_LENGTH) { world.time -= World.DAY_LENGTH; info.day++; }
         if (toHost != null) { // amigo: só o voo das flechas, para o desenho
             arrows.update(dt, world, false, arrowHooks);
+            drops.update(dt, world, player, inv, null);
             return;
         }
         List<Player> everyone = new ArrayList<>();
@@ -404,6 +427,7 @@ public class BlockGame {
         }
         arrows.update(dt, world, true, arrowHooks);
         collectArrows();
+        drops.update(dt, world, player, inv, remotes.values());
         // folhas que apodreceram longe do tronco: às vezes deixam uma muda, uma maçã ou um graveto
         for (int[] ev : world.events) {
             if (ev[0] != World.EV_LEAF_DECAY) continue;
@@ -438,7 +462,6 @@ public class BlockGame {
 
         if (BENCH && !benchTested && time > 4 && System.getProperty("bench.test") != null) { benchTested = true; benchTest(); }
         footsteps(dt);
-        drops.update(dt, world, player, inv);
         particles.update(dt, world);
         tickPrimed(dt);
         if (creative) {
@@ -675,7 +698,8 @@ public class BlockGame {
         }
         boolean supported = !Block.needsSupport(place) || Block.solid(world.get(bx, by - 1, bz));
         if (!supported || (Block.solid(place) && player.intersects(bx, by, bz)) || mobBlocks(bx, by, bz, place)) return;
-        setAndPay(bx, by, bz, place, held);
+        // blocos com "frente" (fornalha, bancada, baú, cama...) ficam com a frente virada para quem os colocou
+        setAndPay(bx, by, bz, place, held, Block.rotatable(place) ? (facing + 2) & 3 : 0);
     }
 
     private static int dirIndex(int dx, int dz) {
@@ -690,11 +714,25 @@ public class BlockGame {
     }
 
     private void setAndPay(int x, int y, int z, int b, int item) {
+        setAndPay(x, y, z, b, item, 0);
+    }
+
+    private void setAndPay(int x, int y, int z, int b, int item, int rot) {
         if (b == Block.CHEST && toHost == null) chests.remove(chestKey(x, y, z));
-        world.set(x, y, z, b);
+        world.setRot(x, y, z, b, rot);
         Sounds.playAt("colocar", x + 0.5, y + 0.5, z + 0.5, player, 0.8);
         if (!creative) inv.set(slot, item, inv.count[slot] - 1);
         swing = 0.3;
+    }
+
+    /** Tecla R: gira o bloco mirado um quarto de volta (a frente passa para a direção seguinte). */
+    private void rotateAimed() {
+        if (sel == null) return;
+        int b = world.get(sel[0], sel[1], sel[2]);
+        if (!Block.rotatable(b)) { toast("Esse bloco não gira"); return; }
+        world.setRot(sel[0], sel[1], sel[2], b, world.rotation(sel[0], sel[1], sel[2]) + 1);
+        Sounds.playAt("colocar", sel[0] + 0.5, sel[1] + 0.5, sel[2] + 0.5, player, 0.5);
+        swing = 0.2;
     }
 
     /** Abre/fecha as duas metades da porta. */
@@ -803,12 +841,7 @@ public class BlockGame {
             if (Mob.SOUNDS[mob.type] != null) Sounds.playAt(Mob.SOUNDS[mob.type], mob.x, mob.y + 0.8, mob.z, player, 0.6);
             if (mob.health <= 0) { // o que a criatura solta vai para quem atirou
                 int[] d = mob.drops(rnd);
-                Remote killer = a.owner > 0 ? remotes.get(a.owner) : null;
-                for (int k = 0; k < d.length; k += 2) {
-                    if (a.owner == 0) drops.scatter(d[k], d[k + 1], 0, mob.x, mob.y + 0.4, mob.z);
-                    else if (killer != null && killer.conn != null)
-                        killer.conn.send(new Net.Out(Net.DROP).i(d[k]).i(d[k + 1]).i(0).f(mob.x).f(mob.y + 0.4).f(mob.z));
-                }
+                for (int k = 0; k < d.length; k += 2) drops.scatter(d[k], d[k + 1], 0, mob.x, mob.y + 0.4, mob.z);
             }
         } else if (me) {
             hit(a.damage);
@@ -844,7 +877,7 @@ public class BlockGame {
             if (!taken)
                 for (Remote r : remotes.values())
                     if (r.hasState && r.conn != null && nearArrow(r.body, a)) {
-                        r.conn.send(new Net.Out(Net.DROP).i(Items.ARROW).i(1).i(0).f(r.body.x).f(r.body.y + 1).f(r.body.z));
+                        drops.spawn(Items.ARROW, 1, 0, r.body.x, r.body.y + 1, r.body.z, 0, 2, 0, 0); // cai aos pés dele e ele pega
                         taken = true;
                         break;
                     }
@@ -1206,6 +1239,7 @@ public class BlockGame {
                 throw new RuntimeException(e.getMessage(), e);
             }
             World w = data == null ? new World(i.seed) : new World(i.seed, data);
+            w.loadRotations(Saves.loadRotations(i));
             if (!i.hasPlayer) {
                 double[] sp = w.findSpawn();
                 i.hasPlayer = true;
@@ -1393,7 +1427,7 @@ public class BlockGame {
 
     /** Um bloco mudou neste jogo: o anfitrião repassa a todos; o amigo avisa o anfitrião. */
     private void onLocalBlock(int x, int y, int z, int b) {
-        Net.Out o = new Net.Out(Net.BLOCK).i(x).i(y).i(z).i(b);
+        Net.Out o = new Net.Out(Net.BLOCK).i(x).i(y).i(z).i(b | world.rotation(x, y, z) << 8); // bloco + direção
         if (server != null) server.broadcast(o, null);
         else if (toHost != null && !applyingRemote) toHost.send(o);
     }
@@ -1468,6 +1502,8 @@ public class BlockGame {
                 String state = d.readUTF();
                 byte[] zipped = new byte[d.readInt()];
                 d.readFully(zipped);
+                byte[] rotBytes = new byte[d.readInt()];
+                d.readFully(rotBytes);
                 byte[] blocks = new byte[World.SX * World.SZ * World.SY];
                 try (java.io.InputStream in = new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(zipped))) {
                     int off = 0, n;
@@ -1478,6 +1514,7 @@ public class BlockGame {
                 i.px = i.spawnX; i.py = i.spawnY; i.pz = i.spawnZ;
                 applyState(i, state);
                 World world2 = new World(i.seed, blocks);
+                world2.loadRotations(Saves.rotationsFromBytes(rotBytes));
                 toHost = c;
                 enterWorld(i, world2);
                 world2.listener = this::onLocalBlock;
@@ -1544,6 +1581,19 @@ public class BlockGame {
                 netTimeTimer = 2;
                 server.broadcast(new Net.Out(Net.TIME).dbl(world.time).i(info.day), null);
             }
+            netDropTimer -= dt;
+            if (netDropTimer <= 0) { // itens que estão caindo ou deslizando
+                netDropTimer = 0.2;
+                List<Drops.Drop> moving = drops.takeMoving();
+                if (!moving.isEmpty()) {
+                    Net.Out o = new Net.Out(Net.DROP_SYNC).i(Math.min(moving.size(), 200));
+                    for (int k = 0; k < moving.size() && k < 200; k++) {
+                        Drops.Drop dr = moving.get(k);
+                        o.i(dr.id).f(dr.x).f(dr.y).f(dr.z).f(dr.vx).f(dr.vy).f(dr.vz);
+                    }
+                    server.broadcast(o, null);
+                }
+            }
             netMobTimer -= dt;
             if (netMobTimer <= 0) {
                 netMobTimer = 0.1;
@@ -1595,10 +1645,11 @@ public class BlockGame {
                 }
                 p.from.send(new Net.Out(Net.WELCOME).s(info.name).i(info.seed).b(creative).dbl(world.time).i(info.day)
                         .f(info.spawnX).f(info.spawnY).f(info.spawnZ).i(nr.id).s(info.lanPlayers.getOrDefault(unique, ""))
-                        .raw(bos.toByteArray()));
+                        .raw(bos.toByteArray()).raw(Saves.rotationBytes(world.packRotations())));
                 // quem já está no mundo (o anfitrião e os outros amigos)
                 p.from.send(joinPacket(0, info.persona.name, info.persona));
                 for (Remote o : remotes.values()) p.from.send(joinPacket(o.id, o.name, o.persona));
+                for (Drops.Drop dr : drops.all()) p.from.send(dropPacket(dr)); // itens que já estão no chão
                 for (Arrows.Arrow a : arrows.list) { // flechas que já estão no mundo
                     p.from.send(arrowPacket(a, false));
                     if (a.stuck) p.from.send(stuckPacket(a));
@@ -1620,17 +1671,18 @@ public class BlockGame {
             }
             case Net.BLOCK: {
                 if (r == null) return;
-                int x = d.readInt(), y = d.readInt(), z = d.readInt(), b = d.readInt();
-                if (World.inBounds(x, y, z) && b >= 0 && b < Block.COUNT) {
-                    if (world.get(x, y, z) == Block.CHEST && b != Block.CHEST) { // baú quebrado por um amigo: o conteúdo cai para ele
+                int x = d.readInt(), y = d.readInt(), z = d.readInt(), v = d.readInt();
+                int b = v & 0xFF, rot = (v >> 8) & 3;
+                if (World.inBounds(x, y, z) && b < Block.COUNT) {
+                    if (world.get(x, y, z) == Block.CHEST && b != Block.CHEST) { // baú quebrado por um amigo: o conteúdo cai no chão
                         Inventory c = chests.remove(chestKey(x, y, z));
                         if (c != null) {
                             if (c == chest) { chest = null; chestKey = null; }
                             for (int k = 0; k < Inventory.CHEST; k++)
-                                if (!c.empty(k)) p.from.send(new Net.Out(Net.DROP).i(c.id[k]).i(c.count[k]).i(c.wear[k]).f(x + 0.5).f(y + 0.5).f(z + 0.5));
+                                if (!c.empty(k)) drops.scatter(c.id[k], c.count[k], c.wear[k], x + 0.5, y + 0.5, z + 0.5);
                         }
                     }
-                    world.set(x, y, z, b); // repassa a todos pelo listener
+                    world.setRot(x, y, z, b, rot); // repassa a todos pelo listener
                 }
                 break;
             }
@@ -1642,6 +1694,29 @@ public class BlockGame {
                 double sp = Math.sqrt(vx * vx + vy * vy + vz * vz);
                 if (!(sp <= 42) || !(dmg >= 0 && dmg <= 9.5)) return; // fora do que o arco consegue
                 spawnArrow(r.id, -1, x, y, z, vx, vy, vz, dmg, pickup && !creative);
+                break;
+            }
+            case Net.DROP_REQ: { // um amigo soltou um item: o anfitrião cria e avisa todos
+                if (r == null) return;
+                int item = d.readInt(), count = d.readInt(), wear = d.readInt();
+                double x = d.readFloat(), y = d.readFloat(), z = d.readFloat(), vx = d.readFloat(), vy = d.readFloat(), vz = d.readFloat();
+                double delay = d.readFloat();
+                if (!Items.exists(item) || count < 1 || count > Items.maxStack(item) || wear < 0 || !(delay >= 0 && delay <= 3)) return;
+                if (!(Math.abs(vx) < 30 && Math.abs(vy) < 30 && Math.abs(vz) < 30)) return;
+                if (r.hasState && (Math.abs(x - r.body.x) > 40 || Math.abs(z - r.body.z) > 40)) return; // longe demais de quem pediu
+                drops.spawn(item, count, wear, x, y, z, vx, vy, vz, delay);
+                break;
+            }
+            case Net.DROP_TAKEN: { // resposta do amigo a uma oferta: o que não coube continua no chão
+                if (r == null) return;
+                int id = d.readInt(), left = d.readInt();
+                Drops.Drop dr = drops.byId(id);
+                if (dr == null) return;
+                if (left <= 0) { drops.removeById(id); server.broadcast(new Net.Out(Net.DROP_GONE).i(id), null); }
+                else {
+                    if (left < dr.count) { dr.count = left; server.broadcast(new Net.Out(Net.DROP_SET).i(id).i(left), null); }
+                    dr.pending = 2.0; // inventário cheio: não insiste por um tempo
+                }
                 break;
             }
             case Net.CHEST_OPEN: {
@@ -1670,10 +1745,9 @@ public class BlockGame {
                 m.damage(dmg);
                 m.vx += kx * 7; m.vz += kz * 7; m.vy = 5;
                 Sounds.playAt("criatura_dano", m.x, m.y + 0.8, m.z, player, 0.9);
-                if (m.health <= 0) {
-                    int[] drops = m.drops(rnd);
-                    for (int k = 0; k < drops.length; k += 2)
-                        p.from.send(new Net.Out(Net.GIVE).i(drops[k]).i(drops[k + 1]).s(Mob.NAMES[m.type]));
+                if (m.health <= 0) { // o que a criatura solta cai no chão para todos verem (como quando o anfitrião a mata)
+                    int[] loot = m.drops(rnd);
+                    for (int k = 0; k < loot.length; k += 2) drops.scatter(loot[k], loot[k + 1], 0, m.x, m.y + 0.4, m.z);
                 }
                 break;
             }
@@ -1744,10 +1818,11 @@ public class BlockGame {
                 break;
             }
             case Net.BLOCK: {
-                int x = d.readInt(), y = d.readInt(), z = d.readInt(), b = d.readInt();
-                if (world != null && World.inBounds(x, y, z) && b >= 0 && b < Block.COUNT) {
+                int x = d.readInt(), y = d.readInt(), z = d.readInt(), v = d.readInt();
+                int b = v & 0xFF, rot = (v >> 8) & 3;
+                if (world != null && World.inBounds(x, y, z) && b < Block.COUNT) {
                     applyingRemote = true;
-                    world.set(x, y, z, b);
+                    world.setRot(x, y, z, b, rot);
                     applyingRemote = false;
                 }
                 break;
@@ -1815,10 +1890,43 @@ public class BlockGame {
                 showChest(chestKey(x, y, z), c);
                 break;
             }
-            case Net.DROP: {
-                int item = d.readInt(), count = d.readInt(), wear = d.readInt();
-                float x = d.readFloat(), y = d.readFloat(), z = d.readFloat();
-                if (world != null) drops.scatter(item, count, wear, x, y, z);
+            case Net.DROP_NEW: {
+                int id = d.readInt(), item = d.readInt(), count = d.readInt(), wear = d.readInt();
+                double x = d.readFloat(), y = d.readFloat(), z = d.readFloat(), vx = d.readFloat(), vy = d.readFloat(), vz = d.readFloat();
+                double phase = d.readFloat();
+                if (world != null) drops.mirrorAdd(id, item, count, wear, x, y, z, vx, vy, vz, phase);
+                break;
+            }
+            case Net.DROP_GONE:
+                drops.removeById(d.readInt());
+                break;
+            case Net.DROP_SET: {
+                Drops.Drop dr = drops.byId(d.readInt());
+                int count = d.readInt();
+                if (dr != null && count > 0) dr.count = count;
+                break;
+            }
+            case Net.DROP_SYNC: {
+                int n = d.readInt();
+                for (int k = 0; k < n; k++) {
+                    Drops.Drop dr = drops.byId(d.readInt());
+                    double x = d.readFloat(), y = d.readFloat(), z = d.readFloat(), vx = d.readFloat(), vy = d.readFloat(), vz = d.readFloat();
+                    if (dr == null) continue;
+                    double off = Math.abs(dr.x - x) + Math.abs(dr.y - y) + Math.abs(dr.z - z);
+                    if (off > 0.4) { dr.x = x; dr.y = y; dr.z = z; } // perto: deixa a queda local; longe: encaixa
+                    dr.vx = vx; dr.vy = vy; dr.vz = vz;
+                }
+                break;
+            }
+            case Net.DROP_OFFER: { // o anfitrião diz que chegamos perto de um item: pega se couber
+                int id = d.readInt(), item = d.readInt(), count = d.readInt(), wear = d.readInt();
+                int left = count;
+                if (player != null && player.health > 0 && state != State.DEAD && Items.exists(item)) {
+                    if (Items.maxStack(item) == 1) left = inv.addTool(item, wear) ? 0 : count;
+                    else left = inv.add(item, count);
+                    if (left < count) Sounds.play("coletar", 0.7);
+                }
+                if (toHost != null) toHost.send(new Net.Out(Net.DROP_TAKEN).i(id).i(left));
                 break;
             }
             case Net.DAMAGE:
@@ -1902,6 +2010,7 @@ public class BlockGame {
         try {
             Saves.saveMeta(info);
             Saves.saveBlocks(info, world.blocks);
+            Saves.saveRotations(info, world.packRotations());
         } catch (Exception e) {
             e.printStackTrace();
             toast("Erro ao salvar: " + e.getMessage());
@@ -1920,9 +2029,11 @@ public class BlockGame {
             return;
         }
         final byte[] copy = world.blocks.clone();
+        final int[] rots = world.packRotations();
         final Saves.Info target = info;
         lastSave = saver.submit(() -> {
             Saves.saveBlocks(target, copy);
+            Saves.saveRotations(target, rots);
             return null;
         });
     }
@@ -1936,6 +2047,160 @@ public class BlockGame {
     // desenho
     // =====================================================================
     private boolean benchTested;
+    private double dT;
+    private int dPhase, dX, dZ;
+    private boolean shotDone;
+
+    private static void say2(String s) {
+        System.out.println("teste: " + s);
+    }
+
+    private String dropDump() {
+        StringBuilder sb = new StringBuilder(drops.all().size() + " item(ns)");
+        for (Drops.Drop d : drops.all())
+            sb.append(String.format(java.util.Locale.ROOT, " [#%d %s x%d em %.1f,%.1f,%.1f]", d.id, Items.name(d.item), d.count, d.x, d.y, d.z));
+        return sb.toString();
+    }
+
+    /** Põe o jogador num ponto, de pé, olhando para yaw, sem velocidade. */
+    private void benchPut(double x, double y, double z, double yaw) {
+        player.x = x; player.y = y; player.z = z; player.yaw = yaw; player.pitch = 0;
+        player.vx = player.vy = player.vz = 0; player.fallDist = player.landedFall = 0; player.flying = false;
+    }
+
+    /**
+     * Teste automático de direção dos blocos e de itens no chão (-Dbench.drops, com -Dbench.survival e -Dbench.shot).
+     * O anfitrião monta um palco, coloca blocos virados para lados diferentes (como se o jogador os colocasse),
+     * gira um com a tecla R, salva, solta um item e abre para a LAN. O amigo (-Dbench.join) confere as direções que
+     * recebeu, vê e pega o item do anfitrião, solta outro item e o anfitrião o pega.
+     */
+    private void benchDrops(double dt) {
+        dT += dt;
+        if (toHost != null) { benchDropsClient(); return; }
+        int x = dX, z = dZ;
+        if (dPhase == 1 && !shotDone && dT > 3.5) { shotName = "blocos"; shotDone = true; }
+        if (dPhase == 0 && dT > 1.5) {
+            dPhase = 1;
+            dT = 0;
+            x = dX = (int) player.x; z = dZ = (int) player.z;
+            for (int dx = -5; dx <= 5; dx++)
+                for (int dz = -3; dz <= 14; dz++) {
+                    world.set(x + dx, 60, z + dz, Block.STONE);
+                    for (int y = 61; y <= 63; y++) world.set(x + dx, y, z + dz, Block.AIR);
+                }
+            world.time = World.DAY_LENGTH * 0.3;
+            player.health = Player.MAX_HEALTH;
+            state = State.PLAYING;
+            inv.clear();
+            slot = 0;
+            // como se o jogador colocasse: olhando para +Z (yaw 0), -X (yaw 3π/2), +X (yaw π/2) e -Z (yaw π)
+            benchPut(x + 0.5, 61.01, z + 0.5, 0);
+            inv.set(0, Block.FURNACE, 4);
+            sel = new int[] { x, 60, z + 2, x, 61, z + 2, 1000 };
+            placeBlock(Block.FURNACE, 0, 0, 1);
+            say2("fornalha colocada olhando para +Z: direcao " + world.rotation(x, 61, z + 2) + " (esperado 2: a frente aponta para o jogador)");
+            sel = new int[] { x, 61, z + 2, x, 61, z + 3, 1000 };
+            rotateAimed();
+            say2("depois de apertar R: " + world.rotation(x, 61, z + 2) + " (esperado 3)");
+            benchPut(x + 0.5, 61.01, z + 0.5, Math.PI / 2);
+            inv.set(0, Block.CHEST, 4);
+            sel = new int[] { x + 2, 60, z + 2, x + 2, 61, z + 2, 1000 };
+            placeBlock(Block.CHEST, 0, 0, 1);
+            say2("bau colocado olhando para +X: direcao " + world.rotation(x + 2, 61, z + 2) + " (esperado 1)");
+            benchPut(x + 0.5, 61.01, z + 0.5, 3 * Math.PI / 2);
+            inv.set(0, Block.BED, 4);
+            sel = new int[] { x - 2, 60, z + 2, x - 2, 61, z + 2, 1000 };
+            placeBlock(Block.BED, 0, 0, 1);
+            say2("cama colocada olhando para -X: direcao " + world.rotation(x - 2, 61, z + 2) + " (esperado 3)");
+            inv.set(0, Block.TABLE, 4);
+            benchPut(x + 0.5, 61.01, z + 0.5, Math.PI);
+            sel = new int[] { x + 4, 60, z + 2, x + 4, 61, z + 2, 1000 };
+            placeBlock(Block.TABLE, 0, 0, 1);
+            say2("bancada colocada olhando para -Z: direcao " + world.rotation(x + 4, 61, z + 2) + " (esperado 0)");
+            benchPut(x + 0.5, 61.01, z + 0.5, 0);
+            inv.clear();
+            // salvar e reler
+            saveSync();
+            int n = 0, furn = -1;
+            for (int v : Saves.loadRotations(info)) { n++; if ((v & 0xFFFFFF) == World.idx(x, 61, z + 2)) furn = v >>> 24; }
+            say2("salvo e relido do arquivo: " + n + " direcoes, fornalha = " + furn + " (esperado 3)");
+            World w2 = new World(info.seed, world.blocks.clone());
+            w2.loadRotations(Saves.loadRotations(info));
+            say2("mundo recarregado: fornalha " + w2.rotation(x, 61, z + 2) + ", bau " + w2.rotation(x + 2, 61, z + 2) + ", cama " + w2.rotation(x - 2, 61, z + 2));
+            // quebrar um bloco limpa a direção
+            world.set(x + 4, 61, z + 2, Block.AIR);
+            say2("bancada quebrada: direcao " + world.rotation(x + 4, 61, z + 2) + " (esperado 0)");
+            world.setRot(x + 4, 61, z + 2, Block.STONE, 2);
+            world.set(x + 4, 61, z + 2, Block.AIR);
+            if (System.getProperty("bench.host") != null) { openToLan(); say2("aberto para LAN: " + (server != null)); }
+        } else if (dPhase == 1 && !remotes.isEmpty() && dT > 3) {
+            dPhase = 2;
+            dT = 0;
+            world.setRot(x + 3, 61, z + 5, Block.CHEST, 2); // depois do amigo entrar: vai pelo pacote de bloco
+            drops.spawn(Block.COBBLE, 5, 0, x + 0.5, 61.5, z + 7.5, 0, 0, 0, 0.5);
+            say2("anfitriao soltou 5 pedregulhos; " + dropDump());
+        } else if (dPhase == 2 && dT > 28) {
+            dPhase = 3;
+            dT = 0;
+            say2("anfitriao ve: " + dropDump());
+            Drops.Drop sand = null;
+            for (Drops.Drop d : drops.all()) if (d.item == Block.SAND) sand = d;
+            if (sand != null) { benchPut(sand.x, 61.01, sand.z, 0); say2("anfitriao foi ate a areia do amigo"); }
+            else say2("ERRO: a areia do amigo nao chegou no anfitriao");
+        } else if (dPhase == 3 && dT > 2.5) {
+            dPhase = 4;
+            say2("FIM anfitriao: areia no inventario " + inv.countOf(Block.SAND) + " (esperado 3); " + dropDump());
+        }
+    }
+
+    /** Lado do amigo no teste de itens no chão. */
+    private void benchDropsClient() {
+        if (dPhase == 0 && dT > 2) {
+            dPhase = 1;
+            dX = -1;
+            for (int cx = 0; cx < World.SX && dX < 0; cx++)
+                for (int cz = 0; cz < World.SZ; cz++)
+                    if (world.get(cx, 61, cz) == Block.FURNACE && world.get(cx + 2, 61, cz) == Block.CHEST) { dX = cx; dZ = cz - 2; break; }
+            if (dX < 0) { say2("AMIGO: nao achei o palco"); dPhase = 99; return; }
+            int x = dX, z = dZ;
+            benchPut(x + 3.5, 61.01, z + 0.5, 0);
+            inv.clear();
+            say2("AMIGO recebeu as direcoes: fornalha " + world.rotation(x, 61, z + 2) + " (esperado 3), bau " + world.rotation(x + 2, 61, z + 2)
+                    + " (esperado 1), cama " + world.rotation(x - 2, 61, z + 2) + " (esperado 3)");
+        } else if (dPhase == 1 && dT > 3) {
+            int x = dX, z = dZ;
+            if (world.get(x + 3, 61, z + 5) == Block.CHEST) {
+                dPhase = 2;
+                dT = 0;
+                say2("AMIGO ve o bau que o anfitriao colocou depois: direcao " + world.rotation(x + 3, 61, z + 5) + " (esperado 2)");
+            }
+        } else if (dPhase == 2 && dT > 0.3) {
+            boolean seen = false;
+            for (Drops.Drop d : drops.all()) if (d.item == Block.COBBLE) seen = true;
+            if (seen || dT > 6) {
+                dPhase = 3;
+                dT = 0;
+                say2("AMIGO ve o item do anfitriao: " + seen + "; " + dropDump());
+                benchPut(dX + 3.5, 61.01, dZ + 0.5, Math.atan2(-3.0, 7.0)); // olha para o item
+            }
+        } else if (dPhase == 3 && dT > 1.2) {
+            if (shotName == null && !shotDone) { shotName = "amigo"; shotDone = true; dT = 1.0; return; }
+            dPhase = 33;
+            dT = 0;
+            benchPut(dX + 0.5, 61.01, dZ + 7.5 - 0.2, 0); // vai até o item
+        } else if (dPhase == 33 && dT > 2.5) {
+            dPhase = 4;
+            dT = 0;
+            say2("AMIGO pegou: " + inv.countOf(Block.COBBLE) + " pedregulhos no inventario (esperado 5); " + dropDump());
+            int x = dX, z = dZ;
+            benchPut(x + 3.5, 61.01, z + 0.5, 0);
+            drops.spawn(Block.SAND, 3, 0, x + 0.5, 61.5, z + 4.5, 0, 0, 0, 0.5); // o amigo solta areia (pelo anfitriao)
+        } else if (dPhase == 4 && dT > 3) {
+            dPhase = 5;
+            say2("AMIGO: a areia que ele soltou aparece para ele? " + dropDump());
+        }
+    }
+
     private double benchT;
     private int benchPhase, benchShots, benchX, benchZ, benchMark;
     private Mob benchPig;
@@ -2175,7 +2440,29 @@ public class BlockGame {
 
     private long lastUiDraw, benchSwapNs, benchWorkNs;
 
+    private String shotName;
+
+    /** Teste: guarda o quadro 3D atual (antes da troca de buffers) num PNG da pasta -Dbench.shot. */
+    private void saveShot(String name) {
+        int w = fbW, h = fbH;
+        java.nio.ByteBuffer buf = org.lwjgl.system.MemoryUtil.memAlloc(w * h * 4);
+        org.lwjgl.opengl.GL11.glReadPixels(0, 0, w, h, org.lwjgl.opengl.GL11.GL_RGBA, org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE, buf);
+        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < h; y++)
+            for (int x = 0; x < w; x++) {
+                int i = ((h - 1 - y) * w + x) * 4;
+                img.setRGB(x, y, (buf.get(i) & 255) << 16 | (buf.get(i + 1) & 255) << 8 | (buf.get(i + 2) & 255));
+            }
+        org.lwjgl.system.MemoryUtil.memFree(buf);
+        try {
+            javax.imageio.ImageIO.write(img, "png", new java.io.File(System.getProperty("bench.shot", "."), name + ".png"));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
     private void swapBuffers() {
+        if (shotName != null) { saveShot(shotName); shotName = null; }
         long t = System.nanoTime();
         glfwSwapBuffers(window);
         benchSwapNs += System.nanoTime() - t;
@@ -2355,7 +2642,7 @@ public class BlockGame {
                     "Dir. numa bancada/fornalha abre as receitas, num baú abre o baú   " + (creative ? "F voar   " : "") + "T chat   Esc pausar   F1 esconder ajuda",
                     "Q joga o item fora (Ctrl+Q a pilha)   Dir. na cama dorme e marca o renascimento   Pederneira acende a dinamite",
                     "Enxada na terra faz terra arada, onde se plantam sementes   Dir. com armadura na mão veste",
-                    "Arco: segure o botão esquerdo para puxar e solte para atirar (precisa de flechas)"
+                    "Arco: segure o botão esquerdo para puxar e solte para atirar (precisa de flechas)   R gira o bloco mirado"
             };
             for (String l : lines) Ui.shadow(g, l, 10, ty += 18, Color.WHITE);
         }
@@ -3179,6 +3466,7 @@ public class BlockGame {
                 else if (k == KeyEvent.VK_ESCAPE) pause();
                 else if (k == KeyEvent.VK_E) openInventory();
                 else if (k == KeyEvent.VK_Q) dropHeld(keys[KeyEvent.VK_CONTROL]);
+                else if (k == KeyEvent.VK_R) rotateAimed();
                 else if (k >= KeyEvent.VK_1 && k <= KeyEvent.VK_9) selectSlot(k - KeyEvent.VK_1);
                 else if (k == KeyEvent.VK_F && creative) { player.flying = !player.flying; player.vy = 0; }
                 else if (k == KeyEvent.VK_F1) help = !help;

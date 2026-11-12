@@ -150,6 +150,55 @@ final class Saves {
         replace(tmp, new File(d, "blocos.dat.gz"));
     }
 
+    /** Direções dos blocos (World.packRotations) em bytes compactados: o mesmo formato do arquivo e da rede. */
+    static byte[] rotationBytes(int[] packed) {
+        try {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            try (DataOutputStream out = new DataOutputStream(new GZIPOutputStream(bos))) {
+                out.writeInt(packed.length);
+                for (int v : packed) out.writeInt(v);
+            }
+            return bos.toByteArray();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    static int[] rotationsFromBytes(byte[] bytes) {
+        if (bytes == null || bytes.length == 0) return new int[0];
+        try (DataInputStream in = new DataInputStream(new GZIPInputStream(new ByteArrayInputStream(bytes)))) {
+            int n = in.readInt();
+            if (n < 0 || n > World.SX * World.SZ * World.SY) return new int[0];
+            int[] out = new int[n];
+            for (int k = 0; k < n; k++) out[k] = in.readInt();
+            return out;
+        } catch (IOException e) {
+            System.out.println("Direções dos blocos ilegíveis: " + e.getMessage());
+            return new int[0];
+        }
+    }
+
+    static void saveRotations(Info i, int[] packed) throws IOException {
+        File d = i.dir();
+        if (!d.exists() && !d.mkdirs()) throw new IOException("não consegui criar " + d);
+        File tmp = new File(d, "direcoes.dat.gz.tmp");
+        try (OutputStream out = new FileOutputStream(tmp)) {
+            out.write(rotationBytes(packed));
+        }
+        replace(tmp, new File(d, "direcoes.dat.gz"));
+    }
+
+    /** Direções dos blocos do mundo (mundos antigos não têm o arquivo: tudo no padrão). */
+    static int[] loadRotations(Info i) {
+        File f = new File(i.dir(), "direcoes.dat.gz");
+        if (!f.exists()) return new int[0];
+        try {
+            return rotationsFromBytes(java.nio.file.Files.readAllBytes(f.toPath()));
+        } catch (IOException e) {
+            return new int[0];
+        }
+    }
+
     static byte[] loadBlocks(Info i) throws IOException {
         File f = new File(i.dir(), "blocos.dat.gz");
         if (!f.exists()) return null;
