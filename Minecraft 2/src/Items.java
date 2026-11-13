@@ -31,7 +31,18 @@ final class Items {
     static final int ARMOR_BASE = 252;
     static final int HELMET = 0, CHESTPLATE = 1, LEGGINGS = 2, BOOTS = 3;
     static final int LAST_ARMOR = 263;
-    static final int LAST = 264;
+    /** Ovos de criatura (criativo): id = SPAWN_EGG + tipo da criatura (Mob). */
+    static final int SPAWN_EGG = 265;
+    static final int LAST = SPAWN_EGG + Mob.TYPES - 1;
+    /** Cores do ovo de cada criatura: fundo e pintas (na ordem dos tipos de Mob). */
+    private static final int[][] EGG_COLORS = {
+            { 0xF0A6B0, 0xD27C8A }, { 0xE8E8E2, 0xB8B0A8 }, { 0xB4B4B4, 0xD02828 }, { 0x2E8A8A, 0x6E9A68 }, { 0x352A28, 0xA01818 },
+            { 0xE48A3A, 0xF2D2A0 }, { 0x4A3424, 0xBEB8B0 }, { 0x0DA70B, 0x101010 }, { 0xC4C4C4, 0x4C4C4C }, { 0xD6D6D8, 0x8E9096 },
+            { 0xD8682A, 0xF2EEE6 }, { 0x9A6A40, 0xE4D2B4 }, { 0x9C8670, 0xF6F4F0 }, { 0x5A3A22, 0xA67C52 }, { 0x3A6AD8, 0xF0D030 },
+            { 0xF07020, 0xFAFAF4 }, { 0xA03A30, 0x9AA6B0 }, { 0x6E7A86, 0xE6E8EA } };
+
+    static boolean isEgg(int id) { return id >= SPAWN_EGG && id <= LAST; }
+    static int eggMob(int id) { return id - SPAWN_EGG; }
 
     private static final String[] ITEM_NAMES = {
             "Graveto", "Carvão", "Lingote de ferro", "Lingote de ouro", "Cristal", "Maçã", "Bife cru", "Bife assado", "Peixe cru", "Peixe assado", "Pólvora" };
@@ -58,7 +69,7 @@ final class Items {
     /** Item que não empilha e gasta com o uso: ferramentas, armaduras e a pederneira. */
     static boolean isDurable(int id) { return isTool(id) || isArmor(id) || id == FLINT_STEEL || id == BOW; }
     static boolean exists(int id) {
-        return isBlock(id) || (id >= FIRST_ITEM && id <= LAST_SIMPLE) || (id >= FIRST_EXTRA && id <= LAST_EXTRA) || id == ARROW || isDurable(id);
+        return isBlock(id) || (id >= FIRST_ITEM && id <= LAST_SIMPLE) || (id >= FIRST_EXTRA && id <= LAST_EXTRA) || id == ARROW || isDurable(id) || isEgg(id);
     }
     static int toolKind(int id) { return (id - TOOL_BASE) / 4; }
     static int toolMat(int id) { return (id - TOOL_BASE) % 4; }
@@ -78,6 +89,7 @@ final class Items {
         if (isBlock(id)) return Block.NAMES[id];
         if (isTool(id)) return TOOL_KIND[toolKind(id)] + " " + TOOL_MAT[toolMat(id)];
         if (isArmor(id)) return ARMOR_PIECE[armorPiece(id)] + " " + ARMOR_MAT[armorMat(id)];
+        if (isEgg(id)) { String n = Mob.NAMES[eggMob(id)]; return "Ovo de " + (n.equals("Creeper") ? n : n.toLowerCase()); }
         if (id == FLINT_STEEL) return "Pederneira";
         if (id == BOW) return "Arco";
         if (id == ARROW) return "Flecha";
@@ -367,6 +379,7 @@ final class Items {
         int[] px = new int[256];
         if (isTool(id)) drawTool(px, toolKind(id), toolMat(id));
         else if (isArmor(id)) drawArmor(px, armorPiece(id), ARMOR_COLOR[armorMat(id)], ARMOR_DARK[armorMat(id)]);
+        else if (isEgg(id)) drawEgg(px, EGG_COLORS[eggMob(id)][0], EGG_COLORS[eggMob(id)][1], eggMob(id));
         else switch (id) {
             case BOW:
                 return bowPixels(0);
@@ -636,6 +649,36 @@ final class Items {
                 double d = dx * dx + dy * dy;
                 if (d < r * r) put(px, x, y, (dx + dy < -2 && d > r * r * 0.3) ? light : c);
             }
+    }
+
+    /** Ovo: oval com luz em cima à esquerda, sombra embaixo à direita e pintas da cor da criatura. */
+    private static void drawEgg(int[] px, int base, int spot, int seed) {
+        java.util.Random r = new java.util.Random(seed * 7919L + 13);
+        boolean[] spots = new boolean[256];
+        for (int k = 0; k < 7; k++) { // pintas de 1 ou 2 pixels
+            int sx = 5 + r.nextInt(7), sy = 4 + r.nextInt(10);
+            spots[sy * 16 + sx] = true;
+            if (r.nextBoolean()) spots[sy * 16 + Math.min(15, sx + 1)] = true;
+            if (r.nextInt(3) == 0) spots[Math.min(15, sy + 1) * 16 + sx] = true;
+        }
+        for (int y = 0; y < 16; y++)
+            for (int x = 0; x < 16; x++) {
+                // ovo: mais estreito em cima (largura cresce até 2/3 da altura)
+                double cy = (y + 0.5 - 8.6) / 6.6, w = cy < 0 ? 4.3 + cy * 1.2 : 5.0;
+                double cx = (x + 0.5 - 8) / w;
+                double d = cx * cx + cy * cy;
+                if (d > 1) continue;
+                double shade = 1.0 - (cx * 0.18 + cy * 0.22);           // luz vindo de cima à esquerda
+                if (d > 0.72) shade *= 0.78;                           // borda mais escura
+                int c = spots[y * 16 + x] && d < 0.8 ? spot : base;
+                put(px, x, y, scale(c, shade));
+            }
+        put(px, 6, 4, scale(base, 1.35)); put(px, 6, 5, scale(base, 1.25)); put(px, 5, 6, scale(base, 1.2)); // brilho
+    }
+
+    private static int scale(int c, double k) {
+        int r = (int) Math.min(255, ((c >> 16) & 255) * k), g = (int) Math.min(255, ((c >> 8) & 255) * k), b = (int) Math.min(255, (c & 255) * k);
+        return r << 16 | g << 8 | b;
     }
 
     private static void put(int[] px, int x, int y, int rgb) {

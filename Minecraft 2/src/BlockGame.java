@@ -686,6 +686,11 @@ public class BlockGame {
             if (rPending && target != null && target.type == Mob.WOLF) {
                 useOnMob(target, held); // osso doma; carne cura; mão vazia faz sentar/levantar
                 swing = 0.3;
+            } else if (rPending && Items.isEgg(held) && sel != null) {
+                // ovo de criatura: nasce na célula de frente para o bloco mirado
+                spawnFromEgg(Items.eggMob(held), sel[3] + 0.5, sel[4], sel[5] + 0.5, player.yaw + Math.PI);
+                if (!creative) inv.set(slot, held, inv.count[slot] - 1);
+                swing = 0.3;
             } else if (rPending && aimed == Block.TABLE && !keys[KeyEvent.VK_SHIFT]) {
                 openCrafting(3); // bancada: grade 3x3
             } else if (rPending && aimed == Block.FURNACE && !keys[KeyEvent.VK_SHIFT]) {
@@ -1537,6 +1542,20 @@ public class BlockGame {
 
     // ----------------------------- lobo domesticável -----------------------------
 
+    /** Ovo de criatura: no multijogador quem cria a criatura é o anfitrião (ele cuida de todas). */
+    private void spawnFromEgg(int type, double x, double y, double z, double yaw) {
+        if (type < 0 || type >= Mob.TYPES) return;
+        if (toHost != null) {
+            toHost.send(new Net.Out(Net.MOB_SPAWN).i(type).f(x).f(y).f(z).f(yaw));
+            return;
+        }
+        Mob m = new Mob(type, x, y + 0.01, z);
+        m.yaw = yaw;
+        mobs.list.add(m);
+        Sounds.playAt(Mob.SOUNDS[type] != null ? Mob.SOUNDS[type] : "colocar", x, y + 0.5, z, player, 0.8);
+        particles.blockBits(Block.WOOL, (int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z), 8);
+    }
+
     private Player ownerOf(String name) {
         if (name == null || name.isEmpty() || player == null) return null;
         if (info != null && name.equals(info.persona.name)) return player;
@@ -2039,6 +2058,13 @@ public class BlockGame {
                 if (text.length() > 100) text = text.substring(0, 100);
                 addChat("<" + r.name + "> " + text, Color.WHITE);
                 server.broadcast(new Net.Out(Net.CHAT).s(r.name).s(text), p.from);
+                break;
+            }
+            case Net.MOB_SPAWN: { // um amigo usou um ovo de criatura
+                if (r == null) return;
+                int type = d.readInt();
+                float x = d.readFloat(), y = d.readFloat(), z = d.readFloat(), yaw = d.readFloat();
+                if (world.isLoaded((int) Math.floor(x), (int) Math.floor(z)) && y > -5 && y < World.SY + 20) spawnFromEgg(type, x, y, z, yaw);
                 break;
             }
             case Net.MOB_USE: { // um amigo usou um item num lobo
