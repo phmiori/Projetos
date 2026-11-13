@@ -35,6 +35,8 @@ final class Saves {
         java.util.Map<String, String> lanPlayers = new java.util.HashMap<>();
         /** O que há em cada baú: "x,y,z" -> conteúdo (Inventory.serialize). */
         java.util.Map<String, String> chests = new java.util.HashMap<>();
+        /** Lobos domesticados: "x;y;z;sentado(0/1);vida;dono". */
+        java.util.List<String> wolves = new ArrayList<>();
 
         File dir() { return new File(DIR, id); }
     }
@@ -89,6 +91,7 @@ final class Saves {
         for (String k : p.stringPropertyNames())
             if (k.startsWith("lan.")) i.lanPlayers.put(k.substring(4), p.getProperty(k));
             else if (k.startsWith("bau.")) i.chests.put(k.substring(4), p.getProperty(k));
+            else if (k.startsWith("lobo.")) i.wolves.add(p.getProperty(k));
         return i;
     }
 
@@ -132,6 +135,7 @@ final class Saves {
         p.setProperty("inventarioFormato", "2");
         for (java.util.Map.Entry<String, String> e : i.lanPlayers.entrySet()) p.setProperty("lan." + e.getKey(), e.getValue());
         for (java.util.Map.Entry<String, String> e : i.chests.entrySet()) p.setProperty("bau." + e.getKey(), e.getValue());
+        for (int k = 0; k < i.wolves.size(); k++) p.setProperty("lobo." + k, i.wolves.get(k));
         p.setProperty("hora", String.valueOf(i.time));
         p.setProperty("diaDuracao", String.valueOf(World.DAY_LENGTH));
         p.setProperty("dia", String.valueOf(i.day));

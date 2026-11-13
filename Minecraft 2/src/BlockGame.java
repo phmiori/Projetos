@@ -499,7 +499,12 @@ public class BlockGame {
         List<Player> everyone = new ArrayList<>();
         everyone.add(player);
         for (Remote r : remotes.values()) if (r.hasState) everyone.add(r.body);
+        for (Mob m : mobs.list) if (m.tamed) m.owner = ownerOf(m.ownerName); // o lobo segue o dono, se ele estiver no mundo
         mobs.update(dt, world, everyone, player, !creative);
+        for (Mob k : mobs.kills) { // monstros que os lobos derrubaram deixam o que tinham
+            int[] loot = k.drops(rnd);
+            for (int i = 0; i < loot.length; i += 2) drops.scatter(loot[i], loot[i + 1], 0, k.x, k.y + 0.4, k.z);
+        }
         world.tickFluids(dt);
         world.tickFalling(dt);
         world.tickGrowth(dt, player.x, player.z, rnd);
@@ -678,7 +683,10 @@ public class BlockGame {
         if (rPending || (rHeld && coolR <= 0)) {
             coolR = 0.25;
             int aimed = sel == null ? Block.AIR : world.get(sel[0], sel[1], sel[2]);
-            if (rPending && aimed == Block.TABLE && !keys[KeyEvent.VK_SHIFT]) {
+            if (rPending && target != null && target.type == Mob.WOLF) {
+                useOnMob(target, held); // osso doma; carne cura; mão vazia faz sentar/levantar
+                swing = 0.3;
+            } else if (rPending && aimed == Block.TABLE && !keys[KeyEvent.VK_SHIFT]) {
                 openCrafting(3); // bancada: grade 3x3
             } else if (rPending && aimed == Block.FURNACE && !keys[KeyEvent.VK_SHIFT]) {
                 openFurnace();
@@ -1348,6 +1356,19 @@ public class BlockGame {
         if (creative && i.inventory.isEmpty())
             for (int k = 0; k < Block.HOTBAR.length; k++) inv.set(k, Block.HOTBAR[k], Inventory.MAX);
         mobs.clear();
+        for (String s : i.wolves) { // os lobos domesticados voltam onde estavam
+            String[] p = s.split(";", 6);
+            if (p.length < 6) continue;
+            try {
+                Mob m = new Mob(Mob.WOLF, Double.parseDouble(p[0]), Double.parseDouble(p[1]), Double.parseDouble(p[2]));
+                m.tamed = true;
+                m.sitting = p[3].equals("1");
+                m.health = Math.max(1, Math.min(Mob.TAMED_HP, Double.parseDouble(p[4])));
+                m.ownerName = p[5];
+                mobs.list.add(m);
+            } catch (NumberFormatException ignored) {
+            }
+        }
         drops.clear();
         particles.clear();
         primed.clear();
@@ -1512,6 +1533,66 @@ public class BlockGame {
         lPending = rPending = lHeld = rHeld = false;
         bowCharge = 0;
         capture();
+    }
+
+    // ----------------------------- lobo domesticável -----------------------------
+
+    private Player ownerOf(String name) {
+        if (name == null || name.isEmpty() || player == null) return null;
+        if (info != null && name.equals(info.persona.name)) return player;
+        for (Remote r : remotes.values()) if (r.hasState && r.name.equals(name)) return r.body;
+        return null;
+    }
+
+    private static boolean isMeat(int id) {
+        return id == Items.RAW_MEAT || id == Items.COOKED_MEAT || id == Items.RAW_PORK || id == Items.COOKED_PORK
+                || id == Items.RAW_MUTTON || id == Items.COOKED_MUTTON || id == Items.RAW_CHICKEN || id == Items.COOKED_CHICKEN
+                || id == Items.RAW_FISH || id == Items.COOKED_FISH;
+    }
+
+    /** Botão direito num lobo, por este jogador. No multijogador quem decide é o anfitrião. */
+    private void useOnMob(Mob m, int held) {
+        boolean eats = (!m.tamed && held == Items.BONE) || (m.tamed && isMeat(held));
+        if (eats && !creative) inv.set(slot, held, inv.count[slot] - 1, inv.wear[slot]); // o osso/a carne é gasto
+        if (toHost != null) {
+            toHost.send(new Net.Out(Net.MOB_USE).i(m.id).i(held));
+            return;
+        }
+        String msg = mobUse(m, held, info.persona.name);
+        if (msg != null) toast(msg);
+    }
+
+    /**
+     * O que acontece quando `user` usa `held` no lobo m (roda no anfitrião). Osso: 1 chance em 3 de domar
+     * (ele senta e passa a ser de quem deu o osso). Carne: cura o lobo domesticado. Mão vazia (do dono): senta/levanta.
+     */
+    private String mobUse(Mob m, int held, String user) {
+        if (m.type != Mob.WOLF) return null;
+        if (!m.tamed) {
+            if (held != Items.BONE) return m.angry > 0 ? "O lobo está bravo!" : "Lobos gostam de osso...";
+            if (rnd.nextInt(3) == 0) {
+                m.tamed = true;
+                m.ownerName = user;
+                m.sitting = true;
+                m.health = Mob.TAMED_HP;
+                m.angry = 0;
+                m.target = null;
+                Sounds.playAt("domar", m.x, m.y + 0.6, m.z, player, 1.0);
+                particles.blockBits(Block.WOOL, (int) Math.floor(m.x), (int) Math.floor(m.y + 0.5), (int) Math.floor(m.z), 12);
+                return "O lobo agora é seu! Clique nele com a mão vazia para ele sentar ou te seguir.";
+            }
+            Sounds.playAt("lobo", m.x, m.y + 0.6, m.z, player, 0.8);
+            return "O lobo cheirou o osso... tente de novo";
+        }
+        if (isMeat(held)) {
+            m.health = Math.min(Mob.TAMED_HP, m.health + Math.max(2, Items.food(held)));
+            Sounds.playAt("comer", m.x, m.y + 0.6, m.z, player, 0.7);
+            return "O lobo comeu (" + (int) m.health + "/" + (int) Mob.TAMED_HP + " de vida)";
+        }
+        if (!m.ownerName.equals(user)) return "Esse lobo é de " + m.ownerName;
+        m.sitting = !m.sitting;
+        m.target = null;
+        return m.sitting ? "Lobo: senta!" : "Lobo: vem comigo!";
     }
 
     /** Tecla E: inventário com a grade de criação 2x2. */
@@ -1802,7 +1883,7 @@ public class BlockGame {
                 Net.Out o = new Net.Out(Net.MOBS).i(mobs.list.size());
                 for (Mob m : mobs.list)
                     o.i(m.id).i(m.type).f(m.x).f(m.y).f(m.z).f(m.yaw).f(m.walk).b(m.hurt > 0)
-                            .f(m.type == Mob.CREEPER ? m.fuse : m.aim); // pavio do creeper ou arco do esqueleto
+                            .f(m.netAnim()); // pavio, arco, ou o estado do lobo/urso/pássaro
                 server.broadcast(o, null);
             }
             server.flushAll();
@@ -1960,6 +2041,15 @@ public class BlockGame {
                 server.broadcast(new Net.Out(Net.CHAT).s(r.name).s(text), p.from);
                 break;
             }
+            case Net.MOB_USE: { // um amigo usou um item num lobo
+                if (r == null) return;
+                Mob m = mobs.byId(d.readInt());
+                int held = d.readInt();
+                if (m == null) return;
+                String msg = mobUse(m, held, r.name);
+                if (msg != null) p.from.send(new Net.Out(Net.TOAST).s(msg));
+                break;
+            }
             case Net.CHAT_IMAGE: { // foto de um amigo: aparece aqui e vai para os outros
                 if (r == null) return;
                 d.readUTF();
@@ -2048,7 +2138,7 @@ public class BlockGame {
                     m.vx = (x - m.x) * 10; m.vz = (z - m.z) * 10; // para a animação das pernas
                     m.x = x; m.y = y; m.z = z; m.yaw = yaw; m.walk = walk;
                     if (hurt) m.hurt = 0.1;
-                    if (m.type == Mob.CREEPER) m.fuse = anim; else m.aim = anim;
+                    m.applyNetAnim(anim);
                     seen.add(id);
                 }
                 mobs.list.removeIf(m -> !seen.contains(m.id));
@@ -2158,6 +2248,9 @@ public class BlockGame {
                 receivePhoto(d, from);
                 break;
             }
+            case Net.TOAST:
+                toast(d.readUTF());
+                break;
             case Net.BYE:
                 netError = d.readUTF();
                 disconnectToLobby();
@@ -2204,6 +2297,10 @@ public class BlockGame {
                 info.chests.put(e.getKey(), e.getValue().serialize(Inventory.CHEST));
         }
         info.lastPlayed = System.currentTimeMillis();
+        info.wolves.clear(); // lobos domesticados ficam salvos com o mundo
+        for (Mob m : mobs.list)
+            if (m.type == Mob.WOLF && m.tamed && m.health > 0)
+                info.wolves.add(String.format(java.util.Locale.ROOT, "%.2f;%.2f;%.2f;%d;%.1f;%s", m.x, m.y, m.z, m.sitting ? 1 : 0, m.health, m.ownerName));
     }
 
     private void waitForSaves() {
