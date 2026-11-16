@@ -184,7 +184,17 @@ public class BlockGame {
     private boolean furnaceOpen;
     /** Bloco da fornalha aberta (acende enquanto assa) e se está assando agora. */
     private int furnaceX, furnaceY = -1, furnaceZ;
-    private static final double SMELT_TIME = 1.2; // segundos por item na fornalha
+    /**
+     * Segundos para assar um item, conforme o tipo de fornalha. Para uma fornalha mais rápida no futuro,
+     * basta um bloco novo aqui com um tempo menor (e tratá-lo como fornalha onde aparece FURNACE).
+     */
+    static double smeltTime(int furnaceBlock) {
+        switch (furnaceBlock) {
+            case Block.FURNACE:
+            case Block.FURNACE_LIT:
+            default: return 8.0; // fornalha comum
+        }
+    }
     private boolean recipeBook = true, bookOnlyCraftable;
     private Items.Recipe bookHover; // receita sob o mouse no livro: o desenho aparece apagado na grade
     // arrastar itens: {área, inventário, espaço} de cada espaço desenhado no último quadro
@@ -470,9 +480,9 @@ public class BlockGame {
 
     /**
      * Fornalha (enquanto a tela está aberta): com algo que assa na entrada e combustível, enche a seta e, a cada
-     * SMELT_TIME segundos, passa um item para o resultado. Cada combustível assa alguns itens (Items.fuel).
+     * smeltTime segundos, passa um item para o resultado. Cada combustível assa alguns itens (Items.fuel).
      */
-    private void tickFurnace(Furnace fu, double dt) {
+    private void tickFurnace(Furnace fu, double dt, double smeltTime) {
         Inventory fi = fu.inv;
         fu.burning = false;
         int in = fi.id[0], out = Items.smelt(in);
@@ -485,7 +495,7 @@ public class BlockGame {
             fu.heat = fu.heatMax = f;
         }
         fu.burning = true;
-        fu.progress += dt / SMELT_TIME;
+        fu.progress += dt / smeltTime;
         if (fu.progress >= 1) {
             fu.progress = 0;
             fi.set(0, in, fi.count[0] - 1, fi.wear[0]);
@@ -497,7 +507,7 @@ public class BlockGame {
 
     /**
      * Todas as fornalhas assam o tempo todo (com a tela aberta ou não), e o bloco acende enquanto assa.
-     * No mundo de um amigo, só a fornalha aberta funciona (o conteúdo volta para a mochila ao fechar).
+     * No mundo de um amigo, ele assa a que está aberta; as fechadas ficam com o anfitrião.
      */
     private void tickFurnaces(double dt) {
         if (world == null) return;
@@ -509,7 +519,7 @@ public class BlockGame {
                 closeInventory();
                 return;
             }
-            tickFurnace(furn, dt);
+            tickFurnace(furn, dt, smeltTime(b));
             showFurnaceFire(furnaceX, furnaceY, furnaceZ, furn.burning);
             return;
         }
@@ -524,7 +534,7 @@ public class BlockGame {
             Furnace fu = e.getValue();
             if (fu.heldBy != null && !fu.heldBy.closed) continue; // um amigo está com ela aberta
             fu.heldBy = null;
-            tickFurnace(fu, dt);
+            tickFurnace(fu, dt, smeltTime(b));
             showFurnaceFire(x, y, z, fu.burning);
             if (fu != furn && fu.heldBy == null && fu.inv.empty(0) && fu.inv.empty(1) && fu.inv.empty(2) && fu.heat <= 0) it.remove(); // vazia: nada a guardar
         }
