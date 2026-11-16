@@ -169,6 +169,7 @@ public class BlockGame {
     private Object[] dragFrom;
     private int dragStartX, dragStartY;
     private boolean invRightDown;
+    private long clearConfirmUntil; // botão "Limpar inventário": até quando o segundo clique confirma
     private final java.util.Set<String> rightVisited = new java.util.HashSet<>();
 
     // ---- multijogador (LAN / Radmin) ----
@@ -3511,6 +3512,25 @@ public class BlockGame {
         int by = iy + topH + 30;
         g.setFont(Ui.STONE_LABEL);
         Ui.shadow(g, "Inventário", ix, by - 9, Ui.STONE_TEXT);
+        // limpar tudo: o primeiro clique pede confirmação (some em 3 s), o segundo apaga mochila e barra rápida
+        boolean confirming = System.currentTimeMillis() < clearConfirmUntil;
+        Rectangle clr = new Rectangle(ix + gridW - 170, by - 27, 170, 22);
+        boolean ch2 = ui.hover(clr);
+        g.setColor(confirming ? new Color(150, 40, 34, 235) : ch2 ? new Color(90, 60, 52, 235) : new Color(40, 36, 38, 220));
+        g.fillRect(clr.x, clr.y, clr.width, clr.height);
+        Ui.bevel(g, clr.x, clr.y, clr.width, clr.height, true);
+        Ui.centered(g, Ui.SMALL, confirming ? "Clique de novo para apagar" : "Limpar inventário", clr.x + clr.width / 2, clr.y + 16,
+                confirming || ch2 ? Color.WHITE : Ui.STONE_TEXT);
+        if (ch2) tooltip = confirming ? "Apaga todos os itens da mochila e da barra (a armadura fica)" : "Esvaziar a mochila e a barra rápida";
+        ui.region(clr, (b, s) -> {
+            if (b != 1) return;
+            if (System.currentTimeMillis() < clearConfirmUntil) {
+                for (int k = 0; k < Inventory.SIZE; k++) inv.set(k, 0, 0);
+                cursorId = cursorCount = cursorWear = 0;
+                clearConfirmUntil = 0;
+                toast("Inventário limpo");
+            } else clearConfirmUntil = System.currentTimeMillis() + 3000;
+        });
         for (int r = 0; r < 3; r++)
             for (int c = 0; c < cols; c++)
                 slotBox(g, inv, Inventory.HOTBAR + r * cols + c, ix + c * step, by + r * step, sz);
