@@ -10,7 +10,7 @@ final class Mob extends Entity {
     private static final double[][] SIZE = { { 0.42, 0.95 }, { 0.42, 1.2 }, { 0.2, 0.75 }, { 0.3, 1.95 }, { 0.6, 0.8 }, { 0.2, 0.35 },
             { 0.45, 1.35 }, { 0.3, 1.7 }, { 0.3, 1.95 },
             { 0.3, 0.85 }, { 0.25, 0.65 }, { 0.36, 1.55 }, { 0.2, 0.5 }, { 0.55, 1.35 }, { 0.15, 0.3 }, { 0.15, 0.3 }, { 0.2, 0.32 }, { 0.6, 0.9 },
-            { 0.42, 1.25 }, { 0.42, 1.25 }, { 0.18, 0.5 }, { 0.3, 0.35 }, { 0.75, 0.9 } };
+            { 0.42, 1.25 }, { 0.42, 1.25 }, { 0.18, 0.5 }, { 0.3, 0.35 }, { 1.6, 2.6 } };
     private static final double[] MAX_HP = { 10, 8, 4, 20, 16, 3, 10, 20, 20, 12, 8, 12, 4, 30, 3, 3, 4, 25, 30, 30, 8, 8, 40 };
     private static final double[] SPEED = { 1.5, 1.3, 1.6, 2.7, 3.6, 1.5, 1.3, 2.4, 2.3, 2.6, 2.8, 3.0, 2.4, 2.2, 4.5, 1.6, 2.0, 3.2, 3.0, 3.0, 2.2, 2.6, 2.0 };
     /** Lobo domesticado: vida maior. */
@@ -175,7 +175,7 @@ final class Mob extends Entity {
             tx = px / Math.max(dist, 0.01);
             tz = pz / Math.max(dist, 0.01);
             if (!hostile()) speed *= 1.4; // lobo e urso com raiva correm
-            double reach = type == SPIDER ? 1.5 : type == BEAR || tiger() ? 1.9 : type == EMPEROR ? 2.3 : 1.3;
+            double reach = type == SPIDER ? 1.5 : type == BEAR || tiger() ? 1.9 : type == EMPEROR ? 4.5 : 1.3;
             if (type != CREEPER && dist < reach && Math.abs(py) < 1.7) { // o creeper não bate: explode
                 tx = tz = 0;
                 if (attackCd <= 0) { wantsAttack = true; attackCd = 1.0; }
@@ -1388,7 +1388,7 @@ final class Mob extends Entity {
         MODELS[WHITE_TIGER] = tigerModel();
         MODELS[CAT] = catModel();
         MODELS[SCORPION] = scorpionModel(1.0);
-        MODELS[EMPEROR] = scorpionModel(2.4);
+        MODELS[EMPEROR] = scorpionModel(7.2); // 3x o tamanho anterior
     }
 
     /** O desenho certo para o estado atual (esqueleto mirando, lobo sentado/domesticado, cervo macho...). */

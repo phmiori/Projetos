@@ -189,7 +189,7 @@ final class Mobs {
             pool = new int[] { Mob.PIG, Mob.SHEEP, Mob.CHICKEN, Mob.COW, Mob.PIG, Mob.SHEEP, Mob.CHICKEN, Mob.COW, Mob.RABBIT, Mob.FOX, Mob.DEER, Mob.CAT };
         int type = pool[rnd.nextInt(pool.length)];
         if ((type == Mob.BEAR || type == Mob.TIGER || type == Mob.WHITE_TIGER) && rnd.nextDouble() < 0.5) type = Mob.DEER; // urso e tigre são raros
-        if (type == Mob.EMPEROR && rnd.nextDouble() < 0.5) type = Mob.SCORPION;
+        if (type == Mob.EMPEROR && rnd.nextDouble() < 0.85) type = Mob.SCORPION; // o imperador é bem raro (~3% dos bichos do deserto)
         int n = type == Mob.BEAR || type == Mob.TIGER || type == Mob.WHITE_TIGER || type == Mob.EMPEROR || type == Mob.CAT ? 1 : type == Mob.WOLF ? 2 + rnd.nextInt(2) : type == Mob.FOX ? 1 : 1 + rnd.nextInt(3);
         for (int i = 0; i < n; i++) {
             double mx = x + 0.5 + rnd.nextDouble() * 2 - 1, mz = z + 0.5 + rnd.nextDouble() * 2 - 1;
