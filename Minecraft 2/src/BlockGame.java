@@ -3514,7 +3514,8 @@ public class BlockGame {
         int by = iy + topH + 30;
         g.setFont(Ui.STONE_LABEL);
         Ui.shadow(g, "Inventário", ix, by - 9, Ui.STONE_TEXT);
-        // limpar tudo: o primeiro clique pede confirmação (some em 3 s), o segundo apaga mochila e barra rápida
+        // limpar tudo (só no criativo): o primeiro clique pede confirmação (some em 3 s), o segundo apaga mochila e barra rápida
+        if (creative) {
         boolean confirming = System.currentTimeMillis() < clearConfirmUntil;
         Rectangle clr = new Rectangle(ix + gridW - 170, by - 27, 170, 22);
         boolean ch2 = ui.hover(clr);
@@ -3533,6 +3534,7 @@ public class BlockGame {
                 toast("Inventário limpo");
             } else clearConfirmUntil = System.currentTimeMillis() + 3000;
         });
+        }
         for (int r = 0; r < 3; r++)
             for (int c = 0; c < cols; c++)
                 slotBox(g, inv, Inventory.HOTBAR + r * cols + c, ix + c * step, by + r * step, sz);
