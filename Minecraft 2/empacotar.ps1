@@ -17,7 +17,8 @@ Write-Host "JDK: $jdk"
 $dist = "dist\MundoDeBlocos"
 # Apaga só o que este script gera. Sons, texturas, mundos e configurações que você tiver
 # colocado em dist\MundoDeBlocos continuam lá.
-foreach ($old in @("$dist\jogo.jar", "$dist\lib", "$dist\runtime", "dist\MundoDeBlocos.zip")) {
+foreach ($old in @("$dist\jogo.jar", "$dist\lib", "$dist\runtime", "$dist\Jogar.bat", "$dist\Jogar (com mensagens).bat",
+                   "$dist\Mundo de Blocos.exe", "dist\MundoDeBlocos.zip")) {
     Remove-Item $old -Recurse -Force -ErrorAction SilentlyContinue
 }
 New-Item -ItemType Directory "$dist\lib" -Force | Out-Null
@@ -38,25 +39,18 @@ foreach ($item in @("bin","lib","conf","legal","release")) {
 }
 if (-not (Test-Path "$dist\runtime\bin\javaw.exe")) { throw "Falha ao copiar o Java" }
 
-@'
-@echo off
-cd /d "%~dp0"
-start "" "runtime\bin\javaw.exe" -XX:+UseParallelGC -cp "jogo.jar;lib\*" BlockGame
-'@ | Set-Content "$dist\Jogar.bat" -Encoding ASCII
-
-@'
-@echo off
-rem Igual ao Jogar.bat, mas mostra uma janela com mensagens (útil se o jogo não abrir).
-cd /d "%~dp0"
-"runtime\bin\java.exe" -XX:+UseParallelGC -cp "jogo.jar;lib\*" BlockGame
-pause
-'@ | Set-Content "$dist\Jogar (com mensagens).bat" -Encoding ASCII
+Write-Host "Criando o launcher (Mundo de Blocos.exe)..."
+& "launcher\compilar-launcher.bat" (Resolve-Path $dist).Path
+if (-not (Test-Path "$dist\Mundo de Blocos.exe")) { throw "Falha ao criar o launcher" }
 
 @'
 MUNDO DE BLOCOS
 ===============
 
-Para jogar: descompacte esta pasta e dê dois cliques em "Jogar.bat".
+Para jogar: descompacte esta pasta e dê dois cliques em "Mundo de Blocos.exe".
+Se o Windows mostrar "O Windows protegeu o computador", clique em "Mais informações" e depois em
+"Executar assim mesmo" (o aviso aparece porque o launcher não tem assinatura digital).
+Se o jogo não abrir, marque "Abrir com janela de mensagens" no launcher para ver o erro.
 Não precisa instalar nada (o Java já vem dentro, na pasta runtime).
 Precisa de Windows 64 bits e placa de vídeo com OpenGL 3.3 (quase todas de 2012 para cá).
 
