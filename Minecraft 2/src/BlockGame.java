@@ -160,6 +160,9 @@ public class BlockGame {
     private int craftSize = 2;
     private final Inventory furnaceInv = new Inventory(); // 0 entrada, 1 combustível, 2 resultado
     private boolean furnaceOpen;
+    /** Bloco da fornalha aberta (acende enquanto assa) e se está assando agora. */
+    private int furnaceX, furnaceY = -1, furnaceZ;
+    private boolean furnaceBurning;
     private double furnaceHeat, furnaceHeatMax, furnaceProgress;
     private static final double SMELT_TIME = 1.2; // segundos por item na fornalha
     private boolean recipeBook = true, bookOnlyCraftable;
@@ -438,6 +441,7 @@ public class BlockGame {
                 break;
             case INVENTORY:
                 if (furnaceOpen) tickFurnace(dt);
+                showFurnaceFire();
                 break;
             default:
                 break;
@@ -449,6 +453,7 @@ public class BlockGame {
      * SMELT_TIME segundos, passa um item para o resultado. Cada combustível assa alguns itens (Items.fuel).
      */
     private void tickFurnace(double dt) {
+        furnaceBurning = false;
         int in = furnaceInv.id[0], out = Items.smelt(in);
         boolean room = furnaceInv.empty(2) || (furnaceInv.id[2] == out && furnaceInv.count[2] < Items.maxStack(out));
         if (furnaceInv.empty(0) || out == 0 || !room) { furnaceProgress = 0; return; }
@@ -458,6 +463,7 @@ public class BlockGame {
             furnaceInv.set(1, furnaceInv.id[1], furnaceInv.count[1] - 1, furnaceInv.wear[1]);
             furnaceHeat = furnaceHeatMax = f;
         }
+        furnaceBurning = true;
         furnaceProgress += dt / SMELT_TIME;
         if (furnaceProgress >= 1) {
             furnaceProgress = 0;
@@ -472,6 +478,15 @@ public class BlockGame {
      * O mundo é infinito: todo quadro carrega (em segundo plano) os pedaços perto de cada jogador e solta os
      * que ficaram longe. O anfitrião também mantém carregado o entorno dos amigos, onde as criaturas e a água agem.
      */
+    /** Troca o bloco da fornalha aberta entre apagada e acesa (com a mesma direção), conforme está assando. */
+    private void showFurnaceFire() {
+        if (world == null || furnaceY < 0) return;
+        int cur = world.get(furnaceX, furnaceY, furnaceZ);
+        if (cur != Block.FURNACE && cur != Block.FURNACE_LIT) return;
+        int want = furnaceOpen && furnaceBurning ? Block.FURNACE_LIT : Block.FURNACE;
+        if (cur != want) world.setRot(furnaceX, furnaceY, furnaceZ, want, world.rotation(furnaceX, furnaceY, furnaceZ));
+    }
+
     private void tickWorldLoading(double dt) {
         if (world != null && player != null) {
             int radius = (int) Math.ceil((settings.viewDist + 24) / 16.0) + 2;
@@ -695,7 +710,8 @@ public class BlockGame {
                 swing = 0.3;
             } else if (rPending && aimed == Block.TABLE && !keys[KeyEvent.VK_SHIFT]) {
                 openCrafting(3); // bancada: grade 3x3
-            } else if (rPending && aimed == Block.FURNACE && !keys[KeyEvent.VK_SHIFT]) {
+            } else if (rPending && (aimed == Block.FURNACE || aimed == Block.FURNACE_LIT) && !keys[KeyEvent.VK_SHIFT]) {
+                furnaceX = sel[0]; furnaceY = sel[1]; furnaceZ = sel[2];
                 openFurnace();
             } else if (rPending && aimed == Block.BED && !keys[KeyEvent.VK_SHIFT]) {
                 useBed(sel[0], sel[1], sel[2]);
@@ -1649,6 +1665,8 @@ public class BlockGame {
         for (int i = 0; i < 3; i++) giveBack(furnaceInv, i, true);
         furnaceOpen = false;
         furnaceHeat = furnaceHeatMax = furnaceProgress = 0;
+        furnaceBurning = false;
+        showFurnaceFire();
         if (cursorCount > 0) {
             int left = returnCursor();
             if (left > 0) dropNearPlayer(cursorId, left, cursorWear);

@@ -96,7 +96,7 @@ final class GLRenderer {
             "void main(){\n" +
             "  vec3 p = vec3(float(aA & 511u), float((aA>>9u)&2047u), float((aA>>20u)&511u)) / 16.0 - vec3(4.0, 0.0, 4.0) + uChunk;\n" +
             "  uint f = (aC>>10u)&7u; uint occ = (aC>>13u)&3u; uint corner = (aC>>15u)&3u;\n" +
-            "  vN = NORMALS[f]; vAO = 1.0 - float(occ)*0.19; vLayer = float(aB & 1023u);\n" +
+            "  vN = NORMALS[f]; vAO = 1.0 - float(occ)*0.19; vLayer = float((aB & 1023u) | ((aB >> 26u) & 1u) << 10u);\n" +
             "  vSky = float((aB>>10u)&15u)/15.0; vBlk = float((aB>>14u)&15u)/15.0; vFlags = int((aB>>18u)&15u);\n" +
             "  vec2 uv = vec2(float(aC & 31u), float((aC>>5u)&31u)) / 16.0; vUV = vec2(uv.x, 1.0-uv.y);\n" +
             // água: baixa os cantos de cima conforme o nível (fonte um pouco abaixo, corrente cada vez mais rasa)
@@ -206,7 +206,7 @@ final class GLRenderer {
             "const vec2 UVS[4] = vec2[4](vec2(0,0),vec2(1,0),vec2(1,1),vec2(0,1));\n" +
             "void main(){\n" +
             "  vec3 p = vec3(float(aA & 511u), float((aA>>9u)&2047u), float((aA>>20u)&511u)) / 16.0 - vec3(4.0, 0.0, 4.0) + uChunk;\n" +
-            "  vLayer = float(aB & 1023u); vec2 uv = vec2(float(aC & 31u), float((aC>>5u)&31u)) / 16.0; vUV = vec2(uv.x, 1.0-uv.y);\n" +
+            "  vLayer = float((aB & 1023u) | ((aB >> 26u) & 1u) << 10u); vec2 uv = vec2(float(aC & 31u), float((aC>>5u)&31u)) / 16.0; vUV = vec2(uv.x, 1.0-uv.y);\n" +
             "  gl_Position = uLightVP * vec4(p, 1.0); }\n";
 
     private static final String SHADOW_FS =

@@ -29,10 +29,12 @@ final class Block {
     static final int VSLAB_BASE = 110, FENCE = 130, GLASS_PANE = 131, WALL_TORCH_BASE = 132, MIXED_SLAB_BASE = 136;
     /** Dinamite, cama (meio bloco de altura) e mudas de árvore. */
     static final int TNT = 161, BED = 162, SAPLING = 163, BIRCH_SAPLING = 164;
-    // limite: o desenho guarda bloco*6+face em 10 bits, então no máximo 170 blocos
+    // limite: o desenho guarda bloco*6+face em 11 bits (10 embaixo + 1 no bit 26), então no máximo 341 blocos
     /** Baú, terra arada (pela enxada) e trigo em 3 fases de crescimento (WHEAT..WHEAT+2). */
     static final int CHEST = 165, FARMLAND = 166, WHEAT = 167;
-    static final int COUNT = 170;
+    /** Fornalha acesa (enquanto assa): mesma fornalha, com fogo na boca e luz. */
+    static final int FURNACE_LIT = 170;
+    static final int COUNT = 171;
     /** Materiais das escadas e lajes. */
     static final int[] SHAPE_MATS = { PLANKS, COBBLE, STONE_BRICK, BRICK, SANDSTONE };
     private static final String[] SHAPE_MAT_NAMES = { "de tábuas", "de pedregulho", "de tijolos de pedra", "de tijolos", "de arenito" };
@@ -149,6 +151,7 @@ final class Block {
         def(SAPLING, "Muda de árvore", 0.05, CROSS, M_PLANT, -1, SAPLING, 0);
         def(BIRCH_SAPLING, "Muda de bétula", 0.05, CROSS, M_PLANT, -1, BIRCH_SAPLING, 0);
         def(CHEST, "Baú", 1.6, CUBE, M_WOOD, -1, CHEST, 0);
+        def(FURNACE_LIT, "Fornalha", 3.0, CUBE, M_ROCK, 0, FURNACE, 13);
         def(FARMLAND, "Terra arada", 0.5, CUBE, M_SOIL, -1, DIRT, 0);
         for (int s = 0; s < 3; s++) def(WHEAT + s, "Trigo", 0.05, CROSS, M_PLANT, -1, Items.SEEDS, 0);
         // duas lajes diferentes no mesmo bloco: cada metade com a textura do seu material
@@ -265,7 +268,7 @@ final class Block {
     /** Aparece como item (paleta do criativo): só a variante padrão de cada escada, laje e porta. */
     static boolean isItemForm(int b) {
         if (b <= AIR || b >= COUNT || b == DOOR_TEX_LOWER || b == DOOR_TEX_UPPER || waterLevel(b) > 0) return false;
-        if (isWallTorch(b) || isMixedSlab(b) || isWheat(b)) return false;
+        if (isWallTorch(b) || isMixedSlab(b) || isWheat(b) || b == FURNACE_LIT) return false;
         if (isStair(b) || isSlab(b) || isDoor(b) || isVSlab(b)) return DROP[b] == b;
         return true;
     }

@@ -44,6 +44,7 @@ final class Textures {
         FILE[Block.BIRCH_SAPLING] = "muda_betula";
         FILE[Block.CHEST] = "bau";
         FILE[Block.FARMLAND] = "terra_arada";
+        FILE[Block.FURNACE_LIT] = "fornalha_acesa";
         for (int s = 0; s < 3; s++) FILE[Block.WHEAT + s] = "trigo_" + (s + 1);
         FILE[Block.DOOR_TEX_LOWER] = "porta_baixo";
         FILE[Block.DOOR_TEX_UPPER] = "porta_cima";
@@ -506,6 +507,12 @@ final class Textures {
             if (gx >= 3 && gx < 13 && gy >= 7 && gy < 15) return mul(cobbleF[y * S + x], 0.6);
             return cobbleF[y * S + x];
         });
+        // apagada: a mesma boca, só com cinzas escuras
+        int[] furnaceOff = make(S, (gx, gy, x, y) -> {
+            if (gx >= 4 && gx < 12 && gy >= 8 && gy < 14) return gy >= 12 ? mul(rgb(58, 54, 52), 0.8 + 0.4 * rnd(x, y, S, 46)) : rgb(24, 22, 22);
+            if (gx >= 3 && gx < 13 && gy >= 7 && gy < 15) return mul(cobbleF[y * S + x], 0.6);
+            return cobbleF[y * S + x];
+        });
         int[] furnaceTop = make(S, (gx, gy, x, y) -> mul(cobbleF[y * S + x], 1.05));
 
         int[] birchSide = make(S, (gx, gy, x, y) -> {
@@ -628,7 +635,8 @@ final class Textures {
         });
 
         int[][] t = new int[Block.COUNT * 3 + Block.COUNT][];
-        t[Block.COUNT * 3 + Block.FURNACE] = furnaceSide;
+        t[Block.COUNT * 3 + Block.FURNACE] = furnaceOff;
+        t[Block.COUNT * 3 + Block.FURNACE_LIT] = furnaceSide;
         t[Block.COUNT * 3 + Block.TABLE] = tableSide;
         t[Block.COUNT * 3 + Block.CHEST] = chestSide;
         set(t, Block.CHEST, chestPlain, chestTop, chestTop);
@@ -648,6 +656,7 @@ final class Textures {
         set(t, Block.TORCH, torch, torch, torch);
         set(t, Block.TABLE, tablePlain, tableTop, planks);
         set(t, Block.FURNACE, furnacePlain, furnaceTop, furnaceTop);
+        set(t, Block.FURNACE_LIT, furnacePlain, furnaceTop, furnaceTop);
         set(t, Block.BIRCH_LOG, birchSide, birchTop, birchTop);
         set(t, Block.BIRCH_LEAVES, birchLeaves, birchLeaves, birchLeaves);
         set(t, Block.CACTUS, cactusSide, cactusTop, cactusTop);

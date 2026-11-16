@@ -77,12 +77,12 @@ final class Mesher {
                     int b = center[Chunk.idx(lx, y, lz)] & 0xFF;
                     if (b == Block.AIR) continue;
                     int shape = Block.shape(b);
-                    int flags = Block.light(b) > 0 && b != Block.TORCH ? FLAG_EMISSIVE : 0;
+                    int flags = Block.light(b) > 0 && b != Block.TORCH && b != Block.FURNACE_LIT ? FLAG_EMISSIVE : 0;
                     int ox = lx * 16, oy = y * 16, oz = lz * 16; // canto do bloco, em 1/16
 
                     if (shape == Block.CROSS) {
                         int s = B.sky(x, y, z), l = B.blk(x, y, z);
-                        int b2 = (Block.texture(b) * 6 + 4) | s << 10 | l << 14 | FLAG_PLANT << 18;
+                        int b2 = L(Block.texture(b) * 6 + 4) | s << 10 | l << 14 | FLAG_PLANT << 18;
                         // tocha na parede: base encostada na parede e topo inclinado para fora
                         int bdx = 0, bdz = 0, tdx = 0, tdz = 0, lift = 0;
                         if (Block.isWallTorch(b)) {
@@ -126,7 +126,7 @@ final class Mesher {
                                     }
                                     int tu = (c[0] - 8) * r[0] + (c[1] - 8) * r[1] + (c[2] - 8) * r[2] + 8;
                                     int tv = (c[0] - 8) * u[0] + (c[1] - 8) * u[1] + (c[2] - 8) * u[2] + 8;
-                                    opaque.add(pos(ox + c[0], oy + c[1], oz + c[2]), layer | s << 10 | l << 14, uv(tu, tv, f, 0, k));
+                                    opaque.add(pos(ox + c[0], oy + c[1], oz + c[2]), L(layer) | s << 10 | l << 14, uv(tu, tv, f, 0, k));
                                 }
                             }
                         }
@@ -168,7 +168,7 @@ final class Mesher {
                             int py = (1 + n[1] + SR[k] * r[1] + SU[k] * u[1]) * 8;
                             int pz = (1 + n[2] + SR[k] * r[2] + SU[k] * u[2]) * 8;
                             out.add(pos(ox + px, oy + py, oz + pz),
-                                    layer | sky[k] << 10 | blk[k] << 14 | flags << 18 | surface << 22,
+                                    L(layer) | sky[k] << 10 | blk[k] << 14 | flags << 18 | surface << 22,
                                     rot != 0 && (f == 2 || f == 3) ? topUv(f, k, rot, occ[k]) : uv(SR[k] > 0 ? 16 : 0, SU[k] > 0 ? 16 : 0, f, occ[k], k));
                         }
                     }
@@ -286,4 +286,8 @@ final class Mesher {
     }
 
     private Mesher() {}
+
+    /** Camada de textura no vértice: 10 bits embaixo e o 11º no bit 26 (os bits 10..25 são luz, efeitos e água). */
+    static int L(int layer) { return (layer & 1023) | (layer >> 10) << 26; }
+
 }
