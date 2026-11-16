@@ -166,6 +166,7 @@ public class BlockGame {
     private Items.Recipe bookHover; // receita sob o mouse no livro: o desenho aparece apagado na grade
     // arrastar itens: {área, inventário, espaço} de cada espaço desenhado no último quadro
     private final List<Object[]> slotHits = new ArrayList<>();
+    private final List<Object[]> paletteHits = new ArrayList<>(); // itens do menu do criativo na tela: {Rectangle, item}
     private Object[] dragFrom;
     private int dragStartX, dragStartY;
     private boolean invRightDown;
@@ -3478,6 +3479,7 @@ public class BlockGame {
         g.setColor(new Color(0, 0, 0, 140));
         g.fillRect(0, 0, cw, ch);
         slotHits.clear();
+        paletteHits.clear();
 
         final int sz = 48, gap = 4, step = sz + gap, cols = 9, pad = 24;
         int gridW = cols * step - gap;
@@ -3747,6 +3749,7 @@ public class BlockGame {
             Ui.slot(g, cx, cy, sz, hv, false);
             drawItem(g, it, 1, 0, cx + 5, cy + 5, sz - 10, false);
             if (hv) tooltip = Items.name(it);
+            paletteHits.add(new Object[] { r, it });
             ui.region(r, (btn, shift) -> {
                 if (btn == 1 && cursorCount > 0 && cursorId == it) { cursorCount = 0; cursorId = 0; cursorWear = 0; } // clicou de novo no mesmo: devolve ao menu
                 else if (btn == 1) { cursorId = it; cursorCount = Items.maxStack(it); cursorWear = 0; }
@@ -3836,6 +3839,43 @@ public class BlockGame {
         if (to == null || slotKey(to).equals(slotKey(from))) return;
         clickSlot((Inventory) to[1], (Integer) to[2], 1, false);
     }
+    /** Teclas 1-9 no inventário: o item embaixo do mouse vai para essa casa da barra rápida (trocando com o que estiver lá). */
+    private void hotbarKey(int n) {
+        if (cursorCount > 0) return; // segurando algo no mouse: as teclas não fazem nada
+        Object[] hit = slotAt(ui.mouseX, ui.mouseY);
+        if (hit == null) {
+            if (!creative) return;
+            for (Object[] p : paletteHits) // criativo: um item do menu vira uma pilha cheia nessa casa
+                if (((Rectangle) p[0]).contains(ui.mouseX, ui.mouseY)) {
+                    int it = (Integer) p[1];
+                    inv.set(n, it, Items.maxStack(it), 0);
+                    return;
+                }
+            return;
+        }
+        Inventory t = (Inventory) hit[1];
+        int i = (Integer) hit[2];
+        if (t == inv && i == n) return;
+        int hid = inv.id[n], hc = inv.count[n], hw = inv.wear[n];
+        boolean hotEmpty = inv.empty(n);
+        if (t == furnaceInv && i == 2) { // resultado da fornalha: só sai, nunca entra
+            if (t.empty(i)) return;
+            if (hotEmpty) { inv.set(n, t.id[i], t.count[i], 0); t.set(i, 0, 0); }
+            else if (hid == t.id[i] && Items.maxStack(hid) > 1) {
+                int k = Math.min(t.count[i], Items.maxStack(hid) - hc);
+                inv.set(n, hid, hc + k, hw);
+                t.set(i, hid, t.count[i] - k);
+            }
+            return;
+        }
+        // espaço de armadura: só aceita a peça certa vinda da barra
+        if (t == inv && i >= Inventory.SIZE && !hotEmpty && !(Items.isArmor(hid) && Items.armorPiece(hid) == i - Inventory.SIZE)) return;
+        if (t.empty(i) && hotEmpty) return;
+        int id = t.id[i], c = t.count[i], w = t.wear[i];
+        t.set(i, hid, hc, hw);
+        inv.set(n, id, c, w);
+    }
+
     private static final String[] ARMOR_SLOT = { "capacete", "peitoral", "calças", "botas" };
 
     /** Um espaço de inventário na tela; target é o inventário do jogador ou o baú aberto. */
@@ -4087,6 +4127,7 @@ public class BlockGame {
                 break;
             case INVENTORY:
                 if (k == KeyEvent.VK_ESCAPE || k == KeyEvent.VK_E) closeInventory();
+                else if (k >= KeyEvent.VK_1 && k <= KeyEvent.VK_9) hotbarKey(k - KeyEvent.VK_1);
                 break;
             case JOIN:
                 if (k == KeyEvent.VK_ESCAPE) enterLobby();
