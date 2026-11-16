@@ -39,6 +39,8 @@ final class Saves {
         java.util.Map<String, String> furnaces = new java.util.HashMap<>();
         /** Lobos domesticados: "x;y;z;sentado(0/1);vida;dono". */
         java.util.List<String> wolves = new ArrayList<>();
+        /** As outras criaturas do mundo: "tipo;x;y;z;direção;vida;id" (Mobs.save). */
+        java.util.List<String> mobs = new ArrayList<>();
 
         File dir() { return new File(DIR, id); }
     }
@@ -95,6 +97,7 @@ final class Saves {
             else if (k.startsWith("bau.")) i.chests.put(k.substring(4), p.getProperty(k));
             else if (k.startsWith("fornalha.")) i.furnaces.put(k.substring(9), p.getProperty(k));
             else if (k.startsWith("lobo.")) i.wolves.add(p.getProperty(k));
+            else if (k.startsWith("criatura.")) i.mobs.add(p.getProperty(k));
         return i;
     }
 
@@ -140,6 +143,7 @@ final class Saves {
         for (java.util.Map.Entry<String, String> e : i.chests.entrySet()) p.setProperty("bau." + e.getKey(), e.getValue());
         for (java.util.Map.Entry<String, String> e : i.furnaces.entrySet()) p.setProperty("fornalha." + e.getKey(), e.getValue());
         for (int k = 0; k < i.wolves.size(); k++) p.setProperty("lobo." + k, i.wolves.get(k));
+        for (int k = 0; k < i.mobs.size(); k++) p.setProperty("criatura." + k, i.mobs.get(k));
         p.setProperty("hora", String.valueOf(i.time));
         p.setProperty("diaDuracao", String.valueOf(World.DAY_LENGTH));
         p.setProperty("dia", String.valueOf(i.day));

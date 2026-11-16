@@ -1466,6 +1466,7 @@ public class BlockGame {
             } catch (NumberFormatException ignored) {
             }
         }
+        mobs.loadAll(i.mobs); // os bichos voltam quando o pedaço deles carregar
         drops.clear();
         particles.clear();
         primed.clear();
@@ -2486,6 +2487,8 @@ public class BlockGame {
                 info.furnaces.put(e.getKey(), e.getValue().serialize());
         }
         info.lastPlayed = System.currentTimeMillis();
+        info.mobs.clear();
+        info.mobs.addAll(mobs.saveAll());
         info.wolves.clear(); // lobos domesticados ficam salvos com o mundo
         for (Mob m : mobs.list)
             if (m.type == Mob.WOLF && m.tamed && m.health > 0)

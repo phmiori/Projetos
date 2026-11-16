@@ -21,6 +21,9 @@ final class Mob extends Entity {
     final int type;
     private static int nextId = 1;
     int id = nextId++; // identifica a criatura na rede
+    /** Uma criatura salva volta com o mesmo id (que decide a pelagem/cor); os novos ids não podem repetir. */
+    static void reserveId(int used) { if (used >= nextId) nextId = used + 1; }
+    static double maxHealth(int type) { return MAX_HP[type]; }
     double health, yaw, hurt, walk, aiTimer, dirX, dirZ, attackCd, flee, burn;
     double idleSound = 2 + Math.random() * 8; // segundos até o próximo som da criatura
     static final String[] SOUNDS = { "porco", "ovelha", "galinha", "morto_vivo", "aranha", null, "vaca", null, "esqueleto",

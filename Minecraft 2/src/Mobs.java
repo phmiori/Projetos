@@ -23,6 +23,79 @@ final class Mobs {
 
     void clear() {
         list.clear();
+        sleeping.clear();
+    }
+
+    /**
+     * Criaturas de pedaços descarregados (o jogador foi para longe): ficam guardadas aqui e voltam quando o
+     * pedaço carregar de novo. Chave = pedaço (cx, cz), valor = criaturas em texto (veja save).
+     */
+    private final java.util.Map<Long, List<String>> sleeping = new java.util.HashMap<>();
+
+    private static long chunkKey(double x, double z) {
+        long cx = (long) Math.floor(x) >> 4, cz = (long) Math.floor(z) >> 4;
+        return (cx << 32) | (cz & 0xFFFFFFFFL);
+    }
+
+    /**
+     * Bichos de terra ficam no mundo (dormem com o pedaço quando o jogador vai longe). Monstros, pássaros e peixes
+     * somem de longe e reaparecem sozinhos; os que estiverem por perto também são salvos ao fechar o mundo.
+     */
+    static boolean persistent(Mob m) {
+        return !m.hostile() && !m.tamed && m.type != Mob.BIRD && !m.swimmer();
+    }
+
+    static String save(Mob m) {
+        return String.format(java.util.Locale.ROOT, "%d;%.2f;%.2f;%.2f;%.2f;%.1f;%d", m.type, m.x, m.y, m.z, m.yaw, m.health, m.id);
+    }
+
+    static Mob load(String s) {
+        String[] p = s.split(";");
+        if (p.length < 7) return null;
+        try {
+            int type = Integer.parseInt(p[0]);
+            if (type < 0 || type >= Mob.TYPES) return null;
+            Mob m = new Mob(type, Double.parseDouble(p[1]), Double.parseDouble(p[2]), Double.parseDouble(p[3]));
+            m.yaw = Double.parseDouble(p[4]);
+            m.health = Math.max(1, Math.min(Mob.maxHealth(type), Double.parseDouble(p[5])));
+            m.id = Integer.parseInt(p[6]);
+            Mob.reserveId(m.id);
+            return m;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /** Todas as criaturas para salvar com o mundo (as em volta e as guardadas), menos os lobos domesticados. */
+    List<String> saveAll() {
+        List<String> out = new ArrayList<>();
+        for (Mob m : list) if (!m.tamed && m.health > 0 && !m.exploding) out.add(save(m));
+        for (List<String> l : sleeping.values()) out.addAll(l);
+        return out;
+    }
+
+    /** Mundo aberto: as criaturas salvas esperam o pedaço delas carregar. */
+    void loadAll(List<String> saved) {
+        for (String s : saved) {
+            Mob m = load(s);
+            if (m == null) continue;
+            sleeping.computeIfAbsent(chunkKey(m.x, m.z), k -> new ArrayList<>()).add(s);
+        }
+    }
+
+    /** Acorda as criaturas dos pedaços que acabaram de carregar. */
+    private void wake(World w) {
+        if (sleeping.isEmpty()) return;
+        for (Iterator<java.util.Map.Entry<Long, List<String>>> it = sleeping.entrySet().iterator(); it.hasNext(); ) {
+            java.util.Map.Entry<Long, List<String>> e = it.next();
+            int cx = (int) (e.getKey() >> 32), cz = (int) (long) e.getKey().longValue();
+            if (!w.isLoaded(cx * 16 + 8, cz * 16 + 8)) continue;
+            for (String s : e.getValue()) {
+                Mob m = load(s);
+                if (m != null && byId(m.id) == null) list.add(m);
+            }
+            it.remove();
+        }
     }
 
     /** Uma explosão machuca e empurra as criaturas em volta. */
@@ -59,12 +132,15 @@ final class Mobs {
         shots.clear();
         kills.clear();
         if (players.isEmpty()) return;
+        wake(w);
         double daylight = w.daylight();
         for (Iterator<Mob> it = list.iterator(); it.hasNext(); ) {
             Mob m = it.next();
             if (!w.isLoaded((int) Math.floor(m.x), (int) Math.floor(m.z))) {
                 if (m.tamed) continue;   // o lobo do jogador espera onde está (é salvo com o mundo)
-                it.remove();             // o pedaço foi descarregado
+                if (persistent(m) && m.health > 0) // o pedaço foi descarregado: o bicho dorme com ele
+                    sleeping.computeIfAbsent(chunkKey(m.x, m.z), k -> new ArrayList<>()).add(save(m));
+                it.remove();
                 continue;
             }
             Player p = nearest(players, m.x, m.z);
@@ -101,7 +177,7 @@ final class Mobs {
                 m.burn += dt;
                 if (m.burn > 4) { it.remove(); continue; }
             }
-            if (m.health <= 0 || (dist > 100 && !m.tamed) || m.y < -10) it.remove();
+            if (m.health <= 0 || (dist > 100 && !m.tamed && !persistent(m)) || m.y < -10) it.remove(); // os bichos de terra não somem de longe
         }
 
         spawnTimer -= dt;
