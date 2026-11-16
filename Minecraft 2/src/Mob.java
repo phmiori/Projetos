@@ -2,14 +2,17 @@
 final class Mob extends Entity {
     static final int PIG = 0, SHEEP = 1, CHICKEN = 2, ZOMBIE = 3, SPIDER = 4, FISH = 5, COW = 6, CREEPER = 7, SKELETON = 8;
     static final int WOLF = 9, FOX = 10, DEER = 11, RABBIT = 12, BEAR = 13, BIRD = 14, TROPICAL = 15, SALMON = 16, SHARK = 17;
-    static final int TYPES = 18;
+    static final int TIGER = 18, WHITE_TIGER = 19, CAT = 20, SCORPION = 21, EMPEROR = 22;
+    static final int TYPES = 23;
     static final String[] NAMES = { "Porco", "Ovelha", "Galinha", "Morto-vivo", "Aranha", "Peixe", "Vaca", "Creeper", "Esqueleto",
-            "Lobo", "Raposa", "Cervo", "Coelho", "Urso", "Pássaro", "Peixe tropical", "Salmão", "Tubarão" };
+            "Lobo", "Raposa", "Cervo", "Coelho", "Urso", "Pássaro", "Peixe tropical", "Salmão", "Tubarão",
+            "Tigre-de-bengala", "Tigre-de-bengala branco", "Gato", "Escorpião amarelo", "Escorpião-imperador" };
     private static final double[][] SIZE = { { 0.42, 0.95 }, { 0.42, 1.2 }, { 0.2, 0.75 }, { 0.3, 1.95 }, { 0.6, 0.8 }, { 0.2, 0.35 },
             { 0.45, 1.35 }, { 0.3, 1.7 }, { 0.3, 1.95 },
-            { 0.3, 0.85 }, { 0.25, 0.65 }, { 0.36, 1.55 }, { 0.2, 0.5 }, { 0.55, 1.35 }, { 0.15, 0.3 }, { 0.15, 0.3 }, { 0.2, 0.32 }, { 0.6, 0.9 } };
-    private static final double[] MAX_HP = { 10, 8, 4, 20, 16, 3, 10, 20, 20, 12, 8, 12, 4, 30, 3, 3, 4, 25 };
-    private static final double[] SPEED = { 1.5, 1.3, 1.6, 2.7, 3.6, 1.5, 1.3, 2.4, 2.3, 2.6, 2.8, 3.0, 2.4, 2.2, 4.5, 1.6, 2.0, 3.2 };
+            { 0.3, 0.85 }, { 0.25, 0.65 }, { 0.36, 1.55 }, { 0.2, 0.5 }, { 0.55, 1.35 }, { 0.15, 0.3 }, { 0.15, 0.3 }, { 0.2, 0.32 }, { 0.6, 0.9 },
+            { 0.42, 1.25 }, { 0.42, 1.25 }, { 0.18, 0.5 }, { 0.3, 0.35 }, { 0.75, 0.9 } };
+    private static final double[] MAX_HP = { 10, 8, 4, 20, 16, 3, 10, 20, 20, 12, 8, 12, 4, 30, 3, 3, 4, 25, 30, 30, 8, 8, 40 };
+    private static final double[] SPEED = { 1.5, 1.3, 1.6, 2.7, 3.6, 1.5, 1.3, 2.4, 2.3, 2.6, 2.8, 3.0, 2.4, 2.2, 4.5, 1.6, 2.0, 3.2, 3.0, 3.0, 2.2, 2.6, 2.0 };
     /** Lobo domesticado: vida maior. */
     static final double TAMED_HP = 20;
     /** Creeper: quanto tempo o pavio queima antes de explodir, e a força da explosão. */
@@ -21,7 +24,7 @@ final class Mob extends Entity {
     double health, yaw, hurt, walk, aiTimer, dirX, dirZ, attackCd, flee, burn;
     double idleSound = 2 + Math.random() * 8; // segundos até o próximo som da criatura
     static final String[] SOUNDS = { "porco", "ovelha", "galinha", "morto_vivo", "aranha", null, "vaca", null, "esqueleto",
-            "lobo", "raposa", null, null, "urso", "passaro", null, null, null };
+            "lobo", "raposa", null, null, "urso", "passaro", null, null, null, "rugido", "rugido", "miau", "aranha", "aranha" };
 
     // ---- lobo (domesticável), urso e pássaro ----
     boolean tamed, sitting;   // lobo: tem dono / está sentado esperando
@@ -41,14 +44,19 @@ final class Mob extends Entity {
 
     /** Ataca jogadores: monstros, tubarão e lobo/urso com raiva. */
     boolean attacksPlayer() {
-        return hostile() || type == SHARK || ((type == WOLF || type == BEAR) && angry > 0 && !tamed);
+        return hostile() || type == SHARK || scorpion() || ((type == WOLF || type == BEAR || tiger()) && angry > 0 && !tamed);
     }
+
+    boolean tiger() { return type == TIGER || type == WHITE_TIGER; }
+
+    boolean scorpion() { return type == SCORPION || type == EMPEROR; }
+
 
     /** Número extra que vai pela rede: pavio, arco, ou o estado do lobo/urso/pássaro. */
     float netAnim() {
         if (type == CREEPER) return (float) fuse;
         if (type == SKELETON) return (float) aim;
-        if (type == WOLF || type == BEAR) return (tamed ? 1 : 0) + (sitting ? 2 : 0) + (angry > 0 ? 4 : 0);
+        if (type == WOLF || type == BEAR || tiger()) return (tamed ? 1 : 0) + (sitting ? 2 : 0) + (angry > 0 ? 4 : 0);
         if (type == BIRD) return flying ? 1 : 0;
         return 0;
     }
@@ -56,7 +64,7 @@ final class Mob extends Entity {
     void applyNetAnim(float a) {
         if (type == CREEPER) fuse = a;
         else if (type == SKELETON) aim = a;
-        else if (type == WOLF || type == BEAR) { int f = (int) a; tamed = (f & 1) != 0; sitting = (f & 2) != 0; angry = (f & 4) != 0 ? 1 : 0; }
+        else if (type == WOLF || type == BEAR || tiger()) { int f = (int) a; tamed = (f & 1) != 0; sitting = (f & 2) != 0; angry = (f & 4) != 0 ? 1 : 0; }
         else if (type == BIRD) flying = a > 0.5f;
     }
     boolean wantsAttack; // encostou no jogador e pode atacar neste quadro
@@ -79,7 +87,9 @@ final class Mob extends Entity {
 
     boolean hostile() { return type == ZOMBIE || type == SPIDER || type == CREEPER || type == SKELETON; }
 
-    double attackDamage() { return type == ZOMBIE || type == WOLF ? 3 : type == BEAR ? 5 : type == SHARK ? 4 : 2; }
+    double attackDamage() {
+        return type == ZOMBIE || type == WOLF ? 3 : type == BEAR ? 5 : type == SHARK ? 4 : tiger() || type == EMPEROR ? 6 : 2;
+    }
 
     void update(double dt, World w, Player p, boolean canTarget, java.util.Random r) {
         if (swimmer()) { swim(dt, w, p, canTarget, r); return; }
@@ -117,7 +127,9 @@ final class Mob extends Entity {
         boolean hunting = type == SKELETON && canTarget && dist < 22 && Math.abs(py) < 10;
         if (!hunting) aim = 0;
         // bichos ariscos fogem de quem chega perto
-        if ((type == DEER || type == RABBIT || type == FOX) && dist < (type == DEER ? 10 : 6) && Math.abs(py) < 4) flee = Math.max(flee, 1.5);
+        if ((type == DEER || type == RABBIT || type == FOX || type == CAT) && dist < (type == DEER ? 10 : 6) && Math.abs(py) < 4) flee = Math.max(flee, 1.5);
+        // tigre defende o território: quem chega muito perto vira presa
+        if (tiger() && canTarget && dist < 5 && Math.abs(py) < 3) angry = Math.max(angry, 12);
         if (type == WOLF && tamed) {
             // lobo domesticado: sentado espera; senão ataca monstros perto do dono ou segue o dono
             if (sitting) {
@@ -163,7 +175,7 @@ final class Mob extends Entity {
             tx = px / Math.max(dist, 0.01);
             tz = pz / Math.max(dist, 0.01);
             if (!hostile()) speed *= 1.4; // lobo e urso com raiva correm
-            double reach = type == SPIDER ? 1.5 : type == BEAR ? 1.9 : 1.3;
+            double reach = type == SPIDER ? 1.5 : type == BEAR || tiger() ? 1.9 : type == EMPEROR ? 2.3 : 1.3;
             if (type != CREEPER && dist < reach && Math.abs(py) < 1.7) { // o creeper não bate: explode
                 tx = tz = 0;
                 if (attackCd <= 0) { wantsAttack = true; attackCd = 1.0; }
@@ -345,10 +357,10 @@ final class Mob extends Entity {
     void damage(double d) {
         health -= d;
         hurt = 0.35;
-        if (type == WOLF || type == BEAR) {
+        if (type == WOLF || type == BEAR || tiger()) {
             if (tamed) sitting = false; // o lobo domesticado levanta para se defender
             else angry = 25;            // lobo selvagem e urso revidam
-        } else if (!hostile() && type != SHARK) flee = 4;
+        } else if (!hostile() && type != SHARK && !scorpion()) flee = 4;
     }
     /** Itens que a criatura deixa ao morrer: pares {item, quantidade}. */
     int[] drops(java.util.Random r) {
@@ -373,6 +385,10 @@ final class Mob extends Entity {
             case TROPICAL: return new int[] { Items.RAW_FISH, 1 };
             case SALMON: return new int[] { Items.RAW_FISH, 1 + r.nextInt(2) };
             case SHARK: return pairs(Items.RAW_FISH, 3 + r.nextInt(3), Items.BONE, r.nextInt(2));
+            case TIGER: case WHITE_TIGER: return pairs(Items.RAW_MEAT, 1 + r.nextInt(3), Items.LEATHER, 1 + r.nextInt(2));
+            case CAT: return pairs(Items.STRING, r.nextInt(2));
+            case SCORPION: return pairs(Items.STRING, r.nextInt(2));
+            case EMPEROR: return pairs(Items.STRING, 1 + r.nextInt(2), Items.BONE, r.nextInt(2), Items.GUNPOWDER, r.nextInt(2));
             default:
                 if (r.nextDouble() < 0.06) return new int[] { Items.IRON_INGOT, 1 };
                 if (r.nextDouble() < 0.4) return new int[] { Items.COAL, 1 + r.nextInt(2) };
@@ -1188,6 +1204,193 @@ final class Mob extends Entity {
         MODELS[SHARK] = sk.toArray(new Box[0]);
     }
 
+    // ---- tigres, gato e escorpiões: o mesmo desenho com cores diferentes (índices 1 a 4 do modelo) ----
+    /** Tigre: pelo, listras, partes claras (barriga, focinho) e olhos. */
+    private static final int[] TIGER_COLORS = { 0xE07A1E, 0x1A1410, 0xF4EEE0, 0xC8D040 };
+    private static final int[] WHITE_TIGER_COLORS = { 0xF2EEE6, 0x2E2824, 0xFFFFFF, 0x5AA8E8 };
+    /** Gato (pela variante): laranja rajado, preto e cinza. */
+    private static final int[][] CAT_COLORS = { { 0xD8902E, 0xA0601A, 0xF4E6CC, 0x78D040 }, { 0x2A2A2E, 0x18181C, 0x404046, 0xE8C030 },
+            { 0x9A9AA0, 0x66666C, 0xE8E8EC, 0x60B0E8 } };
+    /** Escorpião: carapaça, juntas/partes escuras, partes claras e ferrão. */
+    private static final int[] SCORPION_COLORS = { 0xE8C040, 0xB08820, 0xF6DC80, 0x4A3410 };
+    private static final int[] EMPEROR_COLORS = { 0x1C1E26, 0x0E0F14, 0x34405A, 0x6A2418 };
+
+    private int[] palette() {
+        switch (type) {
+            case BIRD: return BIRD_COLORS[variant()];
+            case TROPICAL: return TROPICAL_COLORS[variant()];
+            case CAT: return CAT_COLORS[variant()];
+            case TIGER: return TIGER_COLORS;
+            case WHITE_TIGER: return WHITE_TIGER_COLORS;
+            case SCORPION: return SCORPION_COLORS;
+            case EMPEROR: return EMPEROR_COLORS;
+            default: return null;
+        }
+    }
+
+    /** Escorpião em escala s (o imperador é o mesmo desenho bem maior). */
+    private static Box[] scorpionModel(double s) {
+        int C = 1, J = 2, L = 3, T = 4;
+        java.util.List<Box> l = new java.util.ArrayList<>();
+        // pernas: 4 de cada lado, com coxa subindo, joelho alto e pé no chão (andam como as da aranha)
+        double[] lz = { 0.14, 0.04, -0.06, -0.16 }, fan = { 0.06, 0.02, -0.02, -0.06 };
+        for (int side = -1; side <= 1; side += 2)
+            for (int i = 0; i < 4; i++) {
+                double z = lz[i] * s;
+                l.add(leg(side * 0.2 * s, 0.19 * s, z, 0.14 * s, 0.035 * s, 0.035 * s, J, i + 1));
+                l.add(leg(side * 0.28 * s, 0.17 * s, z + fan[i] * s, 0.035 * s, 0.06 * s, 0.035 * s, C, i + 1));       // joelho
+                l.add(leg(side * 0.31 * s, 0.09 * s, z + fan[i] * 1.5 * s, 0.03 * s, 0.14 * s, 0.03 * s, J, i + 1));
+                l.add(leg(side * 0.33 * s, 0.015 * s, z + fan[i] * 2 * s, 0.04 * s, 0.025 * s, 0.05 * s, L, i + 1));    // pé
+            }
+        // corpo: placas do abdômen com sulcos, e a cabeça (prossoma) com olhos em cima
+        l.add(b(0, 0.14 * s, 0, 0.3 * s, 0.12 * s, 0.36 * s, C));
+        for (double z : new double[] { -0.12, -0.04, 0.04, 0.12 }) {
+            l.add(b(0, 0.203 * s, z * s, 0.28 * s, 0.008 * s, 0.025 * s, J));
+            l.add(b(-0.152 * s, 0.14 * s, z * s, 0.006 * s, 0.1 * s, 0.025 * s, J)); l.add(b(0.152 * s, 0.14 * s, z * s, 0.006 * s, 0.1 * s, 0.025 * s, J));
+        }
+        l.add(b(0, 0.083 * s, 0, 0.24 * s, 0.01 * s, 0.3 * s, L));                     // barriga clara
+        l.add(b(0, 0.15 * s, 0.24 * s, 0.26 * s, 0.1 * s, 0.14 * s, C));
+        l.add(b(0, 0.202 * s, 0.24 * s, 0.2 * s, 0.006 * s, 0.1 * s, J));
+        for (int side = -1; side <= 1; side += 2) {
+            l.add(b(side * 0.03 * s, 0.206 * s, 0.27 * s, 0.025 * s, 0.012 * s, 0.025 * s, 0x101010)); // olhos do meio
+            l.add(b(side * 0.1 * s, 0.2 * s, 0.3 * s, 0.015 * s, 0.01 * s, 0.015 * s, 0x101010));      // olhos dos lados
+            l.add(b(side * 0.05 * s, 0.12 * s, 0.33 * s, 0.03 * s, 0.03 * s, 0.04 * s, J));             // quelíceras
+        }
+        // pinças: braço, antebraço, mão grossa e dois dedos
+        for (int side = -1; side <= 1; side += 2) {
+            l.add(b(side * 0.17 * s, 0.15 * s, 0.36 * s, 0.06 * s, 0.05 * s, 0.16 * s, C));
+            l.add(b(side * 0.17 * s, 0.15 * s, 0.44 * s, 0.07 * s, 0.06 * s, 0.03 * s, J));
+            l.add(b(side * 0.22 * s, 0.15 * s, 0.5 * s, 0.065 * s, 0.065 * s, 0.12 * s, C));
+            l.add(b(side * 0.23 * s, 0.16 * s, 0.62 * s, 0.13 * s, 0.1 * s, 0.14 * s, C));               // mão (quela)
+            l.add(b(side * 0.23 * s, 0.212 * s, 0.62 * s, 0.1 * s, 0.006 * s, 0.1 * s, L));
+            l.add(b(side * 0.195 * s, 0.165 * s, 0.73 * s, 0.035 * s, 0.045 * s, 0.1 * s, J));          // dedos
+            l.add(b(side * 0.26 * s, 0.16 * s, 0.72 * s, 0.03 * s, 0.035 * s, 0.08 * s, J));
+        }
+        // cauda curvada por cima das costas, segmento por segmento, até o ferrão
+        double[][] tail = { { 0.17, -0.26, 0.12 }, { 0.24, -0.34, 0.11 }, { 0.34, -0.38, 0.1 }, { 0.45, -0.36, 0.1 }, { 0.54, -0.3, 0.09 } };
+        for (double[] sg : tail) {
+            l.add(b(0, sg[0] * s, sg[1] * s, sg[2] * s, 0.1 * s, 0.1 * s, C));
+            l.add(b(0, sg[0] * s + 0.051 * s, sg[1] * s, sg[2] * 0.7 * s, 0.006 * s, 0.06 * s, J));
+        }
+        l.add(b(0, 0.58 * s, -0.2 * s, 0.1 * s, 0.09 * s, 0.11 * s, L));                 // bulbo do veneno
+        l.add(b(0, 0.55 * s, -0.12 * s, 0.035 * s, 0.045 * s, 0.08 * s, T));            // ferrão
+        l.add(b(0, 0.51 * s, -0.08 * s, 0.02 * s, 0.035 * s, 0.04 * s, T));
+        return l.toArray(new Box[0]);
+    }
+
+    /** Tigre (as cores vêm da paleta: laranja ou branco). */
+    private static Box[] tigerModel() {
+        int P = 1, S = 2, L = 3, E = 4, nose = 0xC8787A, mouth = 0x2A1A16;
+        java.util.List<Box> l = new java.util.ArrayList<>();
+        double[][] legs = { { -0.18, 0.5, 1, 0 }, { 0.18, 0.5, 2, 0 }, { -0.18, -0.5, 2, 1 }, { 0.18, -0.5, 1, 1 } };
+        for (double[] lg : legs) {
+            int ph = (int) lg[2];
+            double x = lg[0], z = lg[1];
+            if (lg[3] == 0) { // dianteiras fortes
+                l.add(legp(x, 0.6, z, 0.2, 0.3, 0.22, P, ph, 0.8));
+                l.add(legp(x, 0.28, z, 0.16, 0.36, 0.17, P, ph, 0.8));
+                l.add(legp(x, 0.62, z, 0.205, 0.04, 0.225, S, ph, 0.8));
+                l.add(legp(x, 0.4, z, 0.165, 0.035, 0.175, S, ph, 0.8));
+            } else {          // traseiras: coxa grande listrada
+                l.add(legp(x, 0.62, z, 0.24, 0.36, 0.32, P, ph, 0.82));
+                l.add(legp(x, 0.28, z - 0.05, 0.15, 0.36, 0.17, P, ph, 0.82));
+                l.add(legp(x, 0.7, z, 0.245, 0.04, 0.325, S, ph, 0.82));
+                l.add(legp(x, 0.56, z + 0.04, 0.245, 0.035, 0.2, S, ph, 0.82));
+                l.add(legp(x, 0.36, z - 0.05, 0.155, 0.03, 0.175, S, ph, 0.82));
+            }
+            l.add(legp(x, 0.05, z + 0.03, 0.2, 0.1, 0.24, L, ph, 0.8));   // pata clara
+            for (int t = -1; t <= 1; t++) l.add(legp(x + t * 0.055, 0.04, z + 0.155, 0.04, 0.06, 0.02, P, ph, 0.8)); // dedos
+        }
+        l.add(b(0, 0.82, 0, 0.5, 0.46, 1.3, P));                          // tronco
+        l.add(b(0, 0.86, 0.48, 0.54, 0.5, 0.34, P));                      // ombros
+        l.add(b(0, 0.585, 0.02, 0.42, 0.03, 1.1, L));                     // barriga
+        l.add(b(0, 0.75, 0.62, 0.44, 0.36, 0.08, L));                     // peito
+        double[] sz = { -0.56, -0.38, -0.2, -0.02, 0.16, 0.34, 0.52 };
+        for (int k = 0; k < sz.length; k++) { // listras: atravessam as costas e descem pelos lados em comprimentos diferentes
+            double z = sz[k], len = 0.14 + (k % 3) * 0.05;
+            l.add(b(0, 1.052, z, 0.36, 0.01, 0.05, S));
+            l.add(b(-0.252, 1.05 - len / 2 - 0.02, z + 0.02, 0.01, len, 0.045, S));
+            l.add(b(0.252, 1.05 - len / 2 - 0.02, z - 0.02, 0.01, len, 0.045, S));
+            if (k % 2 == 0) { l.add(b(-0.252, 0.72, z + 0.06, 0.01, 0.1, 0.035, S)); l.add(b(0.252, 0.74, z - 0.05, 0.01, 0.08, 0.035, S)); }
+        }
+        // cauda comprida, caída e com a ponta subindo; anéis escuros e ponta preta
+        l.add(b(0, 0.95, -0.7, 0.1, 0.1, 0.14, P)); l.add(b(0, 0.95, -0.66, 0.105, 0.105, 0.03, S));
+        l.add(b(0, 0.86, -0.82, 0.09, 0.09, 0.14, P)); l.add(b(0, 0.86, -0.84, 0.095, 0.095, 0.03, S));
+        l.add(b(0, 0.74, -0.92, 0.09, 0.12, 0.1, P)); l.add(b(0, 0.74, -0.92, 0.095, 0.03, 0.105, S));
+        l.add(b(0, 0.66, -1.0, 0.08, 0.1, 0.1, P));
+        l.add(b(0, 0.62, -1.07, 0.09, 0.1, 0.08, S));
+        // pescoço e cabeça grande
+        l.add(b(0, 0.96, 0.7, 0.36, 0.34, 0.2, P));
+        l.add(b(0, 1.02, 0.86, 0.44, 0.38, 0.34, P));
+        l.add(b(-0.235, 0.94, 0.84, 0.06, 0.2, 0.24, L)); l.add(b(0.235, 0.94, 0.84, 0.06, 0.2, 0.24, L)); // bochechas peludas
+        l.add(b(-0.268, 0.96, 0.84, 0.01, 0.04, 0.16, S)); l.add(b(0.268, 0.96, 0.84, 0.01, 0.04, 0.16, S));
+        l.add(b(0, 0.9, 1.06, 0.24, 0.16, 0.14, L));                      // focinho
+        l.add(b(0, 1.0, 1.05, 0.1, 0.06, 0.12, P));                       // ponte do nariz
+        l.add(b(0, 0.96, 1.135, 0.1, 0.06, 0.02, nose));
+        l.add(b(0, 0.84, 1.1, 0.16, 0.02, 0.06, mouth));
+        l.add(b(0, 0.81, 1.0, 0.16, 0.04, 0.12, L));                      // queixo
+        for (int side = -1; side <= 1; side += 2) {
+            l.add(b(side * 0.07, 0.89, 1.135, 0.03, 0.03, 0.01, mouth));    // pintinhas dos bigodes
+            l.add(b(side * 0.17, 0.9, 1.1, 0.14, 0.006, 0.006, 0xF8F8F8)); // bigodes
+            l.add(b(side * 0.11, 1.07, 1.031, 0.12, 0.08, 0.01, L));        // contorno claro do olho
+            l.add(eye(side * 0.11, 1.07, 1.036, 0.06, E));
+            l.add(b(side * 0.11, 1.07, 1.041, 0.015, 0.045, 0.005, 0x101010));
+            l.add(b(side * 0.08, 1.19, 0.96, 0.03, 0.02, 0.14, S));         // listras da testa
+            l.add(b(side * 0.16, 1.24, 0.8, 0.12, 0.1, 0.06, P));           // orelhas
+            l.add(b(side * 0.16, 1.24, 0.769, 0.12, 0.1, 0.01, S));
+            l.add(b(side * 0.16, 1.235, 0.763, 0.05, 0.05, 0.005, L));      // pinta branca atrás da orelha
+            l.add(b(side * 0.16, 1.235, 0.832, 0.07, 0.06, 0.005, 0xD8A8A0));
+        }
+        l.add(b(0, 1.2, 0.95, 0.04, 0.02, 0.18, S));
+        return l.toArray(new Box[0]);
+    }
+
+    /** Gato (cores pela variante). */
+    private static Box[] catModel() {
+        int P = 1, S = 2, L = 3, E = 4;
+        java.util.List<Box> l = new java.util.ArrayList<>();
+        double[][] legs = { { -0.07, 0.18, 1 }, { 0.07, 0.18, 2 }, { -0.07, -0.2, 2 }, { 0.07, -0.2, 1 } };
+        for (double[] lg : legs) {
+            int ph = (int) lg[2];
+            l.add(legp(lg[0], 0.13, lg[1], 0.07, 0.24, 0.07, P, ph, 0.26));
+            l.add(legp(lg[0], 0.16, lg[1], 0.072, 0.02, 0.072, S, ph, 0.26));
+            l.add(legp(lg[0], 0.02, lg[1] + 0.01, 0.08, 0.04, 0.09, L, ph, 0.26));
+        }
+        l.add(b(0, 0.31, 0, 0.2, 0.18, 0.48, P));
+        l.add(b(0, 0.215, 0.02, 0.16, 0.02, 0.4, L));
+        for (double z : new double[] { -0.15, -0.05, 0.05, 0.15 }) {
+            l.add(b(0, 0.403, z, 0.14, 0.01, 0.03, S));
+            l.add(b(-0.101, 0.33, z, 0.005, 0.1, 0.025, S)); l.add(b(0.101, 0.33, z, 0.005, 0.1, 0.025, S));
+        }
+        l.add(b(0, 0.4, -0.28, 0.05, 0.05, 0.1, P));                      // rabo erguido
+        l.add(b(0, 0.5, -0.33, 0.05, 0.18, 0.05, P));
+        l.add(b(0, 0.5, -0.33, 0.055, 0.02, 0.055, S));
+        l.add(b(0, 0.62, -0.3, 0.05, 0.06, 0.08, P));
+        l.add(b(0, 0.64, -0.25, 0.05, 0.05, 0.04, S));
+        l.add(b(0, 0.42, 0.28, 0.2, 0.17, 0.16, P));                      // cabeça
+        l.add(b(0, 0.38, 0.37, 0.09, 0.06, 0.04, L));
+        l.add(b(0, 0.405, 0.392, 0.03, 0.02, 0.01, 0xD07878));
+        l.add(b(0, 0.506, 0.3, 0.03, 0.005, 0.08, S));
+        for (int side = -1; side <= 1; side += 2) {
+            l.add(eye(side * 0.05, 0.45, 0.362, 0.04, E));
+            l.add(b(side * 0.05, 0.45, 0.366, 0.008, 0.03, 0.004, 0x101010)); // pupila fina
+            l.add(b(side * 0.06, 0.535, 0.27, 0.05, 0.06, 0.03, P));          // orelhas
+            l.add(b(side * 0.06, 0.57, 0.27, 0.03, 0.025, 0.03, P));
+            l.add(b(side * 0.06, 0.53, 0.287, 0.03, 0.035, 0.004, 0xE0A0A0));
+            l.add(b(side * 0.09, 0.38, 0.37, 0.08, 0.005, 0.005, 0xF4F4F4)); // bigodes
+            l.add(b(side * 0.09, 0.37, 0.37, 0.08, 0.005, 0.005, 0xF4F4F4));
+        }
+        return l.toArray(new Box[0]);
+    }
+
+    static {
+        MODELS[TIGER] = tigerModel();
+        MODELS[WHITE_TIGER] = tigerModel();
+        MODELS[CAT] = catModel();
+        MODELS[SCORPION] = scorpionModel(1.0);
+        MODELS[EMPEROR] = scorpionModel(2.4);
+    }
+
     /** O desenho certo para o estado atual (esqueleto mirando, lobo sentado/domesticado, cervo macho...). */
     private Box[] currentModel() {
         if (type == SKELETON && aim > 0.05) return SKELETON_AIM;
@@ -1207,7 +1410,7 @@ final class Mob extends Entity {
         // creeper com o pavio aceso: pisca de branco e incha
         boolean flash = fuse > 0 && ((int) (fuse * 9)) % 2 == 0;
         double swell = fuse > 0 ? 1 + 0.18 * Math.min(1, fuse / FUSE_TIME) : 1;
-        int[][] palette = type == BIRD ? BIRD_COLORS : type == TROPICAL ? TROPICAL_COLORS : null;
+        int[] palette = palette();
         // asas: batendo no voo, dobradas para baixo quando pousado; caudas de peixe balançam para os lados
         double wingA = type == BIRD ? (flying ? Math.sin(walk * 7) * 0.9 + 0.15 : -1.35) : 0;
         double tailA = Math.sin(walk * 5) * (type == SHARK ? 0.3 : 0.45);
@@ -1220,7 +1423,7 @@ final class Mob extends Entity {
             else if (bx.leg == WING_L || bx.leg == WING_R) { angle = bx.leg == WING_L ? wingA : -wingA; mode = 2; }
             else if (bx.leg == TAIL) { angle = tailA; mode = 3; }
             else if (bx.leg != 0) mode = 1;
-            boolean spiderLeg = type == SPIDER && bx.leg != 0;
+            boolean spiderLeg = (type == SPIDER || scorpion()) && bx.leg >= 1 && bx.leg <= 4;
             if (spiderLeg) { oz = Math.sin(walk * 7 + bx.leg * 2.0) * 0.12 * Math.min(1, swing * 3 + 0.05); angle = 0; }
             double hx = bx.sx / 2 * swell, hy = bx.sy / 2, hz = bx.sz / 2 * swell;
             // 8 cantos da caixa, com a perna girando em volta do topo
@@ -1250,7 +1453,7 @@ final class Mob extends Entity {
                 c[i][2] = z - mx * sy + mz * cy;
             }
             int col = bx.color;
-            if (palette != null && col >= 1 && col <= 3) col = palette[variant()][col - 1];
+            if (palette != null && col >= 1 && col <= palette.length) col = palette[col - 1];
             for (int f = 0; f < 6; f++) {
                 double l = bx.glow ? 1.0 : FACE_SHADE[f] * light;
                 double r = ((col >> 16) & 255) / 255.0 * l, g = ((col >> 8) & 255) / 255.0 * l, b = (col & 255) / 255.0 * l;

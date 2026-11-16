@@ -173,20 +173,24 @@ final class Mobs {
         int top = w.grassTop(x, z);
         if (top < 0) return;
         int ground = w.get(x, top, z), biome = w.biomeAt(x, z, top);
-        if (ground != Block.GRASS && !(ground == Block.SNOW && biome == World.TUNDRA)) return;
+        boolean desert = ground == Block.SAND && biome == World.DESERT;
+        if (ground != Block.GRASS && !(ground == Block.SNOW && biome == World.TUNDRA) && !desert) return;
         // cada bioma tem seus bichos: fazenda nas planícies, selvagens nas florestas e na tundra
         int[] pool;
-        if (biome == World.FOREST || biome == World.BIRCH_FOREST)
-            pool = new int[] { Mob.DEER, Mob.DEER, Mob.FOX, Mob.RABBIT, Mob.WOLF, Mob.PIG, Mob.COW, Mob.BEAR };
+        if (desert) // deserto: escorpiões (o imperador é raro) e alguns coelhos
+            pool = new int[] { Mob.SCORPION, Mob.SCORPION, Mob.SCORPION, Mob.RABBIT, Mob.EMPEROR };
+        else if (biome == World.FOREST || biome == World.BIRCH_FOREST)
+            pool = new int[] { Mob.DEER, Mob.DEER, Mob.FOX, Mob.RABBIT, Mob.WOLF, Mob.PIG, Mob.COW, Mob.BEAR, Mob.TIGER };
         else if (biome == World.TUNDRA)
-            pool = new int[] { Mob.WOLF, Mob.FOX, Mob.RABBIT, Mob.RABBIT, Mob.BEAR, Mob.DEER };
+            pool = new int[] { Mob.WOLF, Mob.FOX, Mob.RABBIT, Mob.RABBIT, Mob.BEAR, Mob.DEER, Mob.WHITE_TIGER };
         else if (biome == World.MOUNTAINS)
             pool = new int[] { Mob.SHEEP, Mob.SHEEP, Mob.RABBIT, Mob.WOLF };
         else
-            pool = new int[] { Mob.PIG, Mob.SHEEP, Mob.CHICKEN, Mob.COW, Mob.PIG, Mob.SHEEP, Mob.CHICKEN, Mob.COW, Mob.RABBIT, Mob.FOX, Mob.DEER };
+            pool = new int[] { Mob.PIG, Mob.SHEEP, Mob.CHICKEN, Mob.COW, Mob.PIG, Mob.SHEEP, Mob.CHICKEN, Mob.COW, Mob.RABBIT, Mob.FOX, Mob.DEER, Mob.CAT };
         int type = pool[rnd.nextInt(pool.length)];
-        if (type == Mob.BEAR && rnd.nextDouble() < 0.5) type = Mob.DEER; // urso é raro
-        int n = type == Mob.BEAR ? 1 : type == Mob.WOLF ? 2 + rnd.nextInt(2) : type == Mob.FOX ? 1 : 1 + rnd.nextInt(3);
+        if ((type == Mob.BEAR || type == Mob.TIGER || type == Mob.WHITE_TIGER) && rnd.nextDouble() < 0.5) type = Mob.DEER; // urso e tigre são raros
+        if (type == Mob.EMPEROR && rnd.nextDouble() < 0.5) type = Mob.SCORPION;
+        int n = type == Mob.BEAR || type == Mob.TIGER || type == Mob.WHITE_TIGER || type == Mob.EMPEROR || type == Mob.CAT ? 1 : type == Mob.WOLF ? 2 + rnd.nextInt(2) : type == Mob.FOX ? 1 : 1 + rnd.nextInt(3);
         for (int i = 0; i < n; i++) {
             double mx = x + 0.5 + rnd.nextDouble() * 2 - 1, mz = z + 0.5 + rnd.nextDouble() * 2 - 1;
             Mob m = new Mob(type, mx, top + 1.01, mz);

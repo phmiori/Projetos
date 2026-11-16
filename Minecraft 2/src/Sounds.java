@@ -58,6 +58,8 @@ final class Sounds {
             { "urso", "urso rosnando" },
             { "raposa", "raposa" },
             { "domar", "lobo domesticado (alegre)" },
+            { "rugido", "tigre rugindo" },
+            { "miau", "gato miando" },
             { "arco_tensao", "puxar a corda do arco" },
             { "arco_disparo", "soltar a flecha" },
             { "flecha_madeira", "flecha prendendo em madeira, terra ou planta" },
@@ -335,6 +337,8 @@ final class Sounds {
             case "lobo": return mix(lowpass(tone(0.14, 520, 380, 14, 0.5, 1), 0.3), shift(lowpass(tone(0.12, 480, 360, 16, 0.4, 1), 0.3), 0.2));
             case "urso": return lowpass(mix(vibrato(0.9, 70, 9, 0.18, 0.6, 1), noise(r, 0.9, 0.25, 2.5, 0.25)), 0.1);
             case "raposa": return mix(shift(tone(0.09, 900, 1400, 18, 0.3, 1), 0.0), shift(tone(0.08, 1000, 1500, 20, 0.25, 1), 0.14));
+            case "rugido": return lowpass(mix(vibrato(1.2, 90, 5, 0.3, 0.75, 1), noise(r, 1.2, 0.3, 1.5, 0.45)), 0.13);
+            case "miau": return mix(tone(0.12, 620, 900, 7, 0.32, 1), shift(tone(0.28, 900, 520, 5, 0.32, 1), 0.1));
             case "domar": return mix(shift(tone(0.1, 660, 660, 12, 0.3, 2), 0.0), mix(shift(tone(0.1, 830, 830, 12, 0.3, 2), 0.1), shift(tone(0.2, 990, 990, 8, 0.3, 2), 0.2)));
             case "pavio": return tremolo(noise(r, 1.2, 0.95, 1.2, 0.3), 30);
             case "explosao": return mix(lowpass(noise(r, 1.4, 0.2, 3.5, 1.0), 0.12), tone(0.6, 70, 30, 5, 0.7, 0));
