@@ -1120,7 +1120,7 @@ public class BlockGame {
     private void dropHeld(boolean all) {
         if (inv.empty(slot)) return;
         int item = inv.id[slot], n = all ? inv.count[slot] : 1, w = inv.wear[slot];
-        if (!creative) inv.set(slot, item, inv.count[slot] - n, w);
+        inv.set(slot, item, inv.count[slot] - n, w); // também no criativo: o item sai da mão (não duplica)
         double cp = Math.cos(player.pitch);
         double lx = Math.sin(player.yaw) * cp, ly = Math.sin(player.pitch), lz = Math.cos(player.yaw) * cp;
         drops.spawn(item, n, w, player.x + lx * 0.3, player.y + Player.EYE - 0.3, player.z + lz * 0.3,
@@ -3748,7 +3748,8 @@ public class BlockGame {
             drawItem(g, it, 1, 0, cx + 5, cy + 5, sz - 10, false);
             if (hv) tooltip = Items.name(it);
             ui.region(r, (btn, shift) -> {
-                if (btn == 1) { cursorId = it; cursorCount = Items.maxStack(it); cursorWear = 0; }
+                if (btn == 1 && cursorCount > 0 && cursorId == it) { cursorCount = 0; cursorId = 0; cursorWear = 0; } // clicou de novo no mesmo: devolve ao menu
+                else if (btn == 1) { cursorId = it; cursorCount = Items.maxStack(it); cursorWear = 0; }
                 else if (btn == 3) {
                     if (cursorCount > 0 && cursorId == it) cursorCount = Math.min(Items.maxStack(it), cursorCount + 1);
                     else { cursorId = it; cursorCount = 1; cursorWear = 0; }
