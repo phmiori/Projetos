@@ -163,6 +163,8 @@ public class BlockGame {
         final Inventory inv = new Inventory(); // 0 entrada, 1 combustível, 2 resultado
         double heat, heatMax, progress;
         boolean burning;
+        /** Amigo com a tela desta fornalha aberta: enquanto isso, quem assa é ele (o anfitrião espera). */
+        Net.Connection heldBy;
 
         String serialize() { return inv.serialize(3) + "|" + heat + "|" + heatMax + "|" + progress; }
 
@@ -456,14 +458,14 @@ public class BlockGame {
                     break;
                 }
                 gameUpdate(dt);
-                tickFurnaces(dt);
-                break;
-            case INVENTORY:
-                tickFurnaces(dt);
                 break;
             default:
                 break;
         }
+        // fornalhas assam com o jogo rodando (no inventário também); na LAN, mesmo com o menu de pausa aberto
+        if (world != null && player != null && !warming && state != State.LOADING
+                && (state == State.PLAYING || state == State.INVENTORY || multiplayer()))
+            tickFurnaces(dt);
     }
 
     /**
@@ -499,9 +501,15 @@ public class BlockGame {
      */
     private void tickFurnaces(double dt) {
         if (world == null) return;
-        if (toHost != null) {
-            if (furnaceOpen) tickFurnace(furn, dt);
-            else furn.burning = false;
+        if (toHost != null) { // amigo: assa a fornalha que está aberta; fechada, quem assa é o anfitrião
+            if (!furnaceOpen) return;
+            int b = world.get(furnaceX, furnaceY, furnaceZ);
+            if (b != Block.FURNACE && b != Block.FURNACE_LIT) { // quebraram a fornalha: o anfitrião já espalhou os itens
+                furn = new Furnace(); furnaceInv = furn.inv;
+                closeInventory();
+                return;
+            }
+            tickFurnace(furn, dt);
             showFurnaceFire(furnaceX, furnaceY, furnaceZ, furn.burning);
             return;
         }
@@ -514,9 +522,11 @@ public class BlockGame {
             int b = world.get(x, y, z);
             if (b != Block.FURNACE && b != Block.FURNACE_LIT) { it.remove(); continue; }
             Furnace fu = e.getValue();
+            if (fu.heldBy != null && !fu.heldBy.closed) continue; // um amigo está com ela aberta
+            fu.heldBy = null;
             tickFurnace(fu, dt);
             showFurnaceFire(x, y, z, fu.burning);
-            if (fu != furn && fu.inv.empty(0) && fu.inv.empty(1) && fu.inv.empty(2) && fu.heat <= 0) it.remove(); // vazia: nada a guardar
+            if (fu != furn && fu.heldBy == null && fu.inv.empty(0) && fu.inv.empty(1) && fu.inv.empty(2) && fu.heat <= 0) it.remove(); // vazia: nada a guardar
         }
     }
 
@@ -1703,14 +1713,18 @@ public class BlockGame {
         releaseMouse();
     }
 
+    /** Abre a fornalha. No mundo de um amigo ela fica com o anfitrião: pede o conteúdo e abre quando chegar. */
     private void openFurnace(int x, int y, int z) {
+        if (toHost != null) { toHost.send(new Net.Out(Net.FURNACE_OPEN).i(x).i(y).i(z)); return; }
+        String key = chestKey(x, y, z);
+        Furnace f = furnaces.get(key);
+        if (f == null) { f = new Furnace(); furnaces.put(key, f); }
+        showFurnace(x, y, z, f);
+    }
+
+    private void showFurnace(int x, int y, int z, Furnace f) {
         furnaceX = x; furnaceY = y; furnaceZ = z;
-        if (toHost != null) furn = new Furnace(); // amigo: fornalha só enquanto a tela está aberta
-        else {
-            String key = chestKey(x, y, z);
-            furn = furnaces.get(key);
-            if (furn == null) { furn = new Furnace(); furnaces.put(key, furn); }
-        }
+        furn = f;
         furnaceInv = furn.inv;
         furnaceOpen = true;
         state = State.INVENTORY;
@@ -1727,12 +1741,7 @@ public class BlockGame {
         chestKey = null;
         // o que ficou na grade, na fornalha ou preso no mouse volta para a mochila (se não couber, cai no chão)
         for (int i = 0; i < 9; i++) giveBack(craftGrid, i, true);
-        if (toHost != null) { // amigo: a fornalha não fica guardada, então devolve tudo e apaga
-            for (int i = 0; i < 3; i++) giveBack(furnaceInv, i, true);
-            furn.heat = furn.heatMax = furn.progress = 0;
-            furn.burning = false;
-            showFurnaceFire(furnaceX, furnaceY, furnaceZ, false);
-        }
+        if (furnaceOpen && toHost != null) sendFurnaceBack();
         furnaceOpen = false;
         if (cursorCount > 0) {
             int left = returnCursor();
@@ -1780,13 +1789,20 @@ public class BlockGame {
         enterLobby();
     }
 
+    /** Amigo: a fornalha fechada volta para o anfitrião, com o que tem dentro e o fogo como estão. */
+    private void sendFurnaceBack() {
+        toHost.send(new Net.Out(Net.FURNACE_SET).i(furnaceX).i(furnaceY).i(furnaceZ).s(furn.serialize()));
+        toHost.flush();
+    }
+
     private void closeCursorItem() {
         if (cursorCount > 0 && world != null) returnCursor();
         cursorId = cursorCount = cursorWear = 0;
         if (world != null) { // saindo com a grade ou a fornalha cheias: os itens voltam para a mochila antes de salvar
             for (int i = 0; i < 9; i++) giveBack(craftGrid, i, false);
-            if (toHost != null) for (int i = 0; i < 3; i++) giveBack(furnaceInv, i, false);
+            if (furnaceOpen && toHost != null) sendFurnaceBack();
         }
+        furnaceOpen = false;
         craftGrid.clear();
         furn = new Furnace(); // a do mundo fica guardada em furnaces (e é salva)
         furnaceInv = furn.inv;
@@ -2114,6 +2130,35 @@ public class BlockGame {
                 p.from.send(new Net.Out(Net.CHEST_DATA).i(x).i(y).i(z).s(c == null ? "" : c.serialize(Inventory.CHEST)));
                 break;
             }
+            case Net.FURNACE_OPEN: {
+                if (r == null) return;
+                int x = d.readInt(), y = d.readInt(), z = d.readInt();
+                int fb = world.get(x, y, z);
+                if (fb != Block.FURNACE && fb != Block.FURNACE_LIT) return;
+                String key = chestKey(x, y, z);
+                Furnace f = furnaces.get(key);
+                if (f == null) { f = new Furnace(); furnaces.put(key, f); }
+                if (f == furn && furnaceOpen) { p.from.send(new Net.Out(Net.TOAST).s("O anfitrião está usando essa fornalha")); return; }
+                if (f.heldBy != null && !f.heldBy.closed && f.heldBy != p.from) { p.from.send(new Net.Out(Net.TOAST).s("Outro jogador está usando essa fornalha")); return; }
+                f.heldBy = p.from;
+                p.from.send(new Net.Out(Net.FURNACE_DATA).i(x).i(y).i(z).s(f.serialize()));
+                break;
+            }
+            case Net.FURNACE_SET: {
+                if (r == null) return;
+                int x = d.readInt(), y = d.readInt(), z = d.readInt();
+                String data = d.readUTF();
+                String key = chestKey(x, y, z);
+                Furnace f = furnaces.get(key);
+                if (f == null || f.heldBy != p.from) return; // só quem abriu devolve
+                int fb = world.get(x, y, z);
+                if (fb != Block.FURNACE && fb != Block.FURNACE_LIT) return;
+                Furnace got = Furnace.parse(data);
+                for (int k = 0; k < 3; k++) f.inv.set(k, got.inv.id[k], got.inv.count[k], got.inv.wear[k]);
+                f.heat = got.heat; f.heatMax = got.heatMax; f.progress = got.progress;
+                f.heldBy = null;
+                break;
+            }
             case Net.CHEST_SET: {
                 if (r == null) return;
                 int x = d.readInt(), y = d.readInt(), z = d.readInt();
@@ -2290,6 +2335,16 @@ public class BlockGame {
                 float x = d.readFloat(), y = d.readFloat(), z = d.readFloat();
                 if (a != null) arrows.list.remove(a);
                 if (kind == 1 && world != null && player != null) arrowHitEffects(x, y, z);
+                break;
+            }
+            case Net.FURNACE_DATA: {
+                int x = d.readInt(), y = d.readInt(), z = d.readInt();
+                String data = d.readUTF();
+                if (world == null || state != State.PLAYING) { // não dá para abrir agora: devolve na hora
+                    toHost.send(new Net.Out(Net.FURNACE_SET).i(x).i(y).i(z).s(data));
+                    break;
+                }
+                showFurnace(x, y, z, Furnace.parse(data));
                 break;
             }
             case Net.CHEST_DATA: {
