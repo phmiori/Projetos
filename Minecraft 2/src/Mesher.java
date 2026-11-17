@@ -134,6 +134,8 @@ final class Mesher {
                     }
 
                     int rot = Block.rotatable(b) ? w.rotation(x, y, z) : 0;
+                    // grama e areia: o topo gira ao acaso (sempre o mesmo para cada posição) para a textura não repetir
+                    int topRot = rot == 0 && (b == Block.GRASS || b == Block.SAND) ? randomRot(x, y, z) : rot;
                     for (int f = 0; f < 6; f++) {
                         int[] n = N[f];
                         int nbk = B.at(x + n[0], y + n[1], z + n[2]);
@@ -169,7 +171,7 @@ final class Mesher {
                             int pz = (1 + n[2] + SR[k] * r[2] + SU[k] * u[2]) * 8;
                             out.add(pos(ox + px, oy + py, oz + pz),
                                     L(layer) | sky[k] << 10 | blk[k] << 14 | flags << 18 | surface << 22,
-                                    rot != 0 && (f == 2 || f == 3) ? topUv(f, k, rot, occ[k]) : uv(SR[k] > 0 ? 16 : 0, SU[k] > 0 ? 16 : 0, f, occ[k], k));
+                                    topRot != 0 && (f == 2 || f == 3) ? topUv(f, k, topRot, occ[k]) : uv(SR[k] > 0 ? 16 : 0, SU[k] > 0 ? 16 : 0, f, occ[k], k));
                         }
                     }
                 }
@@ -289,5 +291,13 @@ final class Mesher {
 
     /** Camada de textura no vértice: 10 bits embaixo e o 11º no bit 26 (os bits 10..25 são luz, efeitos e água). */
     static int L(int layer) { return (layer & 1023) | (layer >> 10) << 26; }
+
+
+    /** Giro de 0 a 3 (quartos de volta) sorteado pela posição do bloco: muda de bloco para bloco, mas nunca muda com o tempo. */
+    static int randomRot(int x, int y, int z) {
+        int h = x * 73856093 ^ y * 19349663 ^ z * 83492791;
+        h ^= h >>> 13; h *= 0x5bd1e995; h ^= h >>> 15;
+        return h & 3;
+    }
 
 }
