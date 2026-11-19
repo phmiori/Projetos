@@ -64,7 +64,7 @@ final class Items {
     static int tool(int kind, int mat) { return TOOL_BASE + kind * 4 + mat; }
     static int armor(int piece, int mat) { return ARMOR_BASE + piece * 3 + mat; }
 
-    static boolean isBlock(int id) { return id > 0 && id < Block.COUNT; }
+    static boolean isBlock(int id) { return id > 0 && id < Block.COUNT && id < FIRST_ITEM; } // ids 200+ são itens (variantes de bloco acima de 200 nunca viram item)
     static boolean isTool(int id) { return id >= TOOL_BASE && id <= LAST_TOOL; }
     static boolean isArmor(int id) { return id >= ARMOR_BASE && id <= LAST_ARMOR; }
     /** Item que não empilha e gasta com o uso: ferramentas, armaduras e a pederneira. */
@@ -163,6 +163,14 @@ final class Items {
 
         Recipe(int out, int outCount, int w, int h, int[] cells, boolean shapeless) {
             this.out = out; this.outCount = outCount; this.w = w; this.h = h; this.cells = cells; this.shapeless = shapeless;
+        }
+
+        /**
+         * Peça de uma madeira certa (escada, laje, porta, cerca): aí as tábuas comuns e as de bétula NÃO valem
+         * uma pela outra, cada madeira faz a sua peça.
+         */
+        boolean woodPiece() {
+            return Items.isBlock(out) && (Block.isStair(out) || Block.isSlab(out) || Block.isVSlab(out) || Block.isDoor(out) || Block.isFence(out));
         }
 
         /** Precisa da grade 3x3 da bancada? */
@@ -267,6 +275,9 @@ final class Items {
         }
         r.add(shaped(Block.door(0, 0, 0), 3, "PP|PP|PP", 'P', P));
         r.add(shaped(Block.FENCE, 3, "PSP|PSP", 'P', P, 'S', S));
+        int BP = Block.BIRCH_PLANKS;
+        r.add(shaped(Block.door(Block.WOOD_BIRCH, 0, 0, 0), 3, "PP|PP|PP", 'P', BP));
+        r.add(shaped(Block.BIRCH_FENCE, 3, "PSP|PSP", 'P', BP, 'S', S));
         r.add(shaped(Block.BED, 1, "WWW|PPP", 'W', Block.WOOL, 'P', P));
         r.add(shaped(Block.TNT, 1, "GSG|SGS|GSG", 'G', GUNPOWDER, 'S', Block.SAND));
         r.add(shaped(Block.GLASS_PANE, 16, "GGG|GGG", 'G', Block.GLASS));
@@ -293,12 +304,22 @@ final class Items {
                 }
         if (n == 0) return null;
         int w = maxX - minX + 1, h = maxY - minY + 1;
+        // primeiro procura a receita com os itens exatos; depois aceita tábuas de bétula no lugar das comuns
+        for (int pass = 0; pass < 2; pass++) {
+            Recipe r = matchPass(grid, size, n, minX, minY, w, h, pass == 1);
+            if (r != null) return r;
+        }
+        return null;
+    }
+
+    private static Recipe matchPass(int[] grid, int size, int n, int minX, int minY, int w, int h, boolean loose) {
         for (Recipe r : RECIPES) {
+            if (loose && r.woodPiece()) continue;
             if (r.shapeless) {
                 if (r.cells.length != n) continue;
                 int[] a = new int[n], b = r.cells.clone();
                 int k = 0;
-                for (int c : grid) if (c != 0) a[k++] = same(c);
+                for (int c : grid) if (c != 0) a[k++] = loose ? same(c) : c;
                 java.util.Arrays.sort(a);
                 java.util.Arrays.sort(b);
                 if (java.util.Arrays.equals(a, b)) return r;
@@ -310,7 +331,8 @@ final class Items {
                 for (int y = 0; y < h && ok; y++)
                     for (int x = 0; x < w && ok; x++) {
                         int want = r.at(mirror == 0 ? x : w - 1 - x, y);
-                        if (same(grid[(minY + y) * size + minX + x]) != want) ok = false;
+                        int got = grid[(minY + y) * size + minX + x];
+                        if ((loose ? same(got) : got) != want) ok = false;
                     }
                 if (ok) return r;
             }

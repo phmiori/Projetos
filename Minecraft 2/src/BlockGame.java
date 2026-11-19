@@ -881,8 +881,9 @@ public class BlockGame {
         else if (Block.isDoor(held)) {
             if (!isReplaceable(bx, by + 1, bz) || !Block.solid(world.get(bx, by - 1, bz))) return;
             if (player.intersects(bx, by, bz) || player.intersects(bx, by + 1, bz)) return;
-            world.set(bx, by + 1, bz, Block.door(1, facing, 0));
-            setAndPay(bx, by, bz, Block.door(0, facing, 0), held);
+            int wood = Block.doorWood(held);
+            world.set(bx, by + 1, bz, Block.door(wood, 1, facing, 0));
+            setAndPay(bx, by, bz, Block.door(wood, 0, facing, 0), held);
             return;
         }
         boolean supported = !Block.needsSupport(place) || Block.solid(world.get(bx, by - 1, bz));
@@ -920,9 +921,9 @@ public class BlockGame {
         int lowerY = Block.doorHalf(b) == 0 ? y : y - 1;
         int lower = world.get(x, lowerY, z);
         if (!Block.isDoor(lower)) return;
-        int f = Block.doorFacing(lower), open = Block.doorOpen(lower) ? 0 : 1;
-        world.set(x, lowerY, z, Block.door(0, f, open));
-        if (Block.isDoor(world.get(x, lowerY + 1, z))) world.set(x, lowerY + 1, z, Block.door(1, f, open));
+        int f = Block.doorFacing(lower), open = Block.doorOpen(lower) ? 0 : 1, wood = Block.doorWood(lower);
+        world.set(x, lowerY, z, Block.door(wood, 0, f, open));
+        if (Block.isDoor(world.get(x, lowerY + 1, z))) world.set(x, lowerY + 1, z, Block.door(wood, 1, f, open));
         Sounds.playAt("quebrar_madeira", x + 0.5, lowerY + 1, z + 0.5, player, 0.5);
     }
 
@@ -3972,18 +3973,18 @@ public class BlockGame {
         int sets = max ? Math.min(times, 64) : 1;
         int n = craftSize;
         if (r.shapeless) {
-            for (int k = 0; k < r.cells.length; k++) fillCell(k, r.cells[k], sets);
+            for (int k = 0; k < r.cells.length; k++) fillCell(k, r.cells[k], sets, r.woodPiece());
         } else {
             for (int y = 0; y < r.h; y++)
                 for (int x = 0; x < r.w; x++)
-                    if (r.at(x, y) != 0) fillCell(y * n + x, r.at(x, y), sets);
+                    if (r.at(x, y) != 0) fillCell(y * n + x, r.at(x, y), sets, r.woodPiece());
         }
         Sounds.play("clique", 0.4);
     }
 
     /** Põe na casa k da grade sets itens do ingrediente (tábuas: as comuns ou as de bétula, o que houver). */
-    private void fillCell(int k, int item, int sets) {
-        int id = inv.variantFor(item, sets);
+    private void fillCell(int k, int item, int sets, boolean exact) {
+        int id = exact ? item : inv.variantFor(item, sets);
         int n = Math.min(sets, inv.countOf(id));
         if (n <= 0) return;
         inv.remove(id, n);

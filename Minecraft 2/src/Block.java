@@ -36,10 +36,21 @@ final class Block {
     static final int FURNACE_LIT = 170;
     /** Tábuas de bétula: iguais às tábuas comuns, com a madeira clara. */
     static final int BIRCH_PLANKS = 171;
-    static final int COUNT = 172;
-    /** Materiais das escadas e lajes. */
-    static final int[] SHAPE_MATS = { PLANKS, COBBLE, STONE_BRICK, BRICK, SANDSTONE };
-    private static final String[] SHAPE_MAT_NAMES = { "de tábuas", "de pedregulho", "de tijolos de pedra", "de tijolos", "de arenito" };
+    /**
+     * Peças de bétula (vieram depois, então ficam num trecho próprio de ids; os antigos não mudam):
+     * escadas (8), lajes (2), lajes verticais (4), cerca, lajes empilhadas com bétula (11), porta (16 + 2 texturas).
+     * Os itens começam no id 200, então só a forma de item de cada peça precisa ficar abaixo de 200; as variantes
+     * (giradas, porta aberta, metade de cima) nunca vão para o inventário e podem passar de 200 (o máximo é 255).
+     */
+    static final int BIRCH_STAIR_BASE = 172, BIRCH_SLAB_BASE = 180, BIRCH_VSLAB_BASE = 182, BIRCH_FENCE = 186,
+            BIRCH_MIXED_BASE = 187, BIRCH_DOOR_BASE = 198, BIRCH_DOOR_TEX_LOWER = 214, BIRCH_DOOR_TEX_UPPER = 215;
+    static final int COUNT = 216;
+    /** Materiais das escadas e lajes (o 5 = bétula usa os ids novos acima). */
+    static final int[] SHAPE_MATS = { PLANKS, COBBLE, STONE_BRICK, BRICK, SANDSTONE, BIRCH_PLANKS };
+    static final int BIRCH_MAT = 5;
+    private static final String[] SHAPE_MAT_NAMES = { "de tábuas", "de pedregulho", "de tijolos de pedra", "de tijolos", "de arenito", "de bétula" };
+    /** Madeira das portas: 0 = comum, 1 = bétula. */
+    static final int WOOD_OAK = 0, WOOD_BIRCH = 1;
 
     /** Forma de desenhar. MODEL = feito de caixas (escadas, lajes, portas). */
     static final int CUBE = 0, CUTOUT = 1, CROSS = 2, LIQUID = 3, MODEL = 4;
@@ -52,6 +63,10 @@ final class Block {
             DROP = new int[COUNT], LIGHT = new int[COUNT], TEXTURE = new int[COUNT];
     /** Caixas de cada bloco com formato (x0,y0,z0,x1,y1,z1 de 0 a 1); null = cubo inteiro. */
     private static final float[][][] BOXES = new float[COUNT][][];
+    /** O que cada id é (escada, laje...) e seus detalhes; preenchido junto com as definições. */
+    private static final int K_STAIR = 1, K_SLAB = 2, K_VSLAB = 3, K_DOOR = 4, K_MIXED = 5;
+    private static final int[] KIND = new int[COUNT], SMAT = new int[COUNT], SFACE = new int[COUNT], SFLAG = new int[COUNT],
+            SHALF = new int[COUNT], MLO = new int[COUNT], MHI = new int[COUNT];
 
     static {
         // id, nome, dureza (s com a mão; -1 = inquebrável), forma, material, nível de picareta exigido (-1 nenhum), item que dá, luz
@@ -101,6 +116,7 @@ final class Block {
                     int id = stair(m, f, up);
                     def(id, "Escada " + SHAPE_MAT_NAMES[m], HARDNESS[base], MODEL, MATERIAL[base], TIER[base], stair(m, 0, 0), 0);
                     TEXTURE[id] = base;
+                    KIND[id] = K_STAIR; SMAT[id] = m; SFACE[id] = f; SFLAG[id] = up;
                     BOXES[id] = up == 0
                             ? rotate(f, new float[][] { { 0, 0, 0, 1, 0.5f, 1 }, { 0, 0.5f, 0.5f, 1, 1, 1 } })
                             : rotate(f, new float[][] { { 0, 0.5f, 0, 1, 1, 1 }, { 0, 0, 0.5f, 1, 0.5f, 1 } });
@@ -109,21 +125,27 @@ final class Block {
                 int id = slab(m, top);
                 def(id, "Laje " + SHAPE_MAT_NAMES[m], HARDNESS[base], MODEL, MATERIAL[base], TIER[base], slab(m, 0), 0);
                 TEXTURE[id] = base;
+                KIND[id] = K_SLAB; SMAT[id] = m; SFLAG[id] = top;
                 BOXES[id] = new float[][] { top == 0 ? new float[] { 0, 0, 0, 1, 0.5f, 1 } : new float[] { 0, 0.5f, 0, 1, 1, 1 } };
             }
         }
         // portas: placa fina; fechada fica no lado para onde o jogador olhava, aberta gira para o lado da dobradiça
         def(DOOR_TEX_LOWER, "Porta (textura de baixo)", 1, CUBE, M_WOOD, -1, AIR, 0);
         def(DOOR_TEX_UPPER, "Porta (textura de cima)", 1, CUBE, M_WOOD, -1, AIR, 0);
+        def(BIRCH_DOOR_TEX_LOWER, "Porta de bétula (textura de baixo)", 1, CUBE, M_WOOD, -1, AIR, 0);
+        def(BIRCH_DOOR_TEX_UPPER, "Porta de bétula (textura de cima)", 1, CUBE, M_WOOD, -1, AIR, 0);
         float t = 3 / 16f;
-        for (int half = 0; half < 2; half++)
-            for (int f = 0; f < 4; f++)
-                for (int open = 0; open < 2; open++) {
-                    int id = door(half, f, open);
-                    def(id, "Porta de madeira", 1.4, MODEL, M_WOOD, -1, door(0, 0, 0), 0);
-                    TEXTURE[id] = half == 0 ? DOOR_TEX_LOWER : DOOR_TEX_UPPER;
-                    BOXES[id] = rotate(f, new float[][] { open == 0 ? new float[] { 0, 0, 1 - t, 1, 1, 1 } : new float[] { 0, 0, 0, t, 1, 1 } });
-                }
+        for (int wood = 0; wood < 2; wood++)
+            for (int half = 0; half < 2; half++)
+                for (int f = 0; f < 4; f++)
+                    for (int open = 0; open < 2; open++) {
+                        int id = door(wood, half, f, open);
+                        def(id, wood == WOOD_BIRCH ? "Porta de bétula" : "Porta de madeira", 1.4, MODEL, M_WOOD, -1, door(wood, 0, 0, 0), 0);
+                        TEXTURE[id] = wood == WOOD_BIRCH ? (half == 0 ? BIRCH_DOOR_TEX_LOWER : BIRCH_DOOR_TEX_UPPER)
+                                : (half == 0 ? DOOR_TEX_LOWER : DOOR_TEX_UPPER);
+                        BOXES[id] = rotate(f, new float[][] { open == 0 ? new float[] { 0, 0, 1 - t, 1, 1, 1 } : new float[] { 0, 0, 0, t, 1, 1 } });
+                        KIND[id] = K_DOOR; SMAT[id] = wood; SHALF[id] = half; SFACE[id] = f; SFLAG[id] = open;
+                    }
 
         // lajes verticais: meia parede na direção em que foi colocada
         for (int m = 0; m < SHAPE_MATS.length; m++) {
@@ -132,6 +154,7 @@ final class Block {
                 int id = vslab(m, f);
                 def(id, "Laje vertical " + SHAPE_MAT_NAMES[m], HARDNESS[base], MODEL, MATERIAL[base], TIER[base], vslab(m, 0), 0);
                 TEXTURE[id] = base;
+                KIND[id] = K_VSLAB; SMAT[id] = m; SFACE[id] = f;
                 BOXES[id] = rotate(f, new float[][] { { 0, 0, 0.5f, 1, 1, 1 } });
             }
         }
@@ -139,6 +162,9 @@ final class Block {
         def(FENCE, "Cerca de madeira", 1.4, MODEL, M_WOOD, -1, FENCE, 0);
         TEXTURE[FENCE] = PLANKS;
         BOXES[FENCE] = fenceBoxes(false, false, true, true, false);
+        def(BIRCH_FENCE, "Cerca de bétula", 1.4, MODEL, M_WOOD, -1, BIRCH_FENCE, 0);
+        TEXTURE[BIRCH_FENCE] = BIRCH_PLANKS;
+        BOXES[BIRCH_FENCE] = fenceBoxes(false, false, true, true, false);
         def(GLASS_PANE, "Painel de vidro", 0.4, MODEL, M_NONE, -1, GLASS_PANE, 0);
         TEXTURE[GLASS_PANE] = GLASS;
         BOXES[GLASS_PANE] = paneBoxes(false, false, true, true);
@@ -166,17 +192,22 @@ final class Block {
                         Math.max(TIER[a], TIER[b]), slab(lo, 0), 0);
                 TEXTURE[id] = a;
                 BOXES[id] = new float[][] { { 0, 0, 0, 1, 0.5f, 1, a }, { 0, 0.5f, 0, 1, 1, 1, b } };
+                KIND[id] = K_MIXED; MLO[id] = lo; MHI[id] = hi;
             }
     }
 
-    static int vslab(int mat, int facing) { return VSLAB_BASE + mat * 4 + facing; }
-    static int mixedSlab(int lower, int upper) { return MIXED_SLAB_BASE + lower * 5 + upper; }
-    static boolean isVSlab(int b) { return b >= VSLAB_BASE && b < FENCE; }
-    static int vslabMat(int b) { return (b - VSLAB_BASE) / 4; }
-    static int vslabFacing(int b) { return (b - VSLAB_BASE) % 4; }
+    static int vslab(int mat, int facing) { return mat == BIRCH_MAT ? BIRCH_VSLAB_BASE + facing : VSLAB_BASE + mat * 4 + facing; }
+    static int mixedSlab(int lower, int upper) {
+        if (lower < BIRCH_MAT && upper < BIRCH_MAT) return MIXED_SLAB_BASE + lower * 5 + upper;
+        return BIRCH_MIXED_BASE + (lower == BIRCH_MAT ? upper : 6 + lower); // alguma das duas é de bétula
+    }
+    private static int kind(int b) { return b > 0 && b < COUNT ? KIND[b] : 0; }
+    static boolean isVSlab(int b) { return kind(b) == K_VSLAB; }
+    static int vslabMat(int b) { return SMAT[b]; }
+    static int vslabFacing(int b) { return SFACE[b]; }
     static boolean isWallTorch(int b) { return b >= WALL_TORCH_BASE && b < WALL_TORCH_BASE + 4; }
     static int wallTorchFacing(int b) { return b - WALL_TORCH_BASE; }
-    static boolean isMixedSlab(int b) { return b >= MIXED_SLAB_BASE && b < MIXED_SLAB_BASE + 25; }
+    static boolean isMixedSlab(int b) { return kind(b) == K_MIXED; }
     /** Areia e cascalho caem quando ficam sem apoio. */
     static boolean falls(int b) { return b == SAND || b == GRAVEL; }
     static boolean isLeaves(int b) { return b == LEAVES || b == BIRCH_LEAVES; }
@@ -185,10 +216,11 @@ final class Block {
     static boolean rotatable(int b) { return b > AIR && b < COUNT && (SHAPE[b] == CUBE || b == BED); }
     static boolean isSapling(int b) { return b == SAPLING || b == BIRCH_SAPLING; }
     static boolean isWheat(int b) { return b >= WHEAT && b < WHEAT + 3; }
-    static int mixedLower(int b) { return (b - MIXED_SLAB_BASE) / 5; }
-    static int mixedUpper(int b) { return (b - MIXED_SLAB_BASE) % 5; }
+    static int mixedLower(int b) { return MLO[b]; }
+    static int mixedUpper(int b) { return MHI[b]; }
+    static boolean isFence(int b) { return b == FENCE || b == BIRCH_FENCE; }
     /** Bloco que conecta (cerca e painel). */
-    static boolean connects(int b) { return b == FENCE || b == GLASS_PANE; }
+    static boolean connects(int b) { return isFence(b) || b == GLASS_PANE; }
 
     /** Vetor (dx, dz) de cada direção 0..3. */
     static final int[] DIR_X = { 0, -1, 0, 1 }, DIR_Z = { 1, 0, -1, 0 };
@@ -226,7 +258,7 @@ final class Block {
 
     /** Caixas para desenhar o bloco nesta posição (cerca e painel se ligam aos vizinhos). */
     static float[][] renderBoxes(World w, int x, int y, int z, int b) {
-        if (b == FENCE) return fenceBoxes(link(w, x, y, z - 1, b), link(w, x, y, z + 1, b), link(w, x - 1, y, z, b), link(w, x + 1, y, z, b), false);
+        if (isFence(b)) return fenceBoxes(link(w, x, y, z - 1, b), link(w, x, y, z + 1, b), link(w, x - 1, y, z, b), link(w, x + 1, y, z, b), false);
         if (b == GLASS_PANE) {
             boolean n = link(w, x, y, z - 1, b), s = link(w, x, y, z + 1, b), we = link(w, x - 1, y, z, b), e = link(w, x + 1, y, z, b);
             if (!n && !s && !we && !e) { we = true; e = true; } // painel sozinho: atravessado de lado a lado
@@ -237,30 +269,42 @@ final class Block {
 
     /** Caixas de colisão nesta posição (a cerca tem 1,5 de altura). */
     static float[][] collisionBoxes(World w, int x, int y, int z, int b) {
-        if (b == FENCE) return fenceBoxes(link(w, x, y, z - 1, b), link(w, x, y, z + 1, b), link(w, x - 1, y, z, b), link(w, x + 1, y, z, b), true);
+        if (isFence(b)) return fenceBoxes(link(w, x, y, z - 1, b), link(w, x, y, z + 1, b), link(w, x - 1, y, z, b), link(w, x + 1, y, z, b), true);
         return renderBoxes(w, x, y, z, b);
     }
 
     private static boolean link(World w, int x, int y, int z, int self) {
         int n = w.get(x, y, z);
-        if (n == self) return true;
+        if (n == self || (isFence(self) && isFence(n))) return true; // cercas de madeiras diferentes se ligam
         if (self == GLASS_PANE && n == GLASS) return true;
-        return opaqueCube(n) && n != BEDROCK || (self == FENCE && n == GLASS_PANE) || (self == GLASS_PANE && n == FENCE);
+        return opaqueCube(n) && n != BEDROCK || (isFence(self) && n == GLASS_PANE) || (self == GLASS_PANE && isFence(n));
     }
 
-    static int stair(int mat, int facing, int upside) { return STAIR_BASE + mat * 8 + facing * 2 + upside; }
-    static int slab(int mat, int top) { return SLAB_BASE + mat * 2 + top; }
-    static int door(int half, int facing, int open) { return DOOR_BASE + half * 8 + facing * 2 + open; }
+    static int stair(int mat, int facing, int upside) {
+        return mat == BIRCH_MAT ? BIRCH_STAIR_BASE + facing * 2 + upside : STAIR_BASE + mat * 8 + facing * 2 + upside;
+    }
+    static int slab(int mat, int top) { return mat == BIRCH_MAT ? BIRCH_SLAB_BASE + top : SLAB_BASE + mat * 2 + top; }
+    static int door(int half, int facing, int open) { return door(WOOD_OAK, half, facing, open); }
+    static int door(int wood, int half, int facing, int open) {
+        return (wood == WOOD_BIRCH ? BIRCH_DOOR_BASE : DOOR_BASE) + half * 8 + facing * 2 + open;
+    }
 
-    static boolean isStair(int b) { return b >= STAIR_BASE && b < SLAB_BASE; }
-    static boolean isSlab(int b) { return b >= SLAB_BASE && b < DOOR_BASE; }
-    static boolean isDoor(int b) { return b >= DOOR_BASE && b < DOOR_TEX_LOWER; }
-    static int stairMat(int b) { return (b - STAIR_BASE) / 8; }
-    static int slabMat(int b) { return (b - SLAB_BASE) / 2; }
-    static boolean slabTop(int b) { return (b - SLAB_BASE) % 2 == 1; }
-    static int doorHalf(int b) { return (b - DOOR_BASE) / 8; }
-    static int doorFacing(int b) { return ((b - DOOR_BASE) % 8) / 2; }
-    static boolean doorOpen(int b) { return (b - DOOR_BASE) % 2 == 1; }
+    static boolean isStair(int b) { return kind(b) == K_STAIR; }
+    static boolean isSlab(int b) { return kind(b) == K_SLAB; }
+    static boolean isDoor(int b) { return kind(b) == K_DOOR; }
+    static int stairMat(int b) { return SMAT[b]; }
+    static int slabMat(int b) { return SMAT[b]; }
+    static boolean slabTop(int b) { return SFLAG[b] == 1; }
+    static int doorWood(int b) { return SMAT[b]; }
+    static int doorHalf(int b) { return SHALF[b]; }
+    static int doorFacing(int b) { return SFACE[b]; }
+    static boolean doorOpen(int b) { return SFLAG[b] == 1; }
+    static boolean isDoorTexture(int b) {
+        return b == DOOR_TEX_LOWER || b == DOOR_TEX_UPPER || b == BIRCH_DOOR_TEX_LOWER || b == BIRCH_DOOR_TEX_UPPER;
+    }
+    /** Texturas (de baixo e de cima) da porta de madeira wood. */
+    static int doorTexLower(int wood) { return wood == WOOD_BIRCH ? BIRCH_DOOR_TEX_LOWER : DOOR_TEX_LOWER; }
+    static int doorTexUpper(int wood) { return wood == WOOD_BIRCH ? BIRCH_DOOR_TEX_UPPER : DOOR_TEX_UPPER; }
 
     /** Caixas do bloco (null = cubo inteiro). */
     static float[][] boxes(int b) { return BOXES[b]; }
@@ -270,7 +314,7 @@ final class Block {
 
     /** Aparece como item (paleta do criativo): só a variante padrão de cada escada, laje e porta. */
     static boolean isItemForm(int b) {
-        if (b <= AIR || b >= COUNT || b == DOOR_TEX_LOWER || b == DOOR_TEX_UPPER || waterLevel(b) > 0) return false;
+        if (b <= AIR || b >= COUNT || b >= Items.FIRST_ITEM || isDoorTexture(b) || waterLevel(b) > 0) return false;
         if (isWallTorch(b) || isMixedSlab(b) || isWheat(b) || b == FURNACE_LIT) return false;
         if (isStair(b) || isSlab(b) || isDoor(b) || isVSlab(b)) return DROP[b] == b;
         return true;

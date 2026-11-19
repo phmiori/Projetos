@@ -49,6 +49,8 @@ final class Textures {
         for (int s = 0; s < 3; s++) FILE[Block.WHEAT + s] = "trigo_" + (s + 1);
         FILE[Block.DOOR_TEX_LOWER] = "porta_baixo";
         FILE[Block.DOOR_TEX_UPPER] = "porta_cima";
+        FILE[Block.BIRCH_DOOR_TEX_LOWER] = "porta_betula_baixo";
+        FILE[Block.BIRCH_DOOR_TEX_UPPER] = "porta_betula_cima";
         for (int l = 0; l < 7; l++) FILE[Block.WATER_FLOW + l] = "agua"; // água corrente usa a mesma textura
         // escadas, lajes e portas usam o arquivo do material (ou da porta)
         for (int b = 0; b < Block.COUNT; b++) if (Block.texture(b) != b) FILE[b] = FILE[Block.texture(b)];
@@ -92,8 +94,7 @@ final class Textures {
     /** Blocos com partes transparentes (folhas, vidro, plantas, tocha). */
     private static boolean hasHoles(int b) {
         int s = Block.shape(Block.texture(b));
-        return s == Block.CUTOUT || s == Block.CROSS || Block.texture(b) == Block.DOOR_TEX_UPPER
-                || Block.texture(b) == Block.DOOR_TEX_LOWER;
+        return s == Block.CUTOUT || s == Block.CROSS || Block.isDoorTexture(Block.texture(b));
     }
 
     /** Variantes (escadas, lajes, portas) passam a apontar para as texturas do material. */
@@ -695,6 +696,9 @@ final class Textures {
         });
         set(t, Block.DOOR_TEX_LOWER, doorLower, doorLower, doorLower);
         set(t, Block.DOOR_TEX_UPPER, doorUpper, doorUpper, doorUpper);
+        int[] birchDoorLower = birchWood(S, doorLower), birchDoorUpper = birchWood(S, doorUpper);
+        set(t, Block.BIRCH_DOOR_TEX_LOWER, birchDoorLower, birchDoorLower, birchDoorLower);
+        set(t, Block.BIRCH_DOOR_TEX_UPPER, birchDoorUpper, birchDoorUpper, birchDoorUpper);
         set(t, Block.AIR, stone, stone, stone);
         set(t, Block.GRASS, grassSide, grassTop, dirt);
         set(t, Block.DIRT, dirt, dirt, dirt);
@@ -838,8 +842,9 @@ final class Textures {
                 java.awt.RenderingHints.VALUE_INTERPOLATION_NEAREST_NEIGHBOR);
         if (Block.isDoor(b)) {
             // porta: as duas metades de frente, uma sobre a outra
-            g.drawImage(image16(t16[Block.DOOR_TEX_UPPER * 6 + 4], 1.0), 16, 0, 32, 32, null);
-            g.drawImage(image16(t16[Block.DOOR_TEX_LOWER * 6 + 4], 1.0), 16, 32, 32, 32, null);
+            int wood = Block.doorWood(b);
+            g.drawImage(image16(t16[Block.doorTexUpper(wood) * 6 + 4], 1.0), 16, 0, 32, 32, null);
+            g.drawImage(image16(t16[Block.doorTexLower(wood) * 6 + 4], 1.0), 16, 32, 32, 32, null);
         } else {
             float[][] boxes = Block.boxes(b);
             if (boxes == null) boxes = new float[][] { { 0, 0, 0, 1, 1, 1 } };
@@ -903,4 +908,19 @@ final class Textures {
     }
 
     private Textures() {}
+
+    /** A mesma madeira na cor da bétula (clara e amarelada); metal e vidro, sem cor, ficam como estão. */
+    private static int[] birchWood(int S, int[] src) {
+        int[] out = new int[src.length];
+        for (int k = 0; k < src.length; k++) {
+            int c = src[k], a = c >>> 24, r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
+            int mx = Math.max(r, Math.max(g, b)), mn = Math.min(r, Math.min(g, b));
+            if (a == 0 || mx - mn < 24) { out[k] = c; continue; } // transparente ou cinza (vidro, ferragem)
+            double l = (r * 0.30 + g * 0.59 + b * 0.11) / 120.0;
+            int nr = (int) Math.min(255, 206 * l), ng = (int) Math.min(255, 186 * l), nb = (int) Math.min(255, 128 * l);
+            out[k] = a << 24 | nr << 16 | ng << 8 | nb;
+        }
+        return out;
+    }
+
 }

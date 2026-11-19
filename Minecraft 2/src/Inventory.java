@@ -127,7 +127,7 @@ final class Inventory {
     int timesCraftable(Items.Recipe r) {
         int[] in = r.ingredients();
         int times = Integer.MAX_VALUE;
-        for (int i = 0; i < in.length; i += 2) times = Math.min(times, countLike(in[i]) / in[i + 1]);
+        for (int i = 0; i < in.length; i += 2) times = Math.min(times, (r.woodPiece() ? countOf(in[i]) : countLike(in[i])) / in[i + 1]);
         return times == Integer.MAX_VALUE ? 0 : times;
     }
 
@@ -135,7 +135,7 @@ final class Inventory {
     boolean craft(Items.Recipe r) {
         if (timesCraftable(r) < 1) return false;
         int[] in = r.ingredients();
-        for (int i = 0; i < in.length; i += 2) removeLike(in[i], in[i + 1]);
+        for (int i = 0; i < in.length; i += 2) if (r.woodPiece()) remove(in[i], in[i + 1]); else removeLike(in[i], in[i + 1]);
         int left = add(r.out, r.outCount);
         if (left > 0) { // sem espaço: devolve os ingredientes
             remove(r.out, r.outCount - left);

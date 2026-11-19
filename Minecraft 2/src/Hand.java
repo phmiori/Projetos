@@ -139,7 +139,7 @@ final class Hand {
     private static synchronized float[] model(int item) {
         float[] m = MODELS.get(item);
         if (m == null) {
-            if (Items.isBlock(item) && Block.isDoor(item)) m = flatModel(doorPixels());
+            if (Items.isBlock(item) && Block.isDoor(item)) m = flatModel(doorPixels(Block.doorWood(item)));
             else m = Items.isBlock(item) && Block.shape(item) != Block.CROSS ? cubeModel(item, 16) : flatModel(Items.pixels16(item));
             MODELS.put(item, m);
         }
@@ -210,9 +210,9 @@ final class Hand {
     }
 
     /** Porta na mão: as duas metades lado a lado numa figura 16x16 (8 de largura, 16 de altura). */
-    private static int[] doorPixels() {
+    private static int[] doorPixels(int wood) {
         int[][] tex = Textures.get(16);
-        int[] up = tex[Block.DOOR_TEX_UPPER * 6 + 4], low = tex[Block.DOOR_TEX_LOWER * 6 + 4];
+        int[] up = tex[Block.doorTexUpper(wood) * 6 + 4], low = tex[Block.doorTexLower(wood) * 6 + 4];
         int[] px = new int[256];
         for (int y = 0; y < 16; y++)
             for (int x = 4; x < 12; x++) {
