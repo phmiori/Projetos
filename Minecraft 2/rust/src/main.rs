@@ -19,12 +19,15 @@ mod edit;
 mod fluid;
 mod inventory;
 mod items;
+mod join;
 mod light;
 mod mesher;
 mod hand;
 mod menu;
 mod mob;
 mod mobs;
+mod net;
+mod players;
 mod noise;
 mod options;
 mod particles;
@@ -70,6 +73,8 @@ pub enum Screen {
     /// menu inicial (lista de mundos) e a tela de criar mundo
     Menu,
     Create,
+    /// entrar no mundo de alguém pela LAN
+    Join,
     /// configurações (abertas da pausa ou do menu)
     Settings,
     Play,
@@ -315,8 +320,15 @@ struct Game {
     /// mão: golpe (0,3 s) e quanto andou (balanço)
     swing: f64,
     walk_dist: f64,
-    /// pele e camisa do personagem
-    persona: (usize, usize),
+    /// pele, cabelo, camisa e calça do personagem
+    persona: [usize; 4],
+    /// jogo em LAN (anfitrião ou amigo)
+    net: Option<net::Net>,
+    /// estado salvo dos amigos da LAN (vem do meta.properties)
+    lan_saved: HashMap<String, String>,
+    arrow_id: i32,
+    drop_id: i32,
+    join: join::Join,
     primed: Vec<(i32, i32, i32, f64, bool)>,
     grow_timer: f64,
     l_held: bool,
@@ -356,13 +368,13 @@ struct Game {
 
 impl Game {
     #[allow(clippy::too_many_arguments)]
-    fn new(gen: Generator, save_dir: Option<PathBuf>, world_name: String, settings: save::Settings, player: Player, creative: bool, time: f64, day: i32, inv: Inventory, vitals: [f64; 2], spawn: [f64; 3]) -> Game {
+    fn new(gen: Generator, save_dir: Option<PathBuf>, world_name: String, settings: save::Settings, player: Player, creative: bool, time: f64, day: i32, inv: Inventory, vitals: [f64; 2], spawn: [f64; 3], mem: Arc<HashMap<(i32, i32), Vec<u8>>>) -> Game {
         let (jtx, jrx) = mpsc::channel::<Job>();
         let (dtx, drx) = mpsc::channel::<Done>();
         let jrx = Arc::new(Mutex::new(jrx));
         let threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).saturating_sub(2).clamp(2, 8);
         for i in 0..threads {
-            let (jrx, dtx, gen, dir) = (jrx.clone(), dtx.clone(), gen.clone(), save_dir.clone());
+            let (jrx, dtx, gen, dir, mem) = (jrx.clone(), dtx.clone(), gen.clone(), save_dir.clone(), mem.clone());
             // (os pedaços gravados por esta versão são lidos de volta do disco do mesmo jeito)
             std::thread::Builder::new()
                 .name(format!("pedacos-{i}"))
@@ -370,7 +382,9 @@ impl Game {
                     let job = { jrx.lock().unwrap().recv() };
                     let out = match job {
                         Ok(Job::Load(cx, cz)) => {
-                            let saved = dir.as_ref().and_then(|d| save::read_chunk(d, cx, cz)).and_then(|b| Chunk::from_bytes(cx, cz, &b));
+                            // do disco, ou (no jogo de outro) os pedaços que o anfitrião mandou
+                            let bytes = dir.as_ref().and_then(|d| save::read_chunk(d, cx, cz)).or_else(|| mem.get(&(cx, cz)).cloned());
+                            let saved = bytes.and_then(|b| Chunk::from_bytes(cx, cz, &b));
                             let c = match saved {
                                 Some(mut c) => {
                                     c.prepare();
@@ -449,7 +463,12 @@ impl Game {
             particles: Vec::new(),
             swing: 0.0,
             walk_dist: 0.0,
-            persona: (0, 0),
+            persona: [0; 4],
+            net: None,
+            lan_saved: HashMap::new(),
+            arrow_id: 0,
+            drop_id: 0,
+            join: join::Join::default(),
             primed: Vec::new(),
             grow_timer: 0.0,
             slot: 0,
@@ -547,6 +566,7 @@ impl Game {
                         Vec::new()
                     };
                     self.chunks.insert(k, Arc::new(c));
+                    self.net_chunk_loaded(k.0, k.1);
                     for (x, y, z) in flowing {
                         self.schedule_fluid(x, y, z);
                     }
@@ -649,10 +669,10 @@ impl Game {
     }
 
     fn update(&mut self, dt: f64) {
-        if self.screen == Screen::Pause || self.screen == Screen::Settings {
-            return; // pausado: o mundo para, como no Java
+        if (self.screen == Screen::Pause || self.screen == Screen::Settings) && self.net.is_none() {
+            return; // pausado: o mundo para, como no Java (na LAN continua)
         }
-        if matches!(self.screen, Screen::Menu | Screen::Create) {
+        if matches!(self.screen, Screen::Menu | Screen::Create | Screen::Join) {
             self.player.yaw += dt * 0.04; // menu: o mundo gira devagar ao fundo
             return;
         }
@@ -686,8 +706,13 @@ impl Game {
             self.player.update(step, input, &Loaded(&self.chunks));
             left -= step;
         }
-        self.tick_falling(dt);
-        self.tick_fluids(dt);
+        // no mundo de outro, quem cuida da água, das quedas e do crescimento é o anfitrião
+        if !self.is_client() {
+            self.tick_falling(dt);
+            self.tick_fluids(dt);
+        } else {
+            self.fluid_queue.clear();
+        }
         self.footsteps(dt);
 
         // mira (7 blocos no criativo, 5 na sobrevivência, como no Java)
@@ -705,7 +730,9 @@ impl Game {
         self.blast_flash = (self.blast_flash - dt).max(0.0);
         self.tick_furnaces(dt);
         self.tick_primed(dt);
-        self.tick_growth(dt);
+        if !self.is_client() {
+            self.tick_growth(dt);
+        }
         self.survival(dt);
         let (lp, rp, mp) = (self.l_pending, self.r_pending, self.m_pending);
         self.l_pending = false;
@@ -772,6 +799,18 @@ impl Game {
     /// Grava os pedaços mudados e a posição, a hora e a barra no meta.properties (o resto do arquivo fica igual).
     fn save_all(&mut self) {
         self.last_save = Instant::now();
+        if self.is_client() {
+            let st = net::state_string(self);
+            if let Some(n) = &self.net {
+                n.send(net::Out::new(net::SAVE_STATE).s(&st), None);
+            }
+            return;
+        }
+        if let Some(n) = &self.net {
+            for (k, v) in &n.lan_players {
+                self.lan_saved.insert(k.clone(), v.clone());
+            }
+        }
         if self.health <= 0.0 && !self.creative {
             self.respawn(); // fechou morto: grava como se já tivesse renascido (os itens ficaram no chão)
         }
@@ -803,9 +842,13 @@ impl Game {
         let (mob_lines, wolf_lines) = self.save_mobs();
         let mob_lines: Vec<(String, String)> = mob_lines.into_iter().enumerate().map(|(i, s)| (i.to_string(), s)).collect();
         let wolf_lines: Vec<(String, String)> = wolf_lines.into_iter().enumerate().map(|(i, s)| (i.to_string(), s)).collect();
+        let lan_lines: Vec<(String, String)> = self.lan_saved
+            .iter()
+            .map(|(k, v)| (k.replace(' ', "\\ ").replace(':', "\\:").replace('=', "\\="), v.replace(':', "\\:")))
+            .collect();
         let chests: Vec<(String, String)> = self.chests.iter().map(|(k, c)| (k.clone(), containers::serialize_slots(c))).collect();
         let furnaces: Vec<(String, String)> = self.furnaces.iter().map(|(k, f)| (k.clone(), f.serialize())).collect();
-        if let Err(e) = save::update_meta(&dir, &v, &[("bau.", chests), ("fornalha.", furnaces), ("criatura.", mob_lines), ("lobo.", wolf_lines)]) {
+        if let Err(e) = save::update_meta(&dir, &v, &[("bau.", chests), ("fornalha.", furnaces), ("criatura.", mob_lines), ("lobo.", wolf_lines), ("lan.", lan_lines)]) {
             println!("não consegui gravar o meta.properties: {e}");
         }
     }
@@ -926,8 +969,9 @@ impl Game {
         gl.depth_mask(true);
 
         // itens soltos no chão (girando, com a luz de onde estão)
-        if !self.drops.is_empty() || !self.mobs.is_empty() || !self.arrows.is_empty() || !self.primed.is_empty() || !self.particles.is_empty() {
+        if !self.drops.is_empty() || !self.mobs.is_empty() || !self.arrows.is_empty() || !self.primed.is_empty() || !self.particles.is_empty() || self.net.is_some() {
             self.draw_drops(&mut g.ui, sky.daylight);
+            self.draw_players(&mut g.ui, sky.daylight);
             self.draw_particles(&mut g.ui, sky.daylight);
             self.draw_primed(&mut g.ui);
             self.draw_mobs(&mut g.ui, sky.daylight);
@@ -973,7 +1017,7 @@ impl Game {
         }
 
         // a mão e o item, por cima da cena (com um campo de visão fixo, para não esticar)
-        let in_world = !matches!(self.screen, Screen::Menu | Screen::Create | Screen::Dead) && !(self.screen == Screen::Settings && self.settings_return == Screen::Menu);
+        let in_world = !matches!(self.screen, Screen::Menu | Screen::Create | Screen::Join | Screen::Dead) && !(self.screen == Screen::Settings && self.settings_return == Screen::Menu);
         if in_world {
             gl.clear(glow::DEPTH_BUFFER_BIT);
             gl.enable(glow::DEPTH_TEST);
@@ -1006,11 +1050,13 @@ impl Game {
         gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
         let (fw, fh) = (w as f32, h as f32);
         if in_world {
+            self.draw_name_tags(&mut g.ui, &vp, fw, fh);
             self.draw_hud(&mut g.ui, fw, fh);
             self.draw_bow_charge(&mut g.ui, fw, fh);
         }
         match self.screen {
             Screen::Menu | Screen::Create => self.draw_main_menu(&mut g.ui, fw, fh),
+            Screen::Join => self.draw_join(&mut g.ui, fw, fh),
             Screen::Settings => self.draw_settings(&mut g.ui, fw, fh),
             Screen::Inventory => self.draw_inventory(&mut g.ui, fw, fh),
             Screen::Pause | Screen::Dead => self.draw_menu(&mut g.ui, fw, fh),
@@ -1148,7 +1194,7 @@ fn load_game(info: Option<save::WorldInfo>, seed_arg: Option<i32>, settings: sav
         }
     };
     println!("Mundo de Blocos (Rust): {name} — semente {}, biomas x{}, {}", gen.seed, gen.biome_scale, if creative { "criativo" } else { "sobrevivência" });
-    let mut game = Game::new(gen, if read_only { None } else { save_dir }, name, settings, player, creative, time, day, inv, vitals, spawn);
+    let mut game = Game::new(gen, if read_only { None } else { save_dir }, name, settings, player, creative, time, day, inv, vitals, spawn, Arc::new(HashMap::new()));
     if let Some(w) = &info {
         for (k, v) in &w.chests {
             game.chests.insert(k.clone(), containers::parse_slots(v, containers::CHEST_SIZE));
@@ -1158,8 +1204,39 @@ fn load_game(info: Option<save::WorldInfo>, seed_arg: Option<i32>, settings: sav
         }
         game.player_name = w.player_name.clone();
         game.persona = w.persona;
+        game.lan_saved = w.lan_players.clone();
         game.load_mobs(&w.mobs, &w.wolves);
     }
+    game
+}
+
+/// Entra no mundo de um anfitrião da LAN: o terreno sai da semente, mais os pedaços que ele mandou.
+fn load_lan_game(n: net::Net, w: net::Welcome, settings: save::Settings, name: String, persona: [usize; 4]) -> Game {
+    let gen = Generator { seed: w.seed, biome_scale: w.biome_scale };
+    let mut player = Player::new();
+    (player.x, player.y, player.z) = (w.spawn[0], w.spawn[1], w.spawn[2]);
+    let mut inv = Inventory::default();
+    if w.creative {
+        for (i, id) in [1, 3, 8, 6, 18, 19, 31, 9, 30].iter().enumerate() {
+            inv.s[i] = Stack::new(*id, 64, 0);
+        }
+    }
+    let mut vitals = [survival::MAX_HEALTH, survival::MAX_FOOD];
+    // o anfitrião guarda onde paramos da última vez: x;y;z;yaw;pitch;vida;fome;inventário
+    let p: Vec<&str> = w.state.splitn(8, ';').collect();
+    if p.len() >= 7 {
+        let f: Vec<f64> = p[..7].iter().map(|s| s.trim().parse().unwrap_or(0.0)).collect();
+        (player.x, player.y, player.z, player.yaw, player.pitch) = (f[0], f[1], f[2], f[3], f[4]);
+        vitals = [if f[5] > 0.0 { f[5] } else { survival::MAX_HEALTH }, f[6]];
+        if p.len() == 8 && !p[7].is_empty() {
+            inv = Inventory::parse(p[7]);
+        }
+    }
+    println!("Mundo de Blocos (Rust): {} — semente {}, biomas x{}", w.name, w.seed, w.biome_scale);
+    let mut game = Game::new(gen, None, w.name, settings, player, w.creative, w.time, w.day, inv, vitals, w.spawn, Arc::new(w.chunks));
+    game.net = Some(n);
+    game.player_name = name;
+    game.persona = persona;
     game
 }
 
@@ -1319,6 +1396,7 @@ fn main() {
         Some("morte") => game.screen = Screen::Dead,
         Some("criar") => game.start_create(),
         Some("config") => game.open_settings(),
+        Some("lan") => game.start_join(),
         _ => {}
     }
     if let Some(m) = arg("--mouse") {
@@ -1329,6 +1407,18 @@ fn main() {
     }
     if let Some(s) = arg("--espaco").and_then(|s| s.parse::<usize>().ok()) {
         game.slot = s.clamp(1, 9) - 1;
+    }
+    // testes da LAN: --abrir-lan abre o mundo; --entrar IP [nome] entra no mundo de alguém
+    if args.iter().any(|a| a == "--abrir-lan") {
+        game.open_to_lan();
+    }
+    if let Some(ip) = arg("--entrar") {
+        game.start_join();
+        game.join.ip = ip;
+        if let Some(n) = arg2("--entrar").filter(|n| !n.starts_with("--")) {
+            game.join.name = n;
+        }
+        game.join_key(KeyCode::Enter, None);
     }
     let zoo = args.iter().any(|a| a == "--zoologico");
     let hold_left = arg("--segurar-esq").and_then(|s| s.parse::<u32>().ok());
@@ -1359,6 +1449,7 @@ fn main() {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
                     game.save_all();
+                    game.close_net("O anfitrião fechou o jogo");
                     elwt.exit();
                 }
                 WindowEvent::CursorMoved { position, .. } => {
@@ -1392,7 +1483,9 @@ fn main() {
                                     KeyCode::Digit7 => Some(6), KeyCode::Digit8 => Some(7), KeyCode::Digit9 => Some(8),
                                     _ => None,
                                 };
-                                if game.screen == Screen::Settings {
+                                if game.screen == Screen::Join {
+                                    game.join_key(code, event.text.as_deref());
+                                } else if game.screen == Screen::Settings {
                                     if code == KeyCode::Escape {
                                         game.close_settings();
                                     }
@@ -1460,7 +1553,11 @@ fn main() {
                     let down = state == ElementState::Pressed;
                     let size = window.inner_size();
                     let (fw, fh) = (size.width as f32, size.height as f32);
-                    if game.screen == Screen::Settings {
+                    if game.screen == Screen::Join {
+                        if down && button == MouseButton::Left {
+                            game.join_mouse(fw, fh);
+                        }
+                    } else if game.screen == Screen::Settings {
                         if down && button == MouseButton::Left && game.settings_click(fw, fh) {
                             let v = if game.settings.vsync { SwapInterval::Wait(NonZeroU32::new(1).unwrap()) } else { SwapInterval::DontWait };
                             let _ = gl_surface.set_swap_interval(&gl_ctx, v);
@@ -1488,9 +1585,11 @@ fn main() {
                                 Some("Controles") => game.controls_open = true,
                                 Some("Configurações") => game.open_settings(),
                                 Some("Voltar") => game.controls_open = false,
-                                Some("Salvar e sair") => {
+                                Some("Abrir para LAN") => game.open_to_lan(),
+                                Some("Salvar e sair") | Some("Desconectar") => {
                                     // grava e volta ao menu (o mundo fica girando ao fundo, sem gravar mais nada)
                                     game.save_all();
+                                    game.close_net("O anfitrião saiu do mundo");
                                     game.save_dir = None;
                                     game.player.flying = true;
                                     game.open_menu();
@@ -1549,6 +1648,16 @@ fn main() {
                     let now = Instant::now();
                     let dt = (now - game.last).as_secs_f64().min(0.25);
                     game.last = now;
+                    game.net_update(dt);
+                    // chegou a resposta do anfitrião da LAN: entra no mundo dele
+                    if let Some((n, w, name, persona)) = game.poll_join() {
+                        let settings = game.settings.clone();
+                        unsafe { game.free_gpu(&g) };
+                        g.shadow.dirty = true;
+                        game = load_lan_game(n, w, settings, name, persona);
+                        game.grab_mouse = true;
+                        game.notice("Conectado! Mundo do anfitrião carregado.".into());
+                    }
                     game.update(dt);
                     game.stream(&mut g);
                     let size = window.inner_size();
@@ -1604,6 +1713,7 @@ fn main() {
                     }
                     if auto_shot.map_or(false, |n| frame_no > n) {
                         game.save_all();
+                        game.close_net("O anfitrião fechou o jogo");
                         elwt.exit();
                     }
                 }

@@ -22,6 +22,10 @@ pub struct Drop {
     pub age: f64,
     pub delay: f64,
     pub phase: f64,
+    /// número do item na rede (o anfitrião é quem cria)
+    pub id: i32,
+    /// anfitrião: espera antes de oferecer de novo a um amigo
+    pub pending: f64,
 }
 
 /// Sorteio simples (não precisa ser igual ao Java: é só para o que os blocos soltam).
@@ -49,10 +53,25 @@ impl Game {
         if st.empty() {
             return;
         }
+        if self.is_client() {
+            // no mundo de outro, quem cria o item é o anfitrião (ele avisa todos, inclusive nós)
+            if let Some(n) = &self.net {
+                n.send(crate::net::Out::new(crate::net::DROP_REQ).i(st.id).i(st.count).i(st.wear).f(p[0]).f(p[1]).f(p[2]).f(v[0]).f(v[1]).f(v[2]).f(delay), None);
+            }
+            return;
+        }
+        self.drop_id += 1;
+        let (id, phase) = (self.drop_id, self.rng.next() * 6.28);
+        self.add_drop(id, st, p, v, delay, phase);
+        if let Some(n) = &self.net {
+            n.send(crate::net::Out::new(crate::net::DROP_NEW).i(id).i(st.id).i(st.count).i(st.wear).f(p[0]).f(p[1]).f(p[2]).f(v[0]).f(v[1]).f(v[2]).f(phase), None);
+        }
+    }
+
+    pub fn add_drop(&mut self, id: i32, st: Stack, p: [f64; 3], v: [f64; 3], delay: f64, phase: f64) {
         let mut body = Player::body(0.14, 0.28);
         (body.x, body.y, body.z, body.vx, body.vy, body.vz) = (p[0], p[1], p[2], v[0], v[1], v[2]);
-        let phase = self.rng.next() * 6.28;
-        self.drops.push(Drop { body, st, age: 0.0, delay, phase });
+        self.drops.push(Drop { body, st, age: 0.0, delay, phase, id, pending: 0.0 });
     }
 
     /// Joga fora o que está na mão (Q; com Ctrl, a pilha toda), na direção em que o jogador olha.
@@ -73,7 +92,9 @@ impl Game {
     }
 
     pub fn update_drops(&mut self, dt: f64) {
-        let alive = self.health > 0.0;
+        // no mundo de outro, quem decide quem pega é o anfitrião (ele oferece quando chegamos perto)
+        let alive = self.health > 0.0 && !self.is_client();
+        let before: Vec<(i32, i32)> = if self.is_host() { self.drops.iter().map(|d| (d.id, d.st.count)).collect() } else { Vec::new() };
         let (px, py, pz) = (self.player.x, self.player.y, self.player.z);
         let mut drops = std::mem::take(&mut self.drops);
         let mut picked = false;
@@ -128,6 +149,16 @@ impl Game {
         });
         // itens iguais parados um em cima do outro viram uma pilha só
         self.drops = drops;
+        // anfitrião: avisa os amigos dos itens que sumiram ou diminuíram
+        if let Some(n) = &self.net {
+            for (id, count) in before {
+                match self.drops.iter().find(|d| d.id == id) {
+                    None => n.send(crate::net::Out::new(crate::net::DROP_GONE).i(id), None),
+                    Some(d) if d.st.count != count => n.send(crate::net::Out::new(crate::net::DROP_SET).i(id).i(d.st.count), None),
+                    _ => {}
+                }
+            }
+        }
         if picked {
             crate::sound::play("coletar", 0.7);
             self.slot_name_timer = self.slot_name_timer.max(0.0);

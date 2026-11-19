@@ -124,6 +124,14 @@ impl Game {
 
     /// Botão direito num baú ou fornalha: abre a tela dele.
     pub fn open_container(&mut self, x: i32, y: i32, z: i32, b: u8) {
+        if self.is_client() {
+            // no mundo de outro, o conteúdo está com o anfitrião: ele manda e a tela abre quando chegar
+            let t = if b == CHEST { crate::net::CHEST_OPEN } else { crate::net::FURNACE_OPEN };
+            if let Some(n) = &self.net {
+                n.send(crate::net::Out::new(t).i(x).i(y).i(z), None);
+            }
+            return;
+        }
         let open = if b == CHEST {
             Open::Chest(self.chest_for(x, y, z))
         } else {
@@ -138,6 +146,9 @@ impl Game {
 
     /// O baú ou a fornalha foi quebrado: o que havia dentro cai no chão.
     pub fn spill_container(&mut self, x: i32, y: i32, z: i32, b: u8) {
+        if self.is_client() {
+            return; // quem espalha o conteúdo é o anfitrião
+        }
         let k = key(x, y, z);
         let stacks: Vec<Stack> = if b == CHEST {
             self.chests.remove(&k).unwrap_or_default()
@@ -157,7 +168,11 @@ impl Game {
 
     /// Todas as fornalhas dos pedaços carregados assam; o bloco acende enquanto assa.
     pub fn tick_furnaces(&mut self, dt: f64) {
-        let keys: Vec<String> = self.furnaces.keys().cloned().collect();
+        let mut keys: Vec<String> = self.furnaces.keys().cloned().collect();
+        if self.is_client() {
+            // amigo: assa só a que está aberta; as fechadas ficam com o anfitrião
+            keys.retain(|k| self.open == Some(Open::Furnace(k.clone())));
+        }
         for k in keys {
             let Some((x, y, z)) = parse_key(&k) else { continue };
             if !self.chunks.contains_key(&(x >> 4, z >> 4)) {

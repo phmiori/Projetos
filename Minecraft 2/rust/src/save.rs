@@ -30,8 +30,10 @@ pub struct WorldInfo {
     pub wolves: Vec<String>,
     /// nome do personagem (o dono dos lobos)
     pub player_name: String,
-    /// cor da pele e da camisa do personagem (índices do Persona.java)
-    pub persona: (usize, usize),
+    /// pele, cabelo, camisa e calça do personagem (índices do Persona.java)
+    pub persona: [usize; 4],
+    /// amigos da LAN: estado salvo de cada um ("lan.<nome>")
+    pub lan_players: HashMap<String, String>,
 }
 
 /// Duração de um dia inteiro (dia e noite), em segundos: 48 minutos, como no Java.
@@ -104,10 +106,9 @@ pub fn read_world(dir: &Path) -> Option<WorldInfo> {
         mobs: p.iter().filter(|(k, _)| k.starts_with("criatura.")).map(|(_, v)| v.clone()).collect(),
         wolves: p.iter().filter(|(k, _)| k.starts_with("lobo.")).map(|(_, v)| v.clone()).collect(),
         player_name: p.get("personagem.nome").cloned().unwrap_or_default(),
-        persona: (
-            p.get("personagem.pele").and_then(|v| v.trim().parse().ok()).unwrap_or(0),
-            p.get("personagem.camisa").and_then(|v| v.trim().parse().ok()).unwrap_or(0),
-        ),
+        persona: ["personagem.pele", "personagem.cabelo", "personagem.camisa", "personagem.calca"]
+            .map(|k| p.get(k).and_then(|v| v.trim().parse().ok()).unwrap_or(0)),
+        lan_players: p.iter().filter_map(|(k, v)| k.strip_prefix("lan.").map(|k| (k.to_string(), v.clone()))).collect(),
         chests: p.iter().filter_map(|(k, v)| k.strip_prefix("bau.").map(|k| (k.to_string(), v.clone()))).collect(),
         furnaces: p.iter().filter_map(|(k, v)| k.strip_prefix("fornalha.").map(|k| (k.to_string(), v.clone()))).collect(),
         spawn: match (num("spawn.x"), num("spawn.y"), num("spawn.z")) {

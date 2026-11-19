@@ -53,7 +53,12 @@ impl Game {
         let (x, z) = (self.player.x.floor() as i32, self.player.z.floor() as i32);
         let h = self.gen.height_at(x, z);
         let biome = crate::world::BIOME_NAMES[self.gen.biome_at(x, z, h - 1) as usize];
-        let l1 = format!("{}  ·  {}  ·  versão Rust", self.world_name, if self.creative { "Criativo" } else { "Sobrevivência" });
+        let lan = match &self.net {
+            Some(n) if n.is_host() => format!("  ·  LAN: anfitrião, {} jogadores", n.remotes.len() + 1),
+            Some(n) => format!("  ·  LAN: {} jogadores", n.remotes.len() + 1),
+            None => String::new(),
+        };
+        let l1 = format!("{}  ·  {}  ·  versão Rust{lan}", self.world_name, if self.creative { "Criativo" } else { "Sobrevivência" });
         let l2 = format!(
             "Dia {}, {}  ·  {}  ·  X {:.0}  Y {:.0}  Z {:.0}{}  ·  {} FPS",
             self.day,
@@ -434,6 +439,26 @@ impl Game {
                 self.throw_stack(Stack::new(st.id, rest, st.wear));
             }
         }
+        if self.is_client() {
+            if let Some(o) = self.open.clone() {
+                let (k, is_chest) = match &o {
+                    crate::containers::Open::Chest(k) => (k.clone(), true),
+                    crate::containers::Open::Furnace(k) => (k.clone(), false),
+                };
+                let v: Vec<i32> = k.split(',').filter_map(|s| s.parse().ok()).collect();
+                let data = if is_chest {
+                    self.chests.remove(&k).map(|c| crate::containers::serialize_slots(&c))
+                } else {
+                    self.furnaces.remove(&k).map(|f| f.serialize())
+                };
+                if let (Some(data), true) = (data, v.len() == 3) {
+                    let t = if is_chest { crate::net::CHEST_SET } else { crate::net::FURNACE_SET };
+                    if let Some(n) = &self.net {
+                        n.send(crate::net::Out::new(t).i(v[0]).i(v[1]).i(v[2]).s(&data.replace("\\:", ":")), None);
+                    }
+                }
+            }
+        }
         self.screen = Screen::Play;
         self.at_table = false;
         self.open = None;
@@ -544,7 +569,14 @@ impl Game {
         let (bw, bh) = (300.0 * k, 44.0 * k);
         let names: Vec<&'static str> = match self.screen {
             Screen::Pause if self.controls_open => vec!["Voltar"],
-            Screen::Pause => vec!["Voltar ao jogo", "Controles", "Configurações", "Salvar e sair"],
+            Screen::Pause => {
+                let mut v = vec!["Voltar ao jogo", "Controles", "Configurações"];
+                if self.net.is_none() {
+                    v.push("Abrir para LAN");
+                }
+                v.push(if self.is_client() { "Desconectar" } else { "Salvar e sair" });
+                v
+            }
             Screen::Dead => vec!["Renascer"],
             _ => vec![],
         };
@@ -624,11 +656,20 @@ impl Game {
         ui.rect(0.0, 0.0, w, h, tint);
         ui.centered(30.0 * k, w / 2.0, h / 2.0 - 70.0 * k, title, rgba(245, 232, 205, 255));
         ui.centered(13.0 * k, w / 2.0, h / 2.0 - 40.0 * k, sub, rgba(220, 220, 225, 220));
+        let mut bottom = h / 2.0;
         for (name, r) in self.buttons(w, h) {
             let hot = self.mouse.0 >= r[0] && self.mouse.0 < r[0] + r[2] && self.mouse.1 >= r[1] && self.mouse.1 < r[1] + r[3];
             ui.rect(r[0], r[1], r[2], r[3], if hot { rgba(96, 150, 70, 255) } else { rgba(64, 64, 72, 245) });
             ui.frame(r[0], r[1], r[2], r[3], 2.0 * k, rgba(0, 0, 0, 180));
             ui.centered(16.0 * k, w / 2.0, r[1] + r[3] / 2.0 + 6.0 * k, name, rgba(255, 255, 255, 255));
+            bottom = r[1] + r[3];
+        }
+        // LAN: o IP para os amigos (anfitrião) ou de quem é o mundo (amigo)
+        if self.screen == Screen::Pause {
+            for (i, l) in self.lan_info().iter().enumerate() {
+                let c = if i == 0 { rgba(170, 240, 150, 255) } else { rgba(230, 230, 235, 240) };
+                ui.centered(if i == 0 { 16.0 } else { 14.0 } * k, w / 2.0, bottom + (34.0 + i as f32 * 24.0) * k, l, c);
+            }
         }
     }
 

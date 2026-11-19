@@ -53,6 +53,7 @@ impl Game {
         }
         c.recompute_sky_column(lx, lz);
         self.modified.insert(k);
+        self.net_block(x, y, z, b, rot);
         // redesenha este pedaço e os vizinhos (a luz que vaza de lado e as faces da borda mudam)
         for dx in -1..=1 {
             for dz in -1..=1 {

@@ -29,6 +29,9 @@ pub struct Arrow {
     pub shooter: i32,
     /// pode ser recolhida depois de presa (flecha do jogador na sobrevivência)
     pub pickup: bool,
+    /// número na rede e quem atirou (0 = o anfitrião, -1 = criatura, outro = o amigo)
+    pub id: i32,
+    pub owner: i32,
 }
 
 /// Flecha presa some depois de um minuto (Arrows.LIFE_STUCK); voando, depois de 30 s.
@@ -37,7 +40,7 @@ const LIFE_STUCK: f64 = 60.0;
 impl Arrow {
     pub fn new(p: [f64; 3], v: [f64; 3], damage: f64, shooter: i32, pickup: bool) -> Arrow {
         let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1e-6);
-        Arrow { p, v, d: [v[0] / l, v[1] / l, v[2] / l], life: 30.0, stuck: false, stuck_time: 0.0, damage, shooter, pickup }
+        Arrow { p, v, d: [v[0] / l, v[1] / l, v[2] / l], life: 30.0, stuck: false, stuck_time: 0.0, damage, shooter, pickup, id: 0, owner: 0 }
     }
 }
 
@@ -122,6 +125,14 @@ impl Game {
     }
 
     pub fn update_mobs(&mut self, dt: f64) {
+        if self.is_client() {
+            // no mundo de outro, as criaturas vêm do anfitrião (MOBS); aqui só as pernas e o susto
+            for m in self.mobs.iter_mut() {
+                m.hurt = (m.hurt - dt).max(0.0);
+            }
+            self.update_arrows(dt);
+            return;
+        }
         // acorda as criaturas dos pedaços que carregaram
         let awake: Vec<(i32, i32)> = self.sleeping.keys().filter(|k| self.chunks.contains_key(k)).cloned().collect();
         for k in awake {
@@ -562,6 +573,16 @@ impl Game {
             m.body.vz += dz / l * k * 10.0;
             m.body.vy += 4.0 + k * 5.0;
         }
+        if let Some(n) = &self.net {
+            if n.is_host() {
+                n.send(crate::net::Out::new(crate::net::EXPLODE).f(c[0]).f(c[1]).f(c[2]).f(power), None);
+            }
+        }
+        self.blast_player(c, power);
+    }
+
+    /// Dano e empurrão da explosão no jogador desta tela, e o clarão.
+    fn blast_player(&mut self, c: [f64; 3], power: f64) {
         let (dx, dy, dz) = (self.player.x - c[0], self.player.y + 0.9 - c[1], self.player.z - c[2]);
         let dist = (dx * dx + dy * dy + dz * dz).sqrt();
         if dist <= power * 2.0 && !self.creative && self.health > 0.0 {
@@ -575,6 +596,13 @@ impl Game {
         self.blast_flash = 0.35;
     }
 
+    /// Explosão que aconteceu no mundo do anfitrião: som, fumaça e o dano aqui.
+    pub fn blast_effects(&mut self, c: [f64; 3], power: f64) {
+        self.sfx("explosao", c, 1.0);
+        self.explosion_bits(c, power);
+        self.blast_player(c, power);
+    }
+
     /// Flecha do esqueleto (em m) para o jogador: arco calculado para a distância, com um pouco de erro.
     fn shoot_arrow(&mut self, m: [f64; 3]) {
         let s = [m[0], m[1] + 1.45, m[2]];
@@ -586,7 +614,7 @@ impl Game {
         let vx = dx / t * (1.0 + (self.rng.next() - 0.5) * e);
         let vz = dz / t * (1.0 + (self.rng.next() - 0.5) * e);
         let vy = (dy / t + 0.5 * ARROW_GRAVITY * t) * (1.0 + (self.rng.next() - 0.5) * e) + 0.4;
-        self.arrows.push(Arrow::new([s[0] + dx / flat * 0.45, s[1], s[2] + dz / flat * 0.45], [vx, vy, vz], ARROW_DAMAGE, -2, false));
+        self.spawn_arrow(Arrow::new([s[0] + dx / flat * 0.45, s[1], s[2] + dz / flat * 0.45], [vx, vy, vz], ARROW_DAMAGE, -2, false), -1);
     }
 
     /// Flechas (Arrows.update + BlockGame.arrowHit): gravidade, mais freio na água, acertam criaturas e o jogador,
@@ -596,14 +624,21 @@ impl Game {
         let mut mobs = std::mem::take(&mut self.mobs);
         let e = self.eye();
         let (ear, yaw) = ([e[0] as f64, e[1] as f64, e[2] as f64], self.player.yaw);
-        let can_take = !self.creative && self.health > 0.0 && self.inv.fits(crate::tools::ARROW);
+        let client = self.is_client();
+        let can_take = !self.creative && self.health > 0.0 && self.inv.fits(crate::tools::ARROW) && !client;
+        let mut stuck_now: Vec<usize> = Vec::new();
+        let mut gone: Vec<(i32, i32, [f64; 3])> = Vec::new();
         let (px, py, pz) = (self.player.x, self.player.y, self.player.z);
         let mut killed: Vec<i32> = Vec::new();
         let mut hits: Vec<[f64; 3]> = Vec::new();
         let mut picked = 0;
+        let mut idx = 0usize;
         arrows.retain_mut(|a| {
+            let my = idx;
+            idx += 1;
             a.life -= dt;
             if a.life <= 0.0 || a.p[1] < -20.0 {
+                gone.push((a.id, 0, a.p));
                 return false;
             }
             let w = Loaded(&self.chunks);
@@ -617,6 +652,7 @@ impl Game {
                     let near = (a.p[0] - px).abs() < 1.0 && (a.p[2] - pz).abs() < 1.0 && a.p[1] > py - 0.5 && a.p[1] < py + 2.3;
                     if a.pickup && can_take && a.stuck_time > 0.4 && near {
                         picked += 1;
+                        gone.push((a.id, 0, a.p));
                         return false;
                     }
                     return true;
@@ -641,8 +677,8 @@ impl Game {
                 for k in 0..3 {
                     a.p[k] += a.v[k] * dt / steps as f64;
                 }
-                // criaturas (nunca quem atirou)
-                for m in mobs.iter_mut() {
+                // criaturas (nunca quem atirou); no mundo de outro, quem decide os acertos é o anfitrião
+                for m in mobs.iter_mut().filter(|_| !client) {
                     if m.id == a.shooter || m.health <= 0.0 {
                         continue;
                     }
@@ -660,6 +696,7 @@ impl Game {
                         if m.health <= 0.0 {
                             killed.push(m.id);
                         }
+                        gone.push((a.id, 1, a.p));
                         return false;
                     }
                 }
@@ -671,19 +708,40 @@ impl Game {
                     a.stuck_time = 0.0;
                     a.v = [0.0; 3];
                     a.life = if a.pickup { LIFE_STUCK } else { a.life.min(5.0) };
+                    if client {
+                        a.life = 90.0; // o anfitrião avisa quando some
+                    }
+                    stuck_now.push(my);
                     return true;
                 }
                 // o jogador (só flechas que não são dele)
                 let pl = &self.player;
                 let inside = (a.p[0] - pl.x).abs() < pl.hw + 0.1 && a.p[1] > pl.y && a.p[1] < pl.y + pl.h && (a.p[2] - pl.z).abs() < pl.hw + 0.1;
-                if a.shooter != -1 && inside && !self.creative && self.health > 0.0 {
+                if a.shooter != -1 && a.owner == 0 && !client && inside && !self.creative && self.health > 0.0 {
                     self.pending_damage += a.damage;
+                    gone.push((a.id, 1, a.p));
                     crate::sound::play_at("flecha_criatura", a.p, ear, yaw, 0.9);
                     return false;
                 }
             }
             true
         });
+        // anfitrião: avisa os amigos das flechas que prenderam e das que sumiram
+        if let Some(n) = &self.net {
+            if n.is_host() {
+                for (id, kind, p) in &gone {
+                    n.send(crate::net::Out::new(crate::net::ARROW_GONE).i(*id).i(*kind).f(p[0]).f(p[1]).f(p[2]), None);
+                }
+            }
+        }
+        let _ = stuck_now;
+        for a in arrows.iter().filter(|a| a.stuck && a.stuck_time == 0.0) {
+            if let Some(n) = &self.net {
+                if n.is_host() {
+                    n.send(crate::net::stuck_packet(a), None);
+                }
+            }
+        }
         self.arrows = arrows;
         for p in hits {
             self.hit_bits(p, 0xB02020, 10);
@@ -732,6 +790,30 @@ impl Game {
         let held = self.inv.s[self.slot].id;
         let dmg = crate::items::damage(held);
         let (px, pz) = (self.player.x, self.player.z);
+        if self.mobs[i].hurt > 0.0 {
+            return;
+        }
+        let (kx, kz) = (self.mobs[i].body.x - px, self.mobs[i].body.z - pz);
+        let kl = (kx * kx + kz * kz).sqrt().max(0.01);
+        if self.is_client() {
+            // no mundo de outro, quem calcula o golpe é o anfitrião
+            let m = &mut self.mobs[i];
+            m.hurt = 0.35;
+            let (id, at) = (m.id, [m.body.x, m.body.y + 0.8, m.body.z]);
+            if let Some(n) = &self.net {
+                n.send(crate::net::Out::new(crate::net::HIT_MOB).i(id).f(dmg).f(kx / kl).f(kz / kl), None);
+            }
+            self.sfx("criatura_dano", at, 0.9);
+        } else {
+            self.damage_mob(i, dmg, [kx / kl, kz / kl]);
+        }
+        if !self.creative && self.inv.use_tool(self.slot) {
+            self.notice("Sua ferramenta quebrou!".into());
+        }
+    }
+
+    /// Golpe numa criatura (do jogador ou de um amigo da LAN): dano, empurrão e, se morrer, o que ela solta.
+    pub fn damage_mob(&mut self, i: usize, dmg: f64, k: [f64; 2]) {
         let m = &mut self.mobs[i];
         if m.hurt > 0.0 {
             return;
@@ -743,10 +825,8 @@ impl Game {
             self.sfx(v, at, 0.6);
         }
         let m = &mut self.mobs[i];
-        let (kx, kz) = (m.body.x - px, m.body.z - pz);
-        let kl = (kx * kx + kz * kz).sqrt().max(0.01);
-        m.body.vx += kx / kl * 7.0;
-        m.body.vz += kz / kl * 7.0;
+        m.body.vx += k[0] * 7.0;
+        m.body.vz += k[1] * 7.0;
         m.body.vy = 5.0;
         if m.health <= 0.0 {
             let pos = [m.body.x, m.body.y + 0.4, m.body.z];
@@ -755,9 +835,6 @@ impl Game {
                 let (vx, vz) = ((self.rng.next() - 0.5) * 3.0, (self.rng.next() - 0.5) * 3.0);
                 self.spawn_drop(Stack::new(id, n, 0), pos, [vx, 3.5, vz], 0.5);
             }
-        }
-        if !self.creative && self.inv.use_tool(self.slot) {
-            self.notice("Sua ferramenta quebrou!".into());
         }
     }
 
@@ -771,7 +848,26 @@ impl Game {
         if eats && !self.creative {
             self.inv.take_one(self.slot);
         }
+        if self.is_client() {
+            // no mundo de outro, o lobo é do anfitrião: ele decide e manda a resposta
+            if let Some(n) = &self.net {
+                n.send(crate::net::Out::new(crate::net::MOB_USE).i(self.mobs[i].id).i(held), None);
+            }
+            return true;
+        }
         let name = self.player_name.clone();
+        if let Some(msg) = self.mob_use(i, held, &name) {
+            self.notice(msg);
+        }
+        true
+    }
+
+    /// O que acontece ao usar um item no lobo (do jogador ou de um amigo da LAN). Retorna a mensagem.
+    pub fn mob_use(&mut self, i: usize, held: i32, name: &str) -> Option<String> {
+        if self.mobs[i].t != mob::WOLF {
+            return None;
+        }
+        let name = name.to_string();
         let roll = self.int(3);
         let m = &self.mobs[i];
         let at = [m.body.x, m.body.y + 0.6, m.body.z];
@@ -805,8 +901,7 @@ impl Game {
             m.target = None;
             if m.sitting { "Lobo: senta!" } else { "Lobo: vem comigo!" }.to_string()
         };
-        self.notice(msg);
-        true
+        Some(msg)
     }
 
     /// Ovo de criatura: nasce na célula de frente para o bloco mirado.
@@ -819,6 +914,16 @@ impl Game {
         let Some(h) = self.aim else { return true };
         let [x, y, z] = h.prev;
         self.sfx(mob::voice(t as usize).unwrap_or("colocar"), [x as f64 + 0.5, y as f64 + 0.5, z as f64 + 0.5], 0.8);
+        if self.is_client() {
+            let yaw = self.player.yaw + std::f64::consts::PI;
+            if let Some(n) = &self.net {
+                n.send(crate::net::Out::new(crate::net::MOB_SPAWN).i(t).f(x as f64 + 0.5).f(y as f64 + 0.01).f(z as f64 + 0.5).f(yaw), None);
+            }
+            if !self.creative {
+                self.inv.take_one(self.slot);
+            }
+            return true;
+        }
         if let Some(i) = self.add_mob(t as usize, x as f64 + 0.5, y as f64 + 0.01, z as f64 + 0.5) {
             self.mobs[i].yaw = self.player.yaw + std::f64::consts::PI;
         }

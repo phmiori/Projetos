@@ -7,13 +7,13 @@ use crate::ui::Ui;
 use crate::Game;
 
 /// Cores da pele e da camisa do personagem (Persona.java).
-const SKIN: [u32; 6] = [0xFFDBAC, 0xF1C27D, 0xE0AC69, 0xC68642, 0x8D5524, 0x5C3A1E];
-const SHIRT: [u32; 9] = [0x2AA198, 0xC0392B, 0x2E6FD8, 0x3C9A3C, 0xE0B020, 0x8E44AD, 0xE8E8E8, 0x303030, 0xE67E22];
+pub const SKIN: [u32; 6] = [0xFFDBAC, 0xF1C27D, 0xE0AC69, 0xC68642, 0x8D5524, 0x5C3A1E];
+pub const SHIRT: [u32; 9] = [0x2AA198, 0xC0392B, 0x2E6FD8, 0x3C9A3C, 0xE0B020, 0x8E44AD, 0xE8E8E8, 0x303030, 0xE67E22];
 
 /// Transformação 3x4 (linhas [a b c tx; d e f ty; g h i tz]), como o Hand.Tf do Java.
-type Tf = [f32; 12];
+pub type Tf = [f32; 12];
 
-fn mul(a: &Tf, b: &Tf) -> Tf {
+pub fn mul(a: &Tf, b: &Tf) -> Tf {
     let mut r = [0f32; 12];
     for row in 0..3 {
         for c in 0..4 {
@@ -26,25 +26,25 @@ fn mul(a: &Tf, b: &Tf) -> Tf {
     }
     r
 }
-fn translate(x: f32, y: f32, z: f32) -> Tf {
+pub fn translate(x: f32, y: f32, z: f32) -> Tf {
     [1.0, 0.0, 0.0, x, 0.0, 1.0, 0.0, y, 0.0, 0.0, 1.0, z]
 }
-fn scale(s: f32) -> Tf {
+pub fn scale(s: f32) -> Tf {
     [s, 0.0, 0.0, 0.0, 0.0, s, 0.0, 0.0, 0.0, 0.0, s, 0.0]
 }
-fn rot_y(a: f32) -> Tf {
+pub fn rot_y(a: f32) -> Tf {
     let (c, s) = (a.cos(), a.sin());
     [c, 0.0, s, 0.0, 0.0, 1.0, 0.0, 0.0, -s, 0.0, c, 0.0]
 }
-fn rot_x(a: f32) -> Tf {
+pub fn rot_x(a: f32) -> Tf {
     let (c, s) = (a.cos(), a.sin());
     [1.0, 0.0, 0.0, 0.0, 0.0, c, -s, 0.0, 0.0, s, c, 0.0]
 }
-fn rot_z(a: f32) -> Tf {
+pub fn rot_z(a: f32) -> Tf {
     let (c, s) = (a.cos(), a.sin());
     [c, -s, 0.0, 0.0, s, c, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]
 }
-fn apply(t: &Tf, p: [f32; 3]) -> [f32; 3] {
+pub fn apply(t: &Tf, p: [f32; 3]) -> [f32; 3] {
     [
         t[0] * p[0] + t[1] * p[1] + t[2] * p[2] + t[3],
         t[4] * p[0] + t[5] * p[1] + t[6] * p[2] + t[7],
@@ -82,8 +82,8 @@ impl Game {
         let mut arm = translate(0.5 + bob_x - sw * 0.12, -0.52 + bob_y - sw * 0.08, -0.38 - sw * 0.16);
         arm = mul(&arm, &rot_y(0.32 + sw * 0.3));
         arm = mul(&arm, &rot_x(0.14 - sw * 0.9));
-        let shirt = SHIRT[self.persona.1.min(SHIRT.len() - 1)];
-        let skin = SKIN[self.persona.0.min(SKIN.len() - 1)];
+        let shirt = SHIRT[self.persona[2].min(SHIRT.len() - 1)];
+        let skin = SKIN[self.persona[0].min(SKIN.len() - 1)];
         solid_box(ui, &arm, [-0.1, -0.1, -0.48], [0.1, 0.1, 0.0], shirt, light); // manga
         solid_box(ui, &arm, [-0.095, -0.095, -0.72], [0.095, 0.095, -0.48], skin, light); // mão
 

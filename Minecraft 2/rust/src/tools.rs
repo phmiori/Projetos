@@ -61,7 +61,15 @@ impl Game {
             }
         }
         crate::sound::play("arco_disparo", 0.8);
-        self.arrows.push(Arrow::new(p, [lx * speed, ly * speed, lz * speed], dmg, -1, !self.creative));
+        let v = [lx * speed, ly * speed, lz * speed];
+        if self.is_client() {
+            // no mundo de outro, a flecha nasce no anfitrião (ele avisa todos)
+            if let Some(n) = &self.net {
+                n.send(crate::net::Out::new(crate::net::SHOOT).f(p[0]).f(p[1]).f(p[2]).f(v[0]).f(v[1]).f(v[2]).f(dmg).bo(!self.creative), None);
+            }
+            return;
+        }
+        self.spawn_arrow(Arrow::new(p, v, dmg, -1, !self.creative), 0);
     }
 
     /// Barrinha de força do arco embaixo da mira.
@@ -207,6 +215,10 @@ impl Game {
             self.notice("Ponto de renascimento definido. Só dá para dormir à noite.".into());
             return;
         }
+        if self.is_client() {
+            self.notice("Ponto de renascimento definido. Só o anfitrião faz a noite passar.".into());
+            return;
+        }
         let p = &self.player;
         if self.mobs.iter().any(|m| m.hostile() && (m.body.x - p.x).abs() < 8.0 && (m.body.z - p.z).abs() < 8.0 && (m.body.y - p.y).abs() < 5.0) {
             self.notice("Você não pode dormir agora: há monstros por perto.".into());
@@ -217,6 +229,9 @@ impl Game {
         }
         self.time = crate::DAY_LENGTH * 0.27;
         self.mobs.retain(|m| !m.hostile());
+        if let Some(n) = &self.net {
+            n.send(crate::net::Out::new(crate::net::TIME).dbl(self.time).i(self.day), None);
+        }
         let d = self.day;
         self.notice(format!("Você dormiu. Bom dia!  (dia {d})"));
         self.save_all();
