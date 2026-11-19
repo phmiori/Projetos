@@ -633,9 +633,58 @@ final class World {
         return b == Block.AIR || Block.shape(b) == Block.CROSS;
     }
 
+    private static final int[] HX = { 1, -1, 0, 0 }, HZ = { 0, 0, 1, -1 }; // os 4 lados (h ^ 1 = o lado oposto)
+
+    /** Embaixo de (x, y, z) a água pode cair (ar, planta ou outra água)? */
+    private boolean dropBelow(int x, int y, int z) {
+        if (y <= 0) return false;
+        int b = get(x, y - 1, z);
+        return flowable(b) || Block.isWater(b);
+    }
+
+    /** A água pode entrar em (x, y, z) pelo lado? */
+    private boolean passable(int x, int y, int z) {
+        int b = get(x, y, z);
+        return flowable(b) || Block.waterLevel(b) > 0;
+    }
+
+    /** Quantos blocos andando de lado até um desnível, a partir de (x, y, z), sem voltar pelo lado from (99 = nenhum até 4). */
+    private int dropDistance(int x, int y, int z, int from, int dist) {
+        if (dropBelow(x, y, z)) return dist;
+        if (dist >= 4) return 99;
+        int best = 99;
+        for (int h = 0; h < 4; h++) {
+            if (h == from) continue;
+            int nx = x + HX[h], nz = z + HZ[h];
+            if (!passable(nx, y, nz)) continue;
+            best = Math.min(best, dropDistance(nx, y, nz, h ^ 1, dist + 1));
+        }
+        return best;
+    }
+
     /**
-     * Avança a água a cada 0,2 s: cai, espalha até 7 blocos perdendo altura e seca quando perde
-     * a fonte. Só as células perto de onde algo mudou são olhadas.
+     * Para quais lados a água de (x, y, z) escorre (bit 1 << h). Como numa encosta de verdade, ela procura o
+     * desnível mais perto (até 4 blocos) e vai só por esse caminho, caindo como cachoeira; sem desnível por perto
+     * espalha para todos os lados. Água que tem por onde cair embaixo não escorre para o lado.
+     */
+    private int flowDirs(int x, int y, int z) {
+        int below = y > 0 ? get(x, y - 1, z) : Block.BEDROCK;
+        if (flowable(below) || Block.waterLevel(below) > 0) return 0;
+        int best = 99, mask = 0, open = 0;
+        for (int h = 0; h < 4; h++) {
+            int nx = x + HX[h], nz = z + HZ[h];
+            if (!passable(nx, y, nz) && !Block.isWater(get(nx, y, nz))) continue;
+            open |= 1 << h;
+            int d = dropDistance(nx, y, nz, h ^ 1, 1);
+            if (d < best) { best = d; mask = 1 << h; }
+            else if (d == best && d < 99) mask |= 1 << h;
+        }
+        return best == 99 ? open : mask;
+    }
+
+    /**
+     * Avança a água a cada 0,2 s: cai, escorre para o desnível mais perto (ou espalha até 7 blocos no plano)
+     * perdendo altura e seca quando perde a fonte. Só as células perto de onde algo mudou são olhadas.
      */
     void tickFluids(double dt) {
         fluidTimer += dt;
@@ -672,9 +721,10 @@ final class World {
         } else if (!Block.isWater(below) || level == 0) {
             int next = level + 1;
             if (next > 7) return;
-            for (int d = 0; d < 6; d++) {
-                if (DY[d] != 0) continue;
-                int nx = x + DX[d], nz = z + DZ[d];
+            int dirs = flowDirs(x, y, z);
+            for (int h = 0; h < 4; h++) {
+                if ((dirs & 1 << h) == 0) continue;
+                int nx = x + HX[h], nz = z + HZ[h];
                 int nb = get(nx, y, nz);
                 if (flowable(nb)) set(nx, y, nz, Block.waterOfLevel(next));
             }
@@ -685,15 +735,16 @@ final class World {
     private int supportLevel(int x, int y, int z) {
         if (Block.isWater(get(x, y + 1, z))) return 1; // água caindo de cima
         int best = 99;
-        for (int d = 0; d < 6; d++) {
-            if (DY[d] != 0) continue;
-            int nx = x + DX[d], nz = z + DZ[d];
+        for (int h = 0; h < 4; h++) {
+            int nx = x + HX[h], nz = z + HZ[h];
             int l = Block.waterLevel(get(nx, y, nz));
-            if (l < 0) continue;
+            if (l < 0 || l + 1 >= best) continue;
             int under = get(nx, y - 1, nz);
             // água caindo (ar ou mais água embaixo) não espalha para o lado; só a apoiada em chão ou a fonte
             if (l > 0 && (flowable(under) || Block.isWater(under))) continue;
-            best = Math.min(best, l + 1);
+            // e só se este lado é um dos caminhos que ela escolheu (o do desnível mais perto)
+            if ((flowDirs(nx, y, nz) & 1 << (h ^ 1)) == 0) continue;
+            best = l + 1;
         }
         return best;
     }
