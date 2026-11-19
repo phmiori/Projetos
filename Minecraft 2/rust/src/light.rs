@@ -131,6 +131,16 @@ impl Game {
         self.light_bfs(queue, [x0, y0, z0], [x1, y1, z1]);
     }
 
+    /// Luz do céu (0-15) da célula: plena acima do teto da coluna, e cai rápido abaixo dele.
+    pub fn sky_light(&self, x: i32, y: i32, z: i32) -> u8 {
+        if y >= SY {
+            return 15;
+        }
+        let Some(c) = self.chunks.get(&(x >> 4, z >> 4)) else { return 15 };
+        let top = c.sky_top[((x & 15) * 16 + (z & 15)) as usize] as i32;
+        if y > top { 15 } else { (15 - (top - y + 1) * 3).max(0) as u8 }
+    }
+
     /// Há luz de bloco em volta (3 x 3 x 3)?
     pub fn near_light(&self, x: i32, y: i32, z: i32) -> bool {
         (-1..=1).any(|dx| (-1..=1).any(|dy| (-1..=1).any(|dz| self.block_light(x + dx, y + dy, z + dz) > 0)))

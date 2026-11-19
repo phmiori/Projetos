@@ -74,7 +74,16 @@ pub struct Info {
     pub drop: i32,
     /// segundos para quebrar com a mão (-1 = inquebrável)
     pub hardness: f64,
+    /// qual ferramenta quebra mais rápido (M_SOIL, M_WOOD, M_ROCK, M_PLANT)
+    pub material: i32,
+    /// nível mínimo de picareta para o bloco dar item (-1 = qualquer coisa)
+    pub tier: i32,
 }
+
+pub const M_SOIL: i32 = 1;
+pub const M_WOOD: i32 = 2;
+pub const M_ROCK: i32 = 3;
+pub const M_PLANT: i32 = 4;
 
 pub struct Table {
     pub blocks: Vec<Info>,
@@ -125,6 +134,12 @@ pub fn table() -> &'static Table {
                 info.item_form = p[14] == "1";
                 info.drop = p[15].parse().unwrap_or(0);
                 info.hardness = p[16].parse().unwrap_or(1.0);
+            }
+            if p.len() >= 19 {
+                info.material = p[17].parse().unwrap_or(0);
+                info.tier = p[18].parse().unwrap_or(-1);
+            } else {
+                info.tier = -1;
             }
             if !p[7].is_empty() {
                 for b in p[7].split(';') {

@@ -143,14 +143,19 @@ impl Game {
     pub fn break_aimed(&mut self) {
         let Some(h) = self.aim else { return };
         let [x, y, z] = h.b;
+        self.destroy(x, y, z);
+    }
+
+    /// Tira o bloco (e a outra metade, se for porta). Retorna false se não pode ser quebrado aqui.
+    pub fn destroy(&mut self, x: i32, y: i32, z: i32) -> bool {
         let b = self.get(x, y, z);
         if block::info(b).hardness < 0.0 {
-            return;
+            return false;
         }
         if b == CHEST || b == FURNACE || b == FURNACE_LIT {
             // o conteúdo de baús e fornalhas fica no meta.properties, que a versão Rust ainda não mexe
             self.notice("Baús e fornalhas ainda não podem ser quebrados na versão Rust".into());
-            return;
+            return false;
         }
         self.set(x, y, z, AIR, 0);
         // a outra metade da porta vai junto
@@ -161,11 +166,22 @@ impl Game {
                 self.set(x, oy, z, AIR, 0);
             }
         }
+        true
+    }
+
+    /// Colocou um bloco: na sobrevivência gasta um da mão.
+    fn pay(&mut self) {
+        if !self.creative {
+            self.inv.take_one(self.slot);
+        }
     }
 
     /// Botão direito: abre/fecha porta, ou coloca o bloco da mão (mesmas regras do placeBlock do Java).
     pub fn use_aimed(&mut self) {
-        let Some(h) = self.aim else { return };
+        let Some(h) = self.aim else {
+            self.use_item();
+            return;
+        };
         let [hx, hy, hz] = h.b;
         let target = self.get(hx, hy, hz);
         let ti = block::info(target);
@@ -178,10 +194,22 @@ impl Game {
             }
             return;
         }
-        if target == CHEST || target == FURNACE || target == FURNACE_LIT || target == block::TABLE {
-            return; // no Java abre a tela do bloco; aqui ainda não tem
+        if target == block::TABLE {
+            // bancada: abre a grade de criação 3x3
+            self.at_table = true;
+            self.screen = crate::Screen::Inventory;
+            self.release_mouse = true;
+            return;
         }
-        let held = block::block_of_item(self.hotbar[self.slot]);
+        if target == CHEST || target == FURNACE || target == FURNACE_LIT {
+            self.notice("Baús e fornalhas ainda não abrem na versão Rust".into());
+            return;
+        }
+        // comida e armadura na mão: come ou veste
+        if self.use_item() {
+            return;
+        }
+        let held = block::block_of_item(self.inv.s[self.slot].id);
         if held == AIR {
             return;
         }
@@ -200,6 +228,7 @@ impl Game {
             let (a, m) = (ti.mat, hi.mat);
             let result = if a == m { SHAPE_MATS[m as usize] } else if ti.flag == 1 { block::mixed_slab(m, a) } else { block::mixed_slab(a, m) };
             self.set(hx, hy, hz, result, 0);
+            self.pay();
             return;
         }
         // laje vertical encostando na outra metade de uma laje vertical igual: bloco inteiro
@@ -207,6 +236,7 @@ impl Game {
             let f = ti.face as usize;
             if bx == hx - DIR_X[f] && bz == hz - DIR_Z[f] && by == hy {
                 self.set(hx, hy, hz, SHAPE_MATS[hi.mat as usize], 0);
+                self.pay();
                 return;
             }
         }
@@ -221,6 +251,7 @@ impl Game {
                 return; // precisa de parede firme
             }
             self.set(bx, by, bz, WALL_TORCH_BASE + toward_hit, 0);
+            self.pay();
             return;
         }
         let place = match hi.kind {
@@ -236,6 +267,7 @@ impl Game {
                 }
                 self.set(bx, by + 1, bz, block::variant(K_DOOR, hi.mat, facing, 0, 1), 0);
                 self.set(bx, by, bz, block::variant(K_DOOR, hi.mat, facing, 0, 0), 0);
+                self.pay();
                 return;
             }
             _ => held,
@@ -254,6 +286,7 @@ impl Game {
         // blocos com "frente" (fornalha, bancada, baú, cama...) ficam com a frente virada para quem os colocou
         let rot = if block::info(place).rotatable { (facing + 2) & 3 } else { 0 };
         self.set(bx, by, bz, place, rot);
+        self.pay();
     }
 
     /// Botão do meio: pega o bloco mirado para a mão (criativo).
@@ -261,7 +294,8 @@ impl Game {
         let Some(h) = self.aim else { return };
         let item = block::item_for_block(self.get(h.b[0], h.b[1], h.b[2]));
         if item > 0 {
-            self.hotbar[self.slot] = item;
+            self.inv.s[self.slot] = crate::inventory::Stack::new(item, crate::items::max_stack(item), 0);
+            self.slot_name_timer = 2.0;
         }
     }
 

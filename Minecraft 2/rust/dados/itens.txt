@@ -1,0 +1,89 @@
+# gerado por rust/ferramentas/ExportarBlocos.java a partir do Items.java (não edite à mão)
+# id|nome|pilha|durabilidade|ferramenta|material|velocidade|comida|peça de armadura|defesa|ícone
+200|Graveto|64|0|-1|-1|1.0|0|-1|0|0
+201|Carvão|64|0|-1|-1|1.0|0|-1|0|1
+202|Lingote de ferro|64|0|-1|-1|1.0|0|-1|0|2
+203|Lingote de ouro|64|0|-1|-1|1.0|0|-1|0|3
+204|Cristal|64|0|-1|-1|1.0|0|-1|0|4
+205|Maçã|64|0|-1|-1|1.0|4|-1|0|5
+206|Bife cru|64|0|-1|-1|1.0|3|-1|0|6
+207|Bife assado|64|0|-1|-1|1.0|8|-1|0|7
+208|Peixe cru|64|0|-1|-1|1.0|2|-1|0|8
+209|Peixe assado|64|0|-1|-1|1.0|6|-1|0|9
+210|Pólvora|64|0|-1|-1|1.0|0|-1|0|10
+216|Picareta de madeira|1|60|0|0|2.0|0|-1|0|11
+217|Picareta de pedra|1|132|0|1|4.0|0|-1|0|12
+218|Picareta de ferro|1|250|0|2|6.0|0|-1|0|13
+219|Picareta de cristal|1|1200|0|3|9.0|0|-1|0|14
+220|Machado de madeira|1|60|1|0|2.0|0|-1|0|15
+221|Machado de pedra|1|132|1|1|4.0|0|-1|0|16
+222|Machado de ferro|1|250|1|2|6.0|0|-1|0|17
+223|Machado de cristal|1|1200|1|3|9.0|0|-1|0|18
+224|Pá de madeira|1|60|2|0|2.0|0|-1|0|19
+225|Pá de pedra|1|132|2|1|4.0|0|-1|0|20
+226|Pá de ferro|1|250|2|2|6.0|0|-1|0|21
+227|Pá de cristal|1|1200|2|3|9.0|0|-1|0|22
+228|Espada de madeira|1|60|3|0|2.0|0|-1|0|23
+229|Espada de pedra|1|132|3|1|4.0|0|-1|0|24
+230|Espada de ferro|1|250|3|2|6.0|0|-1|0|25
+231|Espada de cristal|1|1200|3|3|9.0|0|-1|0|26
+232|Enxada de madeira|1|60|4|0|2.0|0|-1|0|27
+233|Enxada de pedra|1|132|4|1|4.0|0|-1|0|28
+234|Enxada de ferro|1|250|4|2|6.0|0|-1|0|29
+235|Enxada de cristal|1|1200|4|3|9.0|0|-1|0|30
+236|Sílex|64|0|-1|-1|1.0|0|-1|0|31
+237|Sementes de trigo|64|0|-1|-1|1.0|0|-1|0|32
+238|Trigo|64|0|-1|-1|1.0|0|-1|0|33
+239|Pão|64|0|-1|-1|1.0|5|-1|0|34
+240|Couro|64|0|-1|-1|1.0|0|-1|0|35
+241|Carne de porco crua|64|0|-1|-1|1.0|3|-1|0|36
+242|Carne de porco assada|64|0|-1|-1|1.0|8|-1|0|37
+243|Carneiro cru|64|0|-1|-1|1.0|2|-1|0|38
+244|Carneiro assado|64|0|-1|-1|1.0|6|-1|0|39
+245|Frango cru|64|0|-1|-1|1.0|2|-1|0|40
+246|Frango assado|64|0|-1|-1|1.0|6|-1|0|41
+247|Fio|64|0|-1|-1|1.0|0|-1|0|42
+248|Pena|64|0|-1|-1|1.0|0|-1|0|43
+249|Osso|64|0|-1|-1|1.0|0|-1|0|44
+250|Pederneira|1|64|-1|-1|1.0|0|-1|0|45
+251|Flecha|64|0|-1|-1|1.0|0|-1|0|46
+252|Capacete de couro|1|70|-1|-1|1.0|0|0|1|47
+253|Capacete de ferro|1|220|-1|-1|1.0|0|0|2|48
+254|Capacete de cristal|1|500|-1|-1|1.0|0|0|3|49
+255|Peitoral de couro|1|70|-1|-1|1.0|0|1|3|50
+256|Peitoral de ferro|1|220|-1|-1|1.0|0|1|6|51
+257|Peitoral de cristal|1|500|-1|-1|1.0|0|1|8|52
+258|Calças de couro|1|70|-1|-1|1.0|0|2|2|53
+259|Calças de ferro|1|220|-1|-1|1.0|0|2|5|54
+260|Calças de cristal|1|500|-1|-1|1.0|0|2|6|55
+261|Botas de couro|1|70|-1|-1|1.0|0|3|1|56
+262|Botas de ferro|1|220|-1|-1|1.0|0|3|2|57
+263|Botas de cristal|1|500|-1|-1|1.0|0|3|3|58
+264|Arco|1|384|-1|-1|1.0|0|-1|0|59
+265|Ovo de porco|64|0|-1|-1|1.0|0|-1|0|60
+266|Ovo de ovelha|64|0|-1|-1|1.0|0|-1|0|61
+267|Ovo de galinha|64|0|-1|-1|1.0|0|-1|0|62
+268|Ovo de morto-vivo|64|0|-1|-1|1.0|0|-1|0|63
+269|Ovo de aranha|64|0|-1|-1|1.0|0|-1|0|64
+270|Ovo de peixe|64|0|-1|-1|1.0|0|-1|0|65
+271|Ovo de vaca|64|0|-1|-1|1.0|0|-1|0|66
+272|Ovo de Creeper|64|0|-1|-1|1.0|0|-1|0|67
+273|Ovo de esqueleto|64|0|-1|-1|1.0|0|-1|0|68
+274|Ovo de lobo|64|0|-1|-1|1.0|0|-1|0|69
+275|Ovo de raposa|64|0|-1|-1|1.0|0|-1|0|70
+276|Ovo de cervo|64|0|-1|-1|1.0|0|-1|0|71
+277|Ovo de coelho|64|0|-1|-1|1.0|0|-1|0|72
+278|Ovo de urso|64|0|-1|-1|1.0|0|-1|0|73
+279|Ovo de pássaro|64|0|-1|-1|1.0|0|-1|0|74
+280|Ovo de peixe tropical|64|0|-1|-1|1.0|0|-1|0|75
+281|Ovo de salmão|64|0|-1|-1|1.0|0|-1|0|76
+282|Ovo de tubarão|64|0|-1|-1|1.0|0|-1|0|77
+283|Ovo de tigre-de-bengala|64|0|-1|-1|1.0|0|-1|0|78
+284|Ovo de tigre-de-bengala branco|64|0|-1|-1|1.0|0|-1|0|79
+285|Ovo de gato|64|0|-1|-1|1.0|0|-1|0|80
+286|Ovo de escorpião amarelo|64|0|-1|-1|1.0|0|-1|0|81
+287|Ovo de escorpião-imperador|64|0|-1|-1|1.0|0|-1|0|82
+288|Ovo de urso-polar|64|0|-1|-1|1.0|0|-1|0|83
+289|Ovo de pinguim|64|0|-1|-1|1.0|0|-1|0|84
+290|Ovo de boi-almiscarado|64|0|-1|-1|1.0|0|-1|0|85
+291|Ovo de narval|64|0|-1|-1|1.0|0|-1|0|86

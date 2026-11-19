@@ -16,13 +16,18 @@
 mod block;
 mod edit;
 mod fluid;
+mod inventory;
+mod items;
 mod light;
 mod mesher;
 mod noise;
 mod physics;
 mod save;
+mod screens;
 mod shaders;
+mod survival;
 mod textures;
+mod ui;
 mod world;
 
 use glow::HasContext;
@@ -47,6 +52,16 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, WindowBuilder};
 use world::{Chunk, Generator, SEA};
+use inventory::{Inventory, Stack};
+
+/// Qual tela está aberta.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Screen {
+    Play,
+    Inventory,
+    Pause,
+    Dead,
+}
 
 enum Job {
     Load(i32, i32),
@@ -137,6 +152,7 @@ struct Gl {
     ebo: glow::Buffer,
     ebo_quads: usize,
     tex: glow::Texture,
+    ui: ui::Ui,
 }
 
 unsafe fn compile(gl: &glow::Context, vs: &str, fs: &str) -> glow::Program {
@@ -226,8 +242,36 @@ struct Game {
     fluid_set: HashSet<(i32, i32, i32)>,
     fluid_timer: f64,
     aim: Option<edit::Hit>,
-    hotbar: [i32; 9],
+    inv: Inventory,
     slot: usize,
+    screen: Screen,
+    /// item preso no mouse (no inventário)
+    cursor: Stack,
+    /// grade de criação (3 x 3; o inventário usa só o canto 2 x 2)
+    craft: [Stack; 9],
+    at_table: bool,
+    palette: Vec<i32>,
+    palette_scroll: usize,
+    mouse: (f32, f32),
+    help: bool,
+    drops: Vec<survival::Drop>,
+    rng: survival::Rng,
+    health: f64,
+    food: f64,
+    air: f64,
+    drown_timer: f64,
+    hazard_cd: f64,
+    starve_timer: f64,
+    last_hurt: f64,
+    hurt_flash: f64,
+    clock_s: f64,
+    eat_cd: f64,
+    break_progress: f64,
+    break_pos: Option<[i32; 3]>,
+    spawn: [f64; 3],
+    slot_name_timer: f64,
+    grab_mouse: bool,
+    release_mouse: bool,
     l_held: bool,
     r_held: bool,
     l_pending: bool,
@@ -265,7 +309,7 @@ struct Game {
 
 impl Game {
     #[allow(clippy::too_many_arguments)]
-    fn new(gen: Generator, save_dir: Option<PathBuf>, world_name: String, settings: save::Settings, player: Player, creative: bool, time: f64, day: i32, hotbar: [i32; 9]) -> Game {
+    fn new(gen: Generator, save_dir: Option<PathBuf>, world_name: String, settings: save::Settings, player: Player, creative: bool, time: f64, day: i32, inv: Inventory, vitals: [f64; 2], spawn: [f64; 3]) -> Game {
         let (jtx, jrx) = mpsc::channel::<Job>();
         let (dtx, drx) = mpsc::channel::<Done>();
         let jrx = Arc::new(Mutex::new(jrx));
@@ -311,7 +355,33 @@ impl Game {
             fluid_set: HashSet::new(),
             fluid_timer: 0.0,
             aim: None,
-            hotbar,
+            inv,
+            screen: Screen::Play,
+            cursor: Stack::default(),
+            craft: [Stack::default(); 9],
+            at_table: false,
+            palette: items::palette(),
+            palette_scroll: 0,
+            mouse: (0.0, 0.0),
+            help: true,
+            drops: Vec::new(),
+            rng: survival::Rng::new(),
+            health: vitals[0],
+            food: vitals[1],
+            air: survival::MAX_AIR,
+            drown_timer: 0.0,
+            hazard_cd: 0.0,
+            starve_timer: 0.0,
+            last_hurt: -10.0,
+            hurt_flash: 0.0,
+            clock_s: 0.0,
+            eat_cd: 0.0,
+            break_progress: 0.0,
+            break_pos: None,
+            spawn,
+            slot_name_timer: 0.0,
+            grab_mouse: false,
+            release_mouse: false,
             slot: 0,
             l_held: false,
             r_held: false,
@@ -480,6 +550,10 @@ impl Game {
     }
 
     fn update(&mut self, dt: f64) {
+        if self.screen == Screen::Pause {
+            return; // pausado: o mundo para, como no Java
+        }
+        self.clock_s = self.start.elapsed().as_secs_f64();
         // relógio do mundo (F4 segurado passa as horas 60x mais depressa)
         self.time += dt * if self.key(KeyCode::F4) { 60.0 } else { 1.0 };
         while self.time >= DAY_LENGTH {
@@ -492,7 +566,8 @@ impl Game {
         if !ready {
             return;
         }
-        let input = Input {
+        let playing = self.screen == Screen::Play;
+        let input = if !playing { Input::default() } else { Input {
             fwd: self.key(KeyCode::KeyW),
             back: self.key(KeyCode::KeyS),
             left: self.key(KeyCode::KeyA),
@@ -500,7 +575,7 @@ impl Game {
             jump: self.key(KeyCode::Space),
             sneak: self.key(KeyCode::ShiftLeft) || self.key(KeyCode::ShiftRight),
             sprint: self.key(KeyCode::ControlLeft),
-        };
+        } };
         // passos de no máximo 1/30 s, como um quadro lento no Java
         let mut left = dt;
         while left > 0.0 {
@@ -517,31 +592,34 @@ impl Game {
         self.aim = self.raycast([eye[0] as f64, eye[1] as f64, eye[2] as f64], [f[0] as f64, f[1] as f64, f[2] as f64], if self.creative { 7.0 } else { 5.0 });
         self.cool_l -= dt;
         self.cool_r -= dt;
+        self.eat_cd -= dt;
+        self.slot_name_timer -= dt;
+        self.update_drops(dt);
+        self.survival(dt);
         let (lp, rp, mp) = (self.l_pending, self.r_pending, self.m_pending);
         self.l_pending = false;
         self.r_pending = false;
         self.m_pending = false;
-        if !self.creative {
-            if lp || rp {
-                self.notice("Por enquanto a versão Rust só edita mundos no modo criativo".into());
+        if playing {
+            if self.creative {
+                // segurando o botão, repete a cada 0,2 s
+                if (lp || (self.l_held && self.cool_l <= 0.0)) && self.aim.is_some() {
+                    self.break_aimed();
+                    self.cool_l = 0.2;
+                }
+            } else {
+                // sobrevivência: segurando, o bloco vai rachando (mais rápido com a ferramenta certa)
+                self.mine(dt, self.l_held);
             }
-            return;
-        }
-        // segurando o botão, repete a cada 0,2 s
-        if lp || (self.l_held && self.cool_l <= 0.0) {
-            if self.aim.is_some() {
-                self.break_aimed();
-                self.cool_l = 0.2;
-            }
-        }
-        if rp || (self.r_held && self.cool_r <= 0.0) {
-            if self.aim.is_some() {
+            if rp || (self.r_held && self.cool_r <= 0.0) {
                 self.use_aimed();
                 self.cool_r = 0.2;
             }
-        }
-        if mp {
-            self.pick_aimed();
+            if mp && self.creative {
+                self.pick_aimed();
+            }
+        } else {
+            self.break_progress = 0.0;
         }
         // grava de tempos em tempos (como o Java)
         if self.last_save.elapsed().as_secs() >= 30 {
@@ -556,6 +634,9 @@ impl Game {
     /// Grava os pedaços mudados e a posição, a hora e a barra no meta.properties (o resto do arquivo fica igual).
     fn save_all(&mut self) {
         self.last_save = Instant::now();
+        if self.health <= 0.0 && !self.creative {
+            self.respawn(); // fechou morto: grava como se já tivesse renascido (os itens ficaram no chão)
+        }
         self.save_chunks(None);
         let Some(dir) = self.save_dir.clone() else { return };
         let p = &self.player;
@@ -571,8 +652,11 @@ impl Game {
             ("dia", self.day.to_string()),
             ("ultimoJogo", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0).to_string()),
         ];
-        if let Some(inv) = save::hotbar_inventory(&dir, &self.hotbar) {
-            v.push(("inventario", inv));
+        v.push(("inventario", self.inv.serialize()));
+        v.push(("inventarioFormato", "2".to_string()));
+        if !self.creative {
+            v.push(("jogador.vida", self.health.max(0.0).to_string()));
+            v.push(("jogador.fome", self.food.to_string()));
         }
         if let Err(e) = save::update_meta(&dir, &v) {
             println!("não consegui gravar o meta.properties: {e}");
@@ -675,6 +759,15 @@ impl Game {
         }
         gl.depth_mask(true);
 
+        // itens soltos no chão (girando, com a luz de onde estão)
+        if !self.drops.is_empty() {
+            self.draw_drops(&mut g.ui, sky.daylight);
+            gl.enable(glow::BLEND);
+            gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+            g.ui.flush(gl, &vp, g.tex);
+            gl.disable(glow::BLEND);
+        }
+
         // contorno do bloco mirado
         if let Some(h) = self.aim {
             let b = self.get(h.b[0], h.b[1], h.b[2]);
@@ -712,6 +805,7 @@ impl Game {
 
         // mira (inverte a cor do que está atrás)
         gl.disable(glow::DEPTH_TEST);
+        if self.screen == Screen::Play {
         gl.blend_func(glow::ONE_MINUS_DST_COLOR, glow::ZERO);
         gl.use_program(Some(g.cross));
         let (sx, sy) = (2.0 / w as f32, 2.0 / h as f32);
@@ -724,6 +818,19 @@ impl Game {
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(g.cross_vbo));
         gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, as_bytes(&quads), glow::STREAM_DRAW);
         gl.draw_arrays(glow::TRIANGLES, 0, 18);
+        }
+
+        // interface: barra, informações e as telas abertas
+        gl.enable(glow::BLEND);
+        gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+        let (fw, fh) = (w as f32, h as f32);
+        self.draw_hud(&mut g.ui, fw, fh);
+        match self.screen {
+            Screen::Inventory => self.draw_inventory(&mut g.ui, fw, fh),
+            Screen::Pause | Screen::Dead => self.draw_menu(&mut g.ui, fw, fh),
+            Screen::Play => {}
+        }
+        g.ui.flush(gl, &ui::ortho(fw, fh), g.tex);
         gl.disable(glow::BLEND);
         gl.enable(glow::DEPTH_TEST);
 
@@ -767,20 +874,9 @@ impl Game {
             self.player.z,
             if self.player.flying { " · voando" } else { "" },
             self.fps
-        ) + &self.held_text()
+        )
     }
 
-    fn held_text(&self) -> String {
-        if let Some((t, at)) = &self.notice {
-            if at.elapsed().as_secs() < 4 {
-                return format!(" · {t}");
-            }
-        }
-        let item = self.hotbar[self.slot];
-        let b = block::block_of_item(item);
-        let name = if b != block::AIR { block::info(b).name.clone() } else if item > 0 { format!("item {item}") } else { "mão vazia".into() };
-        format!(" · [{}] {}", self.slot + 1, name)
-    }
 }
 
 unsafe fn free(g: &Gl, m: GpuMesh) {
@@ -843,8 +939,14 @@ fn main() {
         None => save::latest_world(&PathBuf::from("worlds")),
     };
     let seed_arg = arg("--semente").and_then(|s| s.parse::<i32>().ok());
-    let mut player = Player::default();
-    let mut hotbar = [1, 3, 8, 6, 18, 19, 31, 9, 30]; // a barra inicial do criativo do Java
+    let mut player = Player::new();
+    // a barra inicial do criativo do Java
+    let mut inv = Inventory::default();
+    for (i, id) in [1, 3, 8, 6, 18, 19, 31, 9, 30].iter().enumerate() {
+        inv.s[i] = Stack::new(*id, 64, 0);
+    }
+    let mut vitals = [survival::MAX_HEALTH, survival::MAX_FOOD];
+    let spawn: [f64; 3];
     let (gen, save_dir, name, creative, mut time, day) = match (&info, seed_arg) {
         (Some(w), None) => {
             let gen = Generator { seed: w.seed, biome_scale: w.biome_scale };
@@ -857,15 +959,18 @@ fn main() {
                     (player.x, player.y, player.z) = (0.5, gen.height_at(0, 0).max(SEA) as f64 + 1.0, 0.5);
                 }
             }
-            if w.hotbar.iter().any(|&i| i > 0) {
-                hotbar = w.hotbar;
+            if !w.inventory.is_empty() {
+                inv = Inventory::parse(&w.inventory);
             }
+            vitals = [w.health, w.food];
+            spawn = w.spawn.unwrap_or([player.x, player.y, player.z]);
             (gen, Some(w.dir.clone()), w.name.clone(), w.creative, w.time, w.day)
         }
         _ => {
             let gen = Generator { seed: seed_arg.unwrap_or(2024), biome_scale: 2.0 };
             (player.x, player.y, player.z) = (0.5, gen.height_at(0, 0).max(SEA) as f64 + 1.0, 0.5);
             let name = format!("semente {}", gen.seed);
+            spawn = [player.x, player.y, player.z];
             (gen, None, name, true, DAY_LENGTH * 0.3, 1)
         }
     };
@@ -959,14 +1064,15 @@ fn main() {
         gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_WRAP_S, glow::REPEAT as i32);
         gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_WRAP_T, glow::REPEAT as i32);
         let ebo = gl.create_buffer().unwrap();
-        let mut g = Gl { gl, block: block_p, water: water_p, sky: sky_p, cross: cross_p, empty_vao, cross_vao, cross_vbo, line: line_p, line_vao, line_vbo, ebo, ebo_quads: 0, tex };
+        let ui = ui::Ui::new(&gl);
+        let mut g = Gl { gl, block: block_p, water: water_p, sky: sky_p, cross: cross_p, empty_vao, cross_vao, cross_vbo, line: line_p, line_vao, line_vbo, ebo, ebo_quads: 0, tex, ui };
         g.ensure_indices(1 << 16);
         g
     };
     drop(atlas);
 
     let read_only = args.iter().any(|a| a == "--so-ler");
-    let mut game = Game::new(gen, if read_only { None } else { save_dir.clone() }, name, settings, player, creative, time, day, hotbar);
+    let mut game = Game::new(gen, if read_only { None } else { save_dir.clone() }, name, settings, player, creative, time, day, inv, vitals, spawn);
     // a leitura dos pedaços salvos continua valendo mesmo em --so-ler (só não grava)
     let _ = &save_dir;
     // modo de teste: --foto-e-sair N tira uma foto no quadro N e fecha; --andar segura W o tempo todo
@@ -983,9 +1089,22 @@ fn main() {
             }
         }
     }
+    match arg("--tela").as_deref() {
+        Some("inventario") => game.screen = Screen::Inventory,
+        Some("pausa") => game.screen = Screen::Pause,
+        Some("morte") => game.screen = Screen::Dead,
+        _ => {}
+    }
+    if let Some(m) = arg("--mouse") {
+        let v: Vec<f32> = m.split(',').filter_map(|s| s.parse().ok()).collect();
+        if v.len() == 2 {
+            game.mouse = (v[0], v[1]);
+        }
+    }
     if let Some(s) = arg("--espaco").and_then(|s| s.parse::<usize>().ok()) {
         game.slot = s.clamp(1, 9) - 1;
     }
+    let hold_left = arg("--segurar-esq").and_then(|s| s.parse::<u32>().ok());
     let mut frame_no = 0u32;
     event_loop.set_control_flow(ControlFlow::Poll);
     event_loop
@@ -995,6 +1114,9 @@ fn main() {
                     game.save_all();
                     elwt.exit();
                 }
+                WindowEvent::CursorMoved { position, .. } => {
+                    game.mouse = (position.x as f32, position.y as f32);
+                }
                 WindowEvent::Resized(s) => {
                     if s.width > 0 && s.height > 0 {
                         gl_surface.resize(&gl_ctx, NonZeroU32::new(s.width).unwrap(), NonZeroU32::new(s.height).unwrap());
@@ -1003,22 +1125,57 @@ fn main() {
                 WindowEvent::Focused(false) => {
                     if auto_shot.is_none() {
                         game.keys.clear();
+                        game.l_held = false;
+                        game.r_held = false;
+                        if game.screen == Screen::Play {
+                            game.screen = Screen::Pause; // como no Java: perdeu o foco, pausa
+                            game.release_mouse = true;
+                        }
                     }
                 }
                 WindowEvent::KeyboardInput { event, .. } => {
                     if let PhysicalKey::Code(code) = event.physical_key {
                         if event.state == ElementState::Pressed {
                             if !event.repeat {
+                                let size = window.inner_size();
+                                let (fw, fh) = (size.width as f32, size.height as f32);
+                                let digit = match code {
+                                    KeyCode::Digit1 => Some(0), KeyCode::Digit2 => Some(1), KeyCode::Digit3 => Some(2),
+                                    KeyCode::Digit4 => Some(3), KeyCode::Digit5 => Some(4), KeyCode::Digit6 => Some(5),
+                                    KeyCode::Digit7 => Some(6), KeyCode::Digit8 => Some(7), KeyCode::Digit9 => Some(8),
+                                    _ => None,
+                                };
+                                if game.screen == Screen::Inventory {
+                                    if code == KeyCode::KeyE || code == KeyCode::Escape {
+                                        game.close_inventory();
+                                    } else if let Some(n) = digit {
+                                        game.inv_number(fw, fh, game.mouse.0, game.mouse.1, n);
+                                    }
+                                } else if game.screen == Screen::Pause {
+                                    if code == KeyCode::Escape {
+                                        game.screen = Screen::Play;
+                                        game.grab_mouse = true;
+                                    }
+                                } else if game.screen == Screen::Play {
                                 match code {
                                     KeyCode::Escape => {
-                                        game.grabbed = false;
-                                        let _ = window.set_cursor_grab(CursorGrabMode::None);
-                                        window.set_cursor_visible(true);
+                                        game.screen = Screen::Pause;
+                                        game.release_mouse = true;
                                     }
+                                    KeyCode::KeyE => {
+                                        game.screen = Screen::Inventory;
+                                        game.release_mouse = true;
+                                    }
+                                    KeyCode::KeyQ => {
+                                        let all = game.key(KeyCode::ControlLeft) || game.key(KeyCode::ControlRight);
+                                        game.throw_held(all);
+                                    }
+                                    KeyCode::F1 => game.help = !game.help,
                                     KeyCode::F2 => game.screenshot = true,
                                     KeyCode::Digit1 | KeyCode::Digit2 | KeyCode::Digit3 | KeyCode::Digit4 | KeyCode::Digit5 | KeyCode::Digit6
                                     | KeyCode::Digit7 | KeyCode::Digit8 | KeyCode::Digit9 => {
-                                        game.slot = code as usize - KeyCode::Digit1 as usize;
+                                        game.slot = digit.unwrap_or(0);
+                                        game.slot_name_timer = 2.0;
                                     }
                                     KeyCode::F3 => game.ao = !game.ao,
                                     KeyCode::Space => {
@@ -1034,6 +1191,7 @@ fn main() {
                                     }
                                     _ => {}
                                 }
+                                }
                             }
                             game.keys.insert(code);
                         } else {
@@ -1043,7 +1201,29 @@ fn main() {
                 }
                 WindowEvent::MouseInput { state, button, .. } => {
                     let down = state == ElementState::Pressed;
-                    if !game.grabbed {
+                    let size = window.inner_size();
+                    let (fw, fh) = (size.width as f32, size.height as f32);
+                    if game.screen == Screen::Inventory {
+                        if down && (button == MouseButton::Left || button == MouseButton::Right) {
+                            let shift = game.key(KeyCode::ShiftLeft) || game.key(KeyCode::ShiftRight);
+                            game.inv_click(fw, fh, game.mouse.0, game.mouse.1, button == MouseButton::Right, shift);
+                        }
+                    } else if game.screen == Screen::Pause || game.screen == Screen::Dead {
+                        if down && button == MouseButton::Left {
+                            match game.menu_click(fw, fh) {
+                                Some("Voltar ao jogo") => {
+                                    game.screen = Screen::Play;
+                                    game.grab_mouse = true;
+                                }
+                                Some("Salvar e sair") => {
+                                    game.save_all();
+                                    elwt.exit();
+                                }
+                                Some("Renascer") => game.respawn(),
+                                _ => {}
+                            }
+                        }
+                    } else if !game.grabbed {
                         if down && button == MouseButton::Left {
                             game.grabbed = true;
                             let _ = window.set_cursor_grab(CursorGrabMode::Confined).or_else(|_| window.set_cursor_grab(CursorGrabMode::Locked));
@@ -1078,8 +1258,13 @@ fn main() {
                         MouseScrollDelta::PixelDelta(p) => p.y as f32,
                     };
                     if d != 0.0 {
-                        let n = if d > 0.0 { 8 } else { 1 }; // rodinha para cima volta um espaço
-                        game.slot = (game.slot + n) % 9;
+                        if game.screen == Screen::Inventory {
+                            game.inv_scroll(d > 0.0);
+                        } else if game.screen == Screen::Play {
+                            let n = if d > 0.0 { 8 } else { 1 }; // rodinha para cima volta um espaço
+                            game.slot = (game.slot + n) % 9;
+                            game.slot_name_timer = 2.0;
+                        }
                     }
                 }
                 WindowEvent::RedrawRequested => {
@@ -1090,6 +1275,9 @@ fn main() {
                     game.stream(&mut g);
                     let size = window.inner_size();
                     frame_no += 1;
+                    if hold_left == Some(frame_no) {
+                        game.l_held = true; // teste: segura o botão esquerdo a partir daqui
+                    }
                     for &(f, b) in &clicks {
                         if f == frame_no {
                             if b == 'e' { game.l_pending = true } else { game.r_pending = true }
@@ -1124,7 +1312,23 @@ fn main() {
                     game.player.pitch = (game.player.pitch - delta.1 * s).clamp(-1.55, 1.55);
                 }
             }
-            Event::AboutToWait => window.request_redraw(),
+            Event::AboutToWait => {
+                if game.release_mouse {
+                    game.release_mouse = false;
+                    game.grabbed = false;
+                    game.l_held = false;
+                    game.r_held = false;
+                    let _ = window.set_cursor_grab(CursorGrabMode::None);
+                    window.set_cursor_visible(true);
+                }
+                if game.grab_mouse {
+                    game.grab_mouse = false;
+                    game.grabbed = true;
+                    let _ = window.set_cursor_grab(CursorGrabMode::Confined).or_else(|_| window.set_cursor_grab(CursorGrabMode::Locked));
+                    window.set_cursor_visible(false);
+                }
+                window.request_redraw();
+            }
             _ => {}
         })
         .unwrap();

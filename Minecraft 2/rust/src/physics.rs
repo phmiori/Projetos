@@ -14,8 +14,16 @@ pub const EYE: f64 = 1.62;
 const EPS: f64 = 1e-4;
 const STEP: f64 = 0.55;
 
-#[derive(Default)]
+/// Corpo com física (o jogador e os itens soltos no chão), como o Entity do Java.
+#[derive(Default, Clone)]
 pub struct Player {
+    /// meia largura e altura da caixa
+    pub hw: f64,
+    pub h: f64,
+    /// quanto já caiu desde que saiu do chão, e a queda do último pouso (para o dano)
+    pub fall_dist: f64,
+    pub landed_fall: f64,
+    pub sprinting: bool,
     pub x: f64,
     pub y: f64,
     pub z: f64,
@@ -53,6 +61,15 @@ fn fl(v: f64) -> i32 {
 }
 
 impl Player {
+    /// O jogador (0,6 de largura, 1,8 de altura).
+    pub fn new() -> Player {
+        Player::body(HW, H)
+    }
+
+    pub fn body(hw: f64, h: f64) -> Player {
+        Player { hw, h, ..Default::default() }
+    }
+
     pub fn update<W: Blocks>(&mut self, dt: f64, i: Input, w: &W) {
         let (sy, cy) = (self.yaw.sin(), self.yaw.cos());
         let (mut mx, mut mz) = (0.0, 0.0);
@@ -71,6 +88,7 @@ impl Player {
         let swimming = self.in_water || block::is_water(w.get(fl(self.x), fl(self.y + 0.05), fl(self.z)));
 
         let sprinting = i.sprint && i.fwd && len > 0.0;
+        self.sprinting = sprinting;
         let mut speed = if self.flying { if i.sprint { 22.0 } else { 11.0 } } else if sprinting { 5.8 } else { 4.3 };
         if (self.in_water || self.in_lava) && !self.flying {
             speed *= if self.in_lava { 0.35 } else { 0.55 };
@@ -102,7 +120,8 @@ impl Player {
             }
         }
 
-        self.do_move(dt, w);
+        let flying = self.flying;
+        self.do_move(dt, w, flying);
         let top = (crate::world::SY + 30) as f64;
         if self.y > top {
             self.y = top;
@@ -110,23 +129,29 @@ impl Player {
         }
     }
 
-    fn update_fluids<W: Blocks>(&mut self, w: &W) {
+    pub fn update_fluids<W: Blocks>(&mut self, w: &W) {
         let (bx, bz) = (fl(self.x), fl(self.z));
         let b = w.get(bx, fl(self.y + 0.4), bz);
         self.in_water = block::is_water(b);
         self.in_lava = b == block::LAVA || w.get(bx, fl(self.y + 0.05), bz) == block::LAVA;
     }
 
-    fn do_move<W: Blocks>(&mut self, dt: f64, w: &W) {
+    /// Move pela velocidade atual, colidindo com os blocos, em passos pequenos para não atravessar nada.
+    pub fn do_move<W: Blocks>(&mut self, dt: f64, w: &W, flying: bool) {
         let was_on_ground = self.on_ground;
         self.on_ground = false;
         self.hit_wall = false;
         let (ddx, ddy, ddz) = (self.vx * dt, self.vy * dt, self.vz * dt);
+        if flying || self.in_water {
+            self.fall_dist = 0.0;
+        } else if ddy < 0.0 {
+            self.fall_dist -= ddy;
+        }
         let max_d = ddx.abs().max(ddy.abs()).max(ddz.abs());
         let steps = ((max_d / 0.25).ceil() as i32).max(1);
         for _ in 0..steps {
             self.move_axis(1, ddy / steps as f64, w, false);
-            let can_step = (was_on_ground || self.on_ground) && !self.flying;
+            let can_step = (was_on_ground || self.on_ground) && !flying;
             self.move_axis(0, ddx / steps as f64, w, can_step);
             self.move_axis(2, ddz / steps as f64, w, can_step);
         }
@@ -139,7 +164,7 @@ impl Player {
         let nx = self.x + if axis == 0 { d } else { 0.0 };
         let ny = self.y + if axis == 1 { d } else { 0.0 };
         let nz = self.z + if axis == 2 { d } else { 0.0 };
-        let boxes = overlapping(nx, ny, nz, w);
+        let boxes = overlapping(nx, ny, nz, self.hw, self.h, w);
         if boxes.is_empty() {
             self.x = nx;
             self.y = ny;
@@ -155,28 +180,32 @@ impl Player {
             // degrau de até meio bloco: sobe sozinho
             let top = boxes.iter().map(|c| c[4]).fold(-1e9, f64::max);
             let rise = top - self.y;
-            if rise > 0.0 && rise <= STEP && overlapping(nx, top + EPS, nz, w).is_empty() && overlapping(self.x, top + EPS, self.z, w).is_empty() {
+            if rise > 0.0 && rise <= STEP && overlapping(nx, top + EPS, nz, self.hw, self.h, w).is_empty() && overlapping(self.x, top + EPS, self.z, self.hw, self.h, w).is_empty() {
                 self.x = nx;
                 self.z = nz;
                 self.y = top + EPS;
                 return;
             }
         }
-        let size = if axis == 1 { if d > 0.0 { H } else { 0.0 } } else { HW };
-        let p = if d > 0.0 { limit - size - EPS } else { limit + if axis == 1 { 0.0 } else { HW } + EPS };
+        let size = if axis == 1 { if d > 0.0 { self.h } else { 0.0 } } else { self.hw };
+        let p = if d > 0.0 { limit - size - EPS } else { limit + if axis == 1 { 0.0 } else { self.hw } + EPS };
         let tx = if axis == 0 { p } else { self.x };
         let ty = if axis == 1 { p } else { self.y };
         let tz = if axis == 2 { p } else { self.z };
         if axis == 1 {
             if d < 0.0 {
                 self.on_ground = true;
+                if self.fall_dist > 0.0 {
+                    self.landed_fall = self.fall_dist;
+                    self.fall_dist = 0.0;
+                }
             }
             self.vy = 0.0;
         } else {
             self.hit_wall = true;
             if axis == 0 { self.vx = 0.0 } else { self.vz = 0.0 }
         }
-        if overlapping(tx, ty, tz, w).is_empty() {
+        if overlapping(tx, ty, tz, self.hw, self.h, w).is_empty() {
             self.x = tx;
             self.y = ty;
             self.z = tz;
@@ -185,9 +214,9 @@ impl Player {
 }
 
 /// Caixas sólidas (no mundo) que o corpo tocaria na posição dada.
-fn overlapping<W: Blocks>(px: f64, py: f64, pz: f64, w: &W) -> Vec<[f64; 6]> {
+fn overlapping<W: Blocks>(px: f64, py: f64, pz: f64, hw: f64, h: f64, w: &W) -> Vec<[f64; 6]> {
     let mut out = Vec::new();
-    let (ax0, ax1, ay0, ay1, az0, az1) = (px - HW, px + HW, py, py + H, pz - HW, pz + HW);
+    let (ax0, ax1, ay0, ay1, az0, az1) = (px - hw, px + hw, py, py + h, pz - hw, pz + hw);
     for bx in fl(ax0)..=fl(ax1) {
         for by in fl(ay0) - 1..=fl(ay1) {
             for bz in fl(az0)..=fl(az1) {
@@ -209,4 +238,21 @@ fn overlapping<W: Blocks>(px: f64, py: f64, pz: f64, w: &W) -> Vec<[f64; 6]> {
         }
     }
     out
+}
+
+impl Player {
+    /// Encosta em algum bloco do tipo b (com uma folguinha)? Para o cacto espetar.
+    pub fn touching<W: Blocks>(&self, w: &W, b: u8) -> bool {
+        let e = 0.05;
+        for bx in fl(self.x - self.hw - e)..=fl(self.x + self.hw + e) {
+            for by in fl(self.y - e)..=fl(self.y + self.h) {
+                for bz in fl(self.z - self.hw - e)..=fl(self.z + self.hw + e) {
+                    if w.get(bx, by, bz) == b {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
 }

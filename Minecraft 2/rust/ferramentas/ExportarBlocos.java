@@ -20,6 +20,7 @@ import java.lang.reflect.Field;
  *   caixas: x0,y0,z0,x1,y1,z1[,bloco da textura];... de 0 a 1 (só nos modelos)
  */
 public class ExportarBlocos {
+    static final String NL = "\n";
     /** Tabela interna do Block.java (tipo de cada peça: material, direção, marca, metade). */
     static int[] arr(String name) throws Exception {
         Field f = Block.class.getDeclaredField(name);
@@ -61,12 +62,61 @@ public class ExportarBlocos {
                 int half = kind == 4 ? SHALF[b] : 0;
                 sb.append('|').append(kind).append('|').append(mat).append('|').append(face).append('|').append(flag).append('|').append(half)
                         .append('|').append(Block.needsSupport(b) ? 1 : 0).append('|').append(Block.isItemForm(b) ? 1 : 0)
-                        .append('|').append(Block.drop(b)).append('|').append(Block.hardness(b));
+                        .append('|').append(Block.drop(b)).append('|').append(Block.hardness(b))
+                        .append('|').append(Block.material(b)).append('|').append(Block.requiredTier(b));
                 w.write(sb.append('\n').toString());
             }
             for (int i = Items.BLOCK_ITEM_BASE; i <= Items.LAST; i++)
                 if (Items.isPlacer(i)) w.write("@item|" + i + "|" + Items.blockOf(i) + "\n");
         }
         System.out.println("blocos exportados: " + Block.COUNT + " -> " + out);
+        exportItems(new File(out.getParentFile(), "itens.txt"), new File(out.getParentFile(), "itens.png"));
+        exportRecipes(new File(out.getParentFile(), "receitas.txt"));
+    }
+
+    /**
+     * Itens que não são blocos (materiais, comida, ferramentas, armaduras, ovos), com o desenho 16x16 de cada um:
+     * itens.txt: id|nome|pilha|durabilidade|ferramenta|material|velocidade|comida|peça de armadura|defesa|ícone
+     *   ferramenta: -1 ou 0 picareta, 1 machado, 2 pá, 3 espada, 4 enxada; peça: -1 ou 0 capacete .. 3 botas
+     *   ícone: posição no itens.png (32 por linha, 16x16 cada)
+     */
+    static void exportItems(File txt, File png) throws Exception {
+        Field sp = Items.class.getDeclaredField("SPEED");
+        sp.setAccessible(true);
+        double[] speed = (double[]) sp.get(null);
+        java.util.List<Integer> ids = new java.util.ArrayList<>();
+        for (int i = Items.FIRST_ITEM; i <= Items.LAST; i++) if (Items.exists(i) && !Items.isBlock(i) && !Items.isPlacer(i)) ids.add(i);
+        int cols = 32, rows = (ids.size() + cols - 1) / cols;
+        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(cols * 16, Math.max(1, rows) * 16, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        try (Writer w = new OutputStreamWriter(new FileOutputStream(txt), "UTF-8")) {
+            w.write("# gerado por rust/ferramentas/ExportarBlocos.java a partir do Items.java (não edite à mão)" + NL);
+            w.write("# id|nome|pilha|durabilidade|ferramenta|material|velocidade|comida|peça de armadura|defesa|ícone" + NL);
+            for (int k = 0; k < ids.size(); k++) {
+                int id = ids.get(k);
+                boolean tool = Items.isTool(id), armor = Items.isArmor(id);
+                w.write(id + "|" + Items.name(id).replace('|', '/') + "|" + Items.maxStack(id) + "|" + Items.durability(id) + "|"
+                        + (tool ? Items.toolKind(id) : -1) + "|" + (tool ? Items.toolMat(id) : -1) + "|" + (tool ? speed[Items.toolMat(id)] : 1) + "|"
+                        + Items.food(id) + "|" + (armor ? Items.armorPiece(id) : -1) + "|" + Items.armorPoints(id) + "|" + k + NL);
+                int[] px = Items.pixels16(id);
+                for (int y = 0; y < 16; y++)
+                    for (int x = 0; x < 16; x++) img.setRGB((k % cols) * 16 + x, (k / cols) * 16 + y, px[y * 16 + x]);
+            }
+        }
+        javax.imageio.ImageIO.write(img, "png", png);
+        System.out.println("itens exportados: " + ids.size() + " -> " + txt + " e " + png);
+    }
+
+    /** Receitas: saída|quantidade|largura|altura|sem forma (1/0)|peça de madeira (1/0)|itens (linha por linha, 0 = vazio). */
+    static void exportRecipes(File txt) throws Exception {
+        try (Writer w = new OutputStreamWriter(new FileOutputStream(txt), "UTF-8")) {
+            w.write("# gerado por rust/ferramentas/ExportarBlocos.java a partir do Items.java (não edite à mão)" + NL);
+            w.write("# saída|quantidade|largura|altura|sem forma|peça de madeira|itens" + NL);
+            for (Items.Recipe r : Items.RECIPES) {
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < r.cells.length; i++) sb.append(i > 0 ? "," : "").append(r.cells[i]);
+                w.write(r.out + "|" + r.outCount + "|" + r.w + "|" + r.h + "|" + (r.shapeless ? 1 : 0) + "|" + (r.woodPiece() ? 1 : 0) + "|" + sb + NL);
+            }
+        }
+        System.out.println("receitas exportadas: " + Items.RECIPES.length + " -> " + txt);
     }
 }

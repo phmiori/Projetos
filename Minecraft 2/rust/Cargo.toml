@@ -12,6 +12,7 @@ raw-window-handle = "0.5"
 glow = "0.13"
 image = { version = "0.24", default-features = false, features = ["png"] }
 flate2 = "1"
+fontdue = "0.8"
 
 [profile.release]
 opt-level = 3

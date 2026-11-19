@@ -16,8 +16,12 @@ pub struct WorldInfo {
     /// hora do dia em segundos (0 = nascer do sol; o dia inteiro dura DAY_LENGTH)
     pub time: f64,
     pub day: i32,
-    /// os 9 espaços da barra (ids de bloco ou item; 0 = vazio), lidos do inventário salvo
-    pub hotbar: [i32; 9],
+    /// o inventário salvo (texto "id:qtd:desgaste,..." do Java)
+    pub inventory: String,
+    pub health: f64,
+    pub food: f64,
+    /// onde o jogador renasce
+    pub spawn: Option<[f64; 3]>,
 }
 
 /// Duração de um dia inteiro (dia e noite), em segundos: 48 minutos, como no Java.
@@ -84,16 +88,12 @@ pub fn read_world(dir: &Path) -> Option<WorldInfo> {
             if saved_day > 0.0 { t / saved_day * DAY_LENGTH } else { t }
         },
         day: p.get("dia").and_then(|v| v.trim().parse().ok()).unwrap_or(1),
-        hotbar: {
-            let mut h = [0i32; 9];
-            if let Some(inv) = p.get("inventario") {
-                for (i, slot) in inv.split(',').take(9).enumerate() {
-                    let id: i32 = slot.split(':').next().and_then(|v| v.trim().parse().ok()).unwrap_or(0);
-                    let count: i32 = slot.split(':').nth(1).and_then(|v| v.trim().parse().ok()).unwrap_or(0);
-                    h[i] = if count > 0 { id } else { 0 };
-                }
-            }
-            h
+        inventory: p.get("inventario").cloned().unwrap_or_default(),
+        health: num("jogador.vida").unwrap_or(20.0),
+        food: num("jogador.fome").unwrap_or(20.0),
+        spawn: match (num("spawn.x"), num("spawn.y"), num("spawn.z")) {
+            (Some(x), Some(y), Some(z)) => Some([x, y, z]),
+            _ => None,
         },
     })
 }
@@ -156,18 +156,4 @@ pub fn update_meta(dir: &Path, values: &[(&str, String)]) -> std::io::Result<()>
     let tmp = dir.join("meta.properties.tmp");
     std::fs::write(&tmp, lines.join("\n") + "\n")?;
     std::fs::rename(&tmp, &path)
-}
-
-/// Troca os 9 primeiros espaços (a barra) do inventário salvo, mantendo o resto.
-pub fn hotbar_inventory(dir: &Path, hotbar: &[i32; 9]) -> Option<String> {
-    let p = read_properties(&dir.join("meta.properties"))?;
-    let mut slots: Vec<String> = p.get("inventario")?.split(',').map(|s| s.to_string()).collect();
-    for (i, id) in hotbar.iter().enumerate() {
-        if i < slots.len() {
-            let wear = slots[i].split(':').nth(2).unwrap_or("0").to_string();
-            slots[i] = if *id > 0 { format!("{id}:64:{wear}") } else { "0:0:0".to_string() };
-        }
-    }
-    // o Java grava os dois-pontos escapados (\:)
-    Some(slots.join(",").replace(':', "\\:"))
 }
