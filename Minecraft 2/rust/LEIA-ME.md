@@ -22,6 +22,17 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
 
 ## O que já funciona
 
+- **Menu inicial** como o do Java: a lista dos mundos da pasta `worlds/` (o último jogado primeiro, com o modo, a
+  semente e quando foi jogado), **Jogar**, **Criar novo mundo** (nome, semente opcional, criativo ou sobrevivência,
+  nome do personagem) e **Sair**, com o último mundo girando ao fundo. Os mundos criados aqui abrem no Java (mesma
+  pasta, mesmo `meta.properties`, mesma conta de semente com letras e o mesmo ponto de nascimento). "Salvar e sair"
+  na pausa volta para o menu.
+- **Sons**: os mesmos `.wav` da pasta `sounds/` (se você trocou algum no Java, ouve o seu aqui também), com as regras
+  do `Sounds.java`: quebrar e colocar conforme o material, passos, respingo, pegar itens, comer, dano, a voz de cada
+  criatura de tempos em tempos e ao atacar, pavio e explosão do creeper, flechas, domar o lobo e os cliques do menu.
+  Volume pela distância, som do lado certo e o volume das configurações do Java.
+- **Sombras do sol** (mapa de sombras do `GLRenderer.java`, com o mesmo cache: só é refeito quando o sol anda, você
+  sai da região ou um pedaço perto muda). Desligam junto com a opção "sombras" das configurações do Java.
 - Mundo infinito: os pedaços são gerados e montados em várias threads ao mesmo tempo.
 - Céu, nuvens, neblina, água transparente com reflexo, oclusão nos cantos, luz do céu (com a luz que entra embaixo de saliências).
 - Física do jogador (traduzida do `Player.java`/`Entity.java`): gravidade, pulo, colisão com cubos, lajes e escadas,
@@ -70,16 +81,15 @@ soltos no chão não são gravados (no Java também não).
 
 ## Próximos passos (na ordem sugerida)
 
-1. Sons e sombras do sol.
-2. Menu inicial para escolher e criar mundos.
-3. Cama, enxada e trigo, arco e flechas do jogador, dinamite.
-5. LAN (o mesmo protocolo do `Net.java`, para dar para jogar Java com Rust durante a transição).
+1. Cama, enxada e trigo, arco e flechas do jogador, dinamite.
+2. Tela de configurações (hoje usa as do Java) e partículas (pedacinhos dos blocos, fumaça).
+3. LAN (o mesmo protocolo do `Net.java`, para dar para jogar Java com Rust durante a transição).
 
 ## Ferramentas
 
 - `exportar-blocos.bat`: depois de criar ou mudar blocos, itens ou receitas no Java, atualiza os arquivos de `dados/`.
 - `comparar-geracao.bat`: gera pedaços com o Java e com o Rust e confere se saíram iguais (rode depois de
   mexer na geração do mundo em qualquer um dos dois).
-- Linha de comando: `mundo-de-blocos.exe [--mundo worlds\nome] [--semente N] [--posicao x y z yaw pitch] [--voando] [--hora 0..1] [--so-ler] [--zoologico] [--sem-vsync]`
+- Linha de comando: sem nada abre o menu; `mundo-de-blocos.exe [--mundo worlds\nome] [--semente N] [--posicao x y z yaw pitch] [--voando] [--hora 0..1] [--so-ler] [--zoologico] [--sem-vsync]`
   (`--so-ler`: abre sem gravar nada)
   (`--hora`: 0 = nascer do sol, 0,25 = meio-dia, 0,5 = pôr do sol, 0,75 = meia-noite).
