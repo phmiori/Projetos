@@ -66,12 +66,20 @@ final class World {
 
     static int keyY(long k) { return (int) (k & 63); }
 
+    /**
+     * Tamanho dos biomas: os mapas de temperatura e umidade são esticados por este fator. Os mundos novos usam
+     * BIG_BIOMES (biomas 2x maiores em cada direção); os criados antes guardam 1, para não mudar o que já existe.
+     */
+    final double biomeScale;
+    static final double BIG_BIOMES = 2.0;
+
     World(int seed) {
-        this(seed, null);
+        this(seed, null, BIG_BIOMES);
     }
 
-    World(int seed, Store store) {
+    World(int seed, Store store, double biomeScale) {
         this.seed = seed;
+        this.biomeScale = biomeScale;
         this.store = store;
         int n = Runtime.getRuntime().availableProcessors();
         pool = java.util.concurrent.Executors.newFixedThreadPool(Math.max(1, Math.min(4, n / 2)), r -> {
@@ -1000,10 +1008,15 @@ final class World {
         return hi < 2 ? 2 : Math.min(hi, SY - 10);
     }
 
+    /** Temperatura (0 frio .. 1 quente) que decide os biomas: abaixo de 0,43 é tundra / campo de gelo. */
+    double temperature(int x, int z) {
+        return fbm(x / (260.0 * biomeScale), z / (260.0 * biomeScale), 3, seed + 11);
+    }
+
     int biomeAt(int x, int z, int top) {
         if (top >= 46) return MOUNTAINS;
-        double t = fbm(x / 260.0, z / 260.0, 3, seed + 11);
-        double m = fbm(x / 210.0, z / 210.0, 3, seed + 12);
+        double t = temperature(x, z);
+        double m = fbm(x / (210.0 * biomeScale), z / (210.0 * biomeScale), 3, seed + 12);
         if (t > 0.58 && m < 0.5) return DESERT;
         if (t < 0.43) return top < SEA - 3 ? ICE_FIELD : TUNDRA; // mar frio e fundo: campo de gelo com trincheiras
         if (m > 0.56) return t > 0.5 ? BIRCH_FOREST : FOREST;
@@ -1053,7 +1066,7 @@ final class World {
      * o gelo onde ele já está alto, então sempre dá para chegar no topo andando.
      */
     private void iceField(int x, int z, int top, byte[] out, int base) {
-        double t = fbm(x / 260.0, z / 260.0, 3, seed + 11);
+        double t = temperature(x, z);
         double cold = Math.max(0, Math.min(1, (0.43 - t) / 0.02));       // 0 na borda da tundra, 1 bem no frio
         double deep = Math.max(0, Math.min(1, (SEA - 1 - top) / 8.0));   // 0 na margem, 1 em água funda
         deep = deep * deep * (3 - 2 * deep);

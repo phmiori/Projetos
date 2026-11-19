@@ -31,6 +31,8 @@ final class Saves {
         boolean flying;
         String inventory = "";
         int inventoryFormat = 2; // 1 = itens com ids antigos (64..95)
+        /** Tamanho dos biomas (World.biomeScale): 1 nos mundos antigos, World.BIG_BIOMES nos criados agora. */
+        double biomeScale = 1;
         /** Progresso dos amigos que jogaram neste mundo pela LAN: nome -> estado (Remote.stateString). */
         java.util.Map<String, String> lanPlayers = new java.util.HashMap<>();
         /** O que há em cada baú: "x,y,z" -> conteúdo (Inventory.serialize). */
@@ -72,6 +74,7 @@ final class Saves {
         i.id = d.getName();
         i.name = p.getProperty("nome", d.getName());
         i.seed = Integer.parseInt(p.getProperty("semente", "0"));
+        try { i.biomeScale = Double.parseDouble(p.getProperty("tamanhoBiomas", "1")); } catch (NumberFormatException e) { i.biomeScale = 1; }
         i.creative = "criativo".equals(p.getProperty("modo"));
         i.created = Long.parseLong(p.getProperty("criado", "0"));
         i.lastPlayed = Long.parseLong(p.getProperty("ultimoJogo", "0"));
@@ -120,6 +123,7 @@ final class Saves {
         Properties p = new Properties();
         p.setProperty("nome", i.name);
         p.setProperty("semente", String.valueOf(i.seed));
+        p.setProperty("tamanhoBiomas", String.valueOf(i.biomeScale));
         p.setProperty("modo", i.creative ? "criativo" : "sobrevivencia");
         p.setProperty("criado", String.valueOf(i.created));
         p.setProperty("ultimoJogo", String.valueOf(i.lastPlayed));

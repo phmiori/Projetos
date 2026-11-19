@@ -1421,13 +1421,14 @@ public class BlockGame {
         i.id = Saves.newId(name);
         i.name = name;
         i.seed = seed;
+        i.biomeScale = World.BIG_BIOMES;
         i.creative = draftCreative;
         i.created = i.lastPlayed = System.currentTimeMillis();
         draft.name = fChar.toString().trim().isEmpty() ? "Explorador" : fChar.toString().trim();
         i.persona = draft;
         final int s = seed;
         startLoading("Gerando o mundo \"" + name + "\"...", () -> {
-            World w = new World(s, Saves.chunkStore(i));
+            World w = new World(s, Saves.chunkStore(i), i.biomeScale);
             double[] sp = w.findSpawn();
             i.hasPlayer = true;
             i.spawnX = i.px = sp[0];
@@ -1448,7 +1449,7 @@ public class BlockGame {
             } catch (java.io.IOException e) {
                 throw new RuntimeException(e.getMessage(), e);
             }
-            World w = new World(i.seed, Saves.chunkStore(i));
+            World w = new World(i.seed, Saves.chunkStore(i), i.biomeScale);
             if (!i.hasPlayer) {
                 double[] sp = w.findSpawn();
                 i.hasPlayer = true;
@@ -1963,6 +1964,7 @@ public class BlockGame {
                 i.spawnX = d.readFloat(); i.spawnY = d.readFloat(); i.spawnZ = d.readFloat();
                 myId = d.readInt();
                 String state = d.readUTF();
+                i.biomeScale = d.readDouble();
                 // o amigo gera o terreno sozinho (mesma semente = mesmo mundo); o anfitrião manda só o que foi modificado
                 byte[] changed = new byte[d.readInt()];
                 d.readFully(changed);
@@ -1971,7 +1973,7 @@ public class BlockGame {
                 i.hasPlayer = true;
                 i.px = i.spawnX; i.py = i.spawnY; i.pz = i.spawnZ;
                 applyState(i, state);
-                World world2 = new World(i.seed, changedChunks);
+                World world2 = new World(i.seed, changedChunks, i.biomeScale);
                 toHost = c;
                 enterWorld(i, world2);
                 world2.listener = this::onLocalBlock;
@@ -2096,7 +2098,7 @@ public class BlockGame {
                 // manda os pedaços modificados (o terreno o amigo gera sozinho pela semente) e o estado salvo desse amigo
                 p.from.send(new Net.Out(Net.WELCOME).s(info.name).i(info.seed).b(creative).dbl(world.time).i(info.day)
                         .f(info.spawnX).f(info.spawnY).f(info.spawnZ).i(nr.id).s(info.lanPlayers.getOrDefault(unique, ""))
-                        .raw(world.exportModified()));
+                        .dbl(world.biomeScale).raw(world.exportModified()));
                 // quem já está no mundo (o anfitrião e os outros amigos)
                 p.from.send(joinPacket(0, info.persona.name, info.persona));
                 for (Remote o : remotes.values()) p.from.send(joinPacket(o.id, o.name, o.persona));
@@ -2657,7 +2659,7 @@ public class BlockGame {
             inv.clear();
             // salvar e reler
             saveSync();
-            World w2 = new World(info.seed, Saves.chunkStore(info)); // lê de volta do disco
+            World w2 = new World(info.seed, Saves.chunkStore(info), info.biomeScale); // lê de volta do disco
             w2.ensureAround(x, z, 1);
             say2("salvo e relido do arquivo: fornalha = " + w2.rotation(x, 61, z + 2) + " (esperado 2)");
             say2("mundo recarregado: fornalha " + w2.rotation(x, 61, z + 2) + ", bau " + w2.rotation(x + 2, 61, z + 2) + ", cama " + w2.rotation(x - 2, 61, z + 2));
