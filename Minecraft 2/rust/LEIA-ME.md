@@ -42,14 +42,14 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
 - Usa as configurações do Java (`settings.properties`): distância de visão, campo de visão, sensibilidade do mouse,
   sombra nos cantos, reflexos e vsync.
 - Teclas: **WASD** anda, **Espaço** pula (dois toques: voa), **Shift** desce voando, **Ctrl** corre, **Esc** pausa,
-  **E** abre o inventário, **Q** joga fora, **F1** mostra/esconde a ajuda, **F2** tira uma foto (pasta `fotos/`), **F3** liga/desliga a sombra dos cantos,
+  **E** abre o inventário, **Q** joga fora, **Esc** pausa (a aba **Controles** da pausa lista todas as teclas), **F2** tira uma foto (pasta `fotos/`), **F3** liga/desliga a sombra dos cantos,
   **F4** (segurando) passa as horas depressa.
 - Quebrar e colocar blocos com as regras do Java: escadas viradas para onde você olha e invertidas na metade de
   cima, lajes em cima/embaixo e laje sobre laje virando bloco inteiro, lajes verticais, portas de dois blocos (botão
   direito abre e fecha), tochas na parede, pingentes pendurados, blocos com frente virados para você. Plantas e
   tochas sem apoio caem, e areia e cascalho despencam. Contorno no bloco mirado.
 - **Interface** como a do Java: barra com os ícones (cubinhos com as texturas do mundo e os desenhos dos itens),
-  quantidades e desgaste das ferramentas, nome do item ao trocar, caixa de informações no canto e a ajuda (**F1**).
+  quantidades e desgaste das ferramentas, nome do item ao trocar, caixa de informações no canto e a lista de controles na pausa.
 - **Inventário** (**E**): no criativo, a paleta com todos os blocos e itens (rodinha rola; clicar de novo no mesmo item
   devolve; Shift+clique manda direto para a mochila); na sobrevivência, armadura e a grade de criação 2x2 (3x3 na
   bancada, com o botão direito nela), com as receitas do Java. Clique pega/coloca/troca, botão direito pega metade ou

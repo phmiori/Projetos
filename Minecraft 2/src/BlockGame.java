@@ -87,7 +87,9 @@ public class BlockGame {
     private double mdx, mdy, coolL, coolR, fps, time, lobbyTime;
     private int[] sel;
     private int slot;
-    private boolean lHeld, rHeld, lPending, rPending, help = true;
+    private boolean lHeld, rHeld, lPending, rPending;
+    /** Pausa: mostrando a aba de controles. */
+    private boolean controlsOpen;
 
     // chat: T ou Enter abre, Enter envia, Esc fecha
     private static final class ChatLine {
@@ -1673,6 +1675,7 @@ public class BlockGame {
 
     private void resume() {
         state = State.PLAYING;
+        controlsOpen = false;
         lPending = rPending = lHeld = rHeld = false;
         bowCharge = 0;
         capture();
@@ -3192,25 +3195,6 @@ public class BlockGame {
         Ui.hudBox(g, 8, 8, bw, 44);
         Ui.shadow(g, l1, 18, 26, new Color(245, 232, 205));
         Ui.shadow(g, l2, 18, 44, new Color(220, 220, 225));
-        if (help && active) {
-            String[][] lines = {
-                    { "WASD", "mover" }, { "Espaço", creative ? "pular  ·  2x voa" : "pular / nadar" }, { "Ctrl", "correr" },
-                    { "E", "inventário e criação" }, { "Dir. na bancada", "grade 3x3" }, { "Dir. na fornalha", "assar" },
-                    { creative ? "Meio" : "Segure esq.", creative ? "copiar bloco" : "quebrar" }, { "Dir.", "colocar / comer / vestir" },
-                    { "Q", "jogar fora (Ctrl+Q: a pilha)" }, { "T", "chat" }, { "Esc", "pausar" }, { "F1", "esconder esta ajuda" } };
-            g.setFont(Ui.SMALL);
-            fm = g.getFontMetrics();
-            int kw = 0, vw = 0;
-            for (String[] l : lines) { kw = Math.max(kw, fm.stringWidth(l[0])); vw = Math.max(vw, fm.stringWidth(l[1])); }
-            int hy = 60, hh = lines.length * 17 + 12;
-            Ui.hudBox(g, 8, hy, kw + vw + 34, hh);
-            int yy = hy + 19;
-            for (String[] l : lines) {
-                Ui.shadow(g, l[0], 18, yy, new Color(240, 200, 110));
-                Ui.shadow(g, l[1], 18 + kw + 12, yy, new Color(225, 225, 230));
-                yy += 17;
-            }
-        }
     }
 
     private static final Font CHAT_FONT = new Font(Font.SANS_SERIF, Font.PLAIN, 15);
@@ -3590,8 +3574,13 @@ public class BlockGame {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setColor(new Color(0, 0, 0, 130));
         g.fillRect(0, 0, cw, ch);
+        if (controlsOpen) {
+            drawControls(g, cw, ch);
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+            return;
+        }
         int bw = 320, bh = 46, gap = 14;
-        int x = (cw - bw) / 2, y = ch / 2 - (bh * 4 + gap * 3) / 2;
+        int x = (cw - bw) / 2, y = ch / 2 - (bh * 5 + gap * 4) / 2;
         Ui.centered(g, Ui.TITLE, "Jogo pausado", cw / 2, y - 58, Color.WHITE);
         Ui.centered(g, Ui.LABEL, info.name + "  ·  " + info.persona.name, cw / 2, y - 28, Ui.TEXT_DIM);
         ui.button(g, x, y, bw, bh, "Continuar", true, true, this::resume);
@@ -3599,6 +3588,8 @@ public class BlockGame {
         ui.button(g, x, y, bw, bh, "Inventário", this::openInventory);
         y += bh + gap;
         ui.button(g, x, y, bw, bh, "Configurações", () -> { settingsReturn = State.PAUSED; state = State.SETTINGS; });
+        y += bh + gap;
+        ui.button(g, x, y, bw, bh, "Controles", () -> controlsOpen = true);
         y += bh + gap;
         if (toHost != null) {
             ui.button(g, x, y, bw, bh, "Desconectar", () -> { closeNet("saiu"); world = null; player = null; info = null; mobs.clear(); drops.clear(); enterLobby(); });
@@ -3619,6 +3610,42 @@ public class BlockGame {
             }
         }
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_OFF);
+    }
+
+    /** Aba "Controles" da pausa: todas as teclas e botões do jogo. */
+    private void drawControls(Graphics2D g, int cw, int ch) {
+        String[][] lines = {
+                { "W A S D", "andar" },
+                { "Espaço", creative ? "pular  ·  dois toques: voar" : "pular  ·  nadar para cima" },
+                { "Shift", creative ? "descer voando" : "descer nadando" },
+                { "Ctrl", "correr" },
+                { "Botão esquerdo", creative ? "quebrar bloco  ·  bater" : "segurar: quebrar bloco  ·  bater" },
+                { "Botão direito", "colocar bloco  ·  comer  ·  vestir  ·  abrir portas, baús, fornalhas e bancada" },
+                { "Botão do meio", creative ? "copiar o bloco mirado" : "—" },
+                { "Arco", "segure o botão esquerdo para puxar, solte para atirar" },
+                { "Rodinha  ·  1 a 9", "trocar o item da mão" },
+                { "E", "inventário e criação" },
+                { "Q  ·  Ctrl+Q", "jogar fora um item  ·  a pilha toda" },
+                { "T  ·  Enter", "chat" },
+                { "Esc", "pausar" } };
+        int pw = Math.min(cw - 40, 760), rowH = 30, ph = lines.length * rowH + 150;
+        int px = (cw - pw) / 2, py = Math.max(10, (ch - ph) / 2);
+        Ui.panel(g, px, py, pw, ph);
+        Ui.centered(g, Ui.TITLE, "Controles", cw / 2, py + 50, Color.WHITE);
+        g.setFont(Ui.BUTTON);
+        java.awt.FontMetrics fm = g.getFontMetrics();
+        int kw = 0;
+        for (String[] l : lines) kw = Math.max(kw, fm.stringWidth(l[0]));
+        int y = py + 92;
+        for (String[] l : lines) {
+            g.setFont(Ui.BUTTON);
+            Ui.shadow(g, l[0], px + 36, y, new Color(240, 200, 110));
+            g.setFont(Ui.LABEL);
+            Ui.shadow(g, l[1], px + 36 + kw + 24, y, new Color(225, 225, 230));
+            y += rowH;
+        }
+        int bw = 240, bh = 44;
+        ui.button(g, (cw - bw) / 2, py + ph - bh - 20, bw, bh, "Voltar", true, true, () -> controlsOpen = false);
     }
 
     /** Coloca o boneco dos outros jogadores nos triângulos das criaturas. */
@@ -4338,10 +4365,9 @@ public class BlockGame {
                     if (now - lastSpaceTap < 300_000_000L) { player.flying = !player.flying; player.vy = 0; lastSpaceTap = 0; }
                     else lastSpaceTap = now;
                 }
-                else if (k == KeyEvent.VK_F1) help = !help;
                 break;
             case PAUSED:
-                if (k == KeyEvent.VK_ESCAPE) resume();
+                if (k == KeyEvent.VK_ESCAPE) { if (controlsOpen) controlsOpen = false; else resume(); }
                 break;
             case SETTINGS:
                 if (k == KeyEvent.VK_ESCAPE) state = settingsReturn;

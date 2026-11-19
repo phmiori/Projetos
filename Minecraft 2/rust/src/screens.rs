@@ -160,32 +160,6 @@ impl Game {
         ui.hud_box(8.0 * k, 8.0 * k, bw, 44.0 * k, k);
         ui.shadow(fpx, 18.0 * k, 26.0 * k, &l1, rgba(245, 232, 205, 255));
         ui.shadow(fpx, 18.0 * k, 44.0 * k, &l2, rgba(220, 220, 225, 255));
-        if self.help {
-            let lines: Vec<(&str, &str)> = vec![
-                ("WASD", "mover"),
-                ("Espaço", if self.creative { "pular  ·  2x voa" } else { "pular / nadar" }),
-                ("Ctrl", "correr"),
-                ("E", "inventário e criação"),
-                ("Dir. na bancada", "grade 3x3"),
-                (if self.creative { "Esq." } else { "Segure esq." }, "quebrar"),
-                ("Dir.", "colocar / comer / vestir"),
-                ("Meio", if self.creative { "copiar bloco" } else { "—" }),
-                ("Q", "jogar fora (Ctrl+Q: a pilha)"),
-                ("Esc", "pausar"),
-                ("F1", "esconder esta ajuda"),
-            ];
-            let spx = 11.0 * k;
-            let kw = lines.iter().map(|l| ui.text_width(spx, l.0)).fold(0.0, f32::max);
-            let vw = lines.iter().map(|l| ui.text_width(spx, l.1)).fold(0.0, f32::max);
-            let hy = 60.0 * k;
-            ui.hud_box(8.0 * k, hy, kw + vw + 34.0 * k, lines.len() as f32 * 17.0 * k + 12.0 * k, k);
-            let mut yy = hy + 19.0 * k;
-            for (a, b) in lines {
-                ui.shadow(spx, 18.0 * k, yy, a, rgba(240, 200, 110, 255));
-                ui.shadow(spx, 18.0 * k + kw + 12.0 * k, yy, b, rgba(225, 225, 230, 255));
-                yy += 17.0 * k;
-            }
-        }
     }
 
     // ------------------------------------------------------------------ inventário
@@ -569,19 +543,80 @@ impl Game {
         let k = Self::ui_scale(h as u32);
         let (bw, bh) = (300.0 * k, 44.0 * k);
         let names: Vec<&'static str> = match self.screen {
-            Screen::Pause => vec!["Voltar ao jogo", "Salvar e sair"],
+            Screen::Pause if self.controls_open => vec!["Voltar"],
+            Screen::Pause => vec!["Voltar ao jogo", "Controles", "Salvar e sair"],
             Screen::Dead => vec!["Renascer"],
             _ => vec![],
         };
         names
             .into_iter()
             .enumerate()
-            .map(|(i, n)| (n, [(w - bw) / 2.0, h / 2.0 + i as f32 * (bh + 12.0 * k), bw, bh]))
+            .map(|(i, n)| {
+                let y = if self.controls_open { self.controls_rect(w, h)[1] + self.controls_rect(w, h)[3] - bh - 20.0 * k } else { h / 2.0 + i as f32 * (bh + 12.0 * k) };
+                (n, [(w - bw) / 2.0, y, bw, bh])
+            })
             .collect()
+    }
+
+    /// Todas as teclas e botões do jogo (aba "Controles" da pausa).
+    fn controls(&self) -> Vec<(&'static str, &'static str)> {
+        let c = self.creative;
+        vec![
+            ("W A S D", "andar"),
+            ("Espaço", if c { "pular  ·  dois toques: voar" } else { "pular  ·  nadar para cima" }),
+            ("Shift", if c { "descer voando" } else { "descer nadando" }),
+            ("Ctrl", "correr"),
+            ("Botão esquerdo", if c { "quebrar bloco  ·  bater" } else { "segurar: quebrar bloco  ·  bater" }),
+            ("Botão direito", "colocar bloco  ·  comer  ·  vestir  ·  abrir portas, baús, fornalhas e bancada"),
+            ("Botão do meio", if c { "copiar o bloco mirado" } else { "—" }),
+            ("Arco", "segure o botão esquerdo para puxar, solte para atirar"),
+            ("Rodinha  ·  1 a 9", "trocar o item da mão"),
+            ("E", "inventário e criação"),
+            ("Q  ·  Ctrl+Q", "jogar fora um item  ·  a pilha toda"),
+            ("F2", "tirar foto (pasta fotos)"),
+            ("F3", "ligar/desligar a sombra dos cantos"),
+            ("F4 (segurando)", "passar as horas depressa"),
+            ("Esc", "pausar"),
+        ]
+    }
+
+    fn controls_rect(&self, w: f32, h: f32) -> [f32; 4] {
+        let k = Self::ui_scale(h as u32);
+        let pw = (760.0 * k).min(w - 40.0);
+        let ph = self.controls().len() as f32 * 28.0 * k + 160.0 * k;
+        [(w - pw) / 2.0, ((h - ph) / 2.0).max(10.0), pw, ph]
+    }
+
+    fn draw_controls(&mut self, ui: &mut Ui, w: f32, h: f32) {
+        let k = Self::ui_scale(h as u32);
+        let r = self.controls_rect(w, h);
+        ui.rect(r[0], r[1], r[2], r[3], rgba(20, 22, 28, 225));
+        ui.frame(r[0], r[1], r[2], r[3], 2.0 * k, rgba(0, 0, 0, 180));
+        ui.centered(28.0 * k, w / 2.0, r[1] + 50.0 * k, "Controles", rgba(245, 232, 205, 255));
+        let lines = self.controls();
+        let (kp, vp) = (15.0 * k, 14.0 * k);
+        let kw = lines.iter().map(|l| ui.text_width(kp, l.0)).fold(0.0, f32::max);
+        let mut y = r[1] + 92.0 * k;
+        for (a, b) in lines {
+            ui.shadow(kp, r[0] + 36.0 * k, y, a, rgba(240, 200, 110, 255));
+            ui.shadow(vp, r[0] + 36.0 * k + kw + 24.0 * k, y, b, rgba(225, 225, 230, 255));
+            y += 28.0 * k;
+        }
     }
 
     pub fn draw_menu(&mut self, ui: &mut Ui, w: f32, h: f32) {
         let k = Self::ui_scale(h as u32);
+        if self.screen == Screen::Pause && self.controls_open {
+            ui.rect(0.0, 0.0, w, h, rgba(0, 0, 0, 140));
+            self.draw_controls(ui, w, h);
+            for (name, r) in self.buttons(w, h) {
+                let hot = self.mouse.0 >= r[0] && self.mouse.0 < r[0] + r[2] && self.mouse.1 >= r[1] && self.mouse.1 < r[1] + r[3];
+                ui.rect(r[0], r[1], r[2], r[3], if hot { rgba(96, 150, 70, 255) } else { rgba(64, 64, 72, 245) });
+                ui.frame(r[0], r[1], r[2], r[3], 2.0 * k, rgba(0, 0, 0, 180));
+                ui.centered(16.0 * k, w / 2.0, r[1] + r[3] / 2.0 + 6.0 * k, name, rgba(255, 255, 255, 255));
+            }
+            return;
+        }
         let (tint, title, sub) = match self.screen {
             Screen::Dead => (rgba(120, 0, 0, 140), "Você morreu", "Seus itens ficaram onde você caiu"),
             _ => (rgba(0, 0, 0, 140), "Jogo pausado", "Os mundos são gravados no mesmo formato do jogo Java"),

@@ -264,7 +264,8 @@ struct Game {
     palette: Vec<i32>,
     palette_scroll: usize,
     mouse: (f32, f32),
-    help: bool,
+    /// pausa: mostrando a aba de controles
+    controls_open: bool,
     drops: Vec<survival::Drop>,
     rng: survival::Rng,
     health: f64,
@@ -396,7 +397,7 @@ impl Game {
             palette: items::palette(),
             palette_scroll: 0,
             mouse: (0.0, 0.0),
-            help: true,
+            controls_open: false,
             drops: Vec::new(),
             rng: survival::Rng::new(),
             health: vitals[0],
@@ -1270,6 +1271,10 @@ fn main() {
     match arg("--tela").as_deref() {
         Some("inventario") => game.screen = Screen::Inventory,
         Some("pausa") => game.screen = Screen::Pause,
+        Some("controles") => {
+            game.screen = Screen::Pause;
+            game.controls_open = true;
+        }
         Some("morte") => game.screen = Screen::Dead,
         Some("criar") => game.start_create(),
         _ => {}
@@ -1356,8 +1361,12 @@ fn main() {
                                     }
                                 } else if game.screen == Screen::Pause {
                                     if code == KeyCode::Escape {
-                                        game.screen = Screen::Play;
-                                        game.grab_mouse = true;
+                                        if game.controls_open {
+                                            game.controls_open = false;
+                                        } else {
+                                            game.screen = Screen::Play;
+                                            game.grab_mouse = true;
+                                        }
                                     }
                                 } else if game.screen == Screen::Play {
                                 match code {
@@ -1373,7 +1382,6 @@ fn main() {
                                         let all = game.key(KeyCode::ControlLeft) || game.key(KeyCode::ControlRight);
                                         game.throw_held(all);
                                     }
-                                    KeyCode::F1 => game.help = !game.help,
                                     KeyCode::F2 => game.screenshot = true,
                                     KeyCode::Digit1 | KeyCode::Digit2 | KeyCode::Digit3 | KeyCode::Digit4 | KeyCode::Digit5 | KeyCode::Digit6
                                     | KeyCode::Digit7 | KeyCode::Digit8 | KeyCode::Digit9 => {
@@ -1426,6 +1434,8 @@ fn main() {
                                     game.screen = Screen::Play;
                                     game.grab_mouse = true;
                                 }
+                                Some("Controles") => game.controls_open = true,
+                                Some("Voltar") => game.controls_open = false,
                                 Some("Salvar e sair") => {
                                     // grava e volta ao menu (o mundo fica girando ao fundo, sem gravar mais nada)
                                     game.save_all();
