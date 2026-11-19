@@ -21,6 +21,7 @@ mod inventory;
 mod items;
 mod light;
 mod mesher;
+mod menu;
 mod mob;
 mod mobs;
 mod noise;
@@ -62,6 +63,9 @@ use inventory::{Inventory, Stack};
 /// Qual tela está aberta.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Screen {
+    /// menu inicial (lista de mundos) e a tela de criar mundo
+    Menu,
+    Create,
     Play,
     Inventory,
     Pause,
@@ -295,6 +299,7 @@ struct Game {
     pending_damage: f64,
     blast_flash: f64,
     player_name: String,
+    menu: menu::Menu,
     l_held: bool,
     r_held: bool,
     l_pending: bool,
@@ -419,6 +424,7 @@ impl Game {
             pending_damage: 0.0,
             blast_flash: 0.0,
             player_name: String::new(),
+            menu: menu::Menu::default(),
             slot: 0,
             l_held: false,
             r_held: false,
@@ -618,6 +624,10 @@ impl Game {
         if self.screen == Screen::Pause {
             return; // pausado: o mundo para, como no Java
         }
+        if matches!(self.screen, Screen::Menu | Screen::Create) {
+            self.player.yaw += dt * 0.04; // menu: o mundo gira devagar ao fundo
+            return;
+        }
         self.clock_s = self.start.elapsed().as_secs_f64();
         // relógio do mundo (F4 segurado passa as horas 60x mais depressa)
         self.time += dt * if self.key(KeyCode::F4) { 60.0 } else { 1.0 };
@@ -728,6 +738,10 @@ impl Game {
             ("jogador.yaw", p.yaw.to_string()),
             ("jogador.pitch", p.pitch.to_string()),
             ("jogador.voando", p.flying.to_string()),
+            // o Java conta com o ponto de nascimento sempre gravado (senão renasceria em 0, 0, 0)
+            ("spawn.x", self.spawn[0].to_string()),
+            ("spawn.y", self.spawn[1].to_string()),
+            ("spawn.z", self.spawn[2].to_string()),
             ("hora", self.time.to_string()),
             ("diaDuracao", DAY_LENGTH.to_string()),
             ("dia", self.day.to_string()),
@@ -746,6 +760,13 @@ impl Game {
         let furnaces: Vec<(String, String)> = self.furnaces.iter().map(|(k, f)| (k.clone(), f.serialize())).collect();
         if let Err(e) = save::update_meta(&dir, &v, &[("bau.", chests), ("fornalha.", furnaces), ("criatura.", mob_lines), ("lobo.", wolf_lines)]) {
             println!("não consegui gravar o meta.properties: {e}");
+        }
+    }
+
+    /// Solta as malhas da placa de vídeo (antes de trocar de mundo).
+    unsafe fn free_gpu(&mut self, g: &Gl) {
+        for (_, m) in self.meshes.drain() {
+            free(g, m);
         }
     }
 
@@ -923,8 +944,11 @@ impl Game {
         gl.enable(glow::BLEND);
         gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
         let (fw, fh) = (w as f32, h as f32);
-        self.draw_hud(&mut g.ui, fw, fh);
+        if !matches!(self.screen, Screen::Menu | Screen::Create) {
+            self.draw_hud(&mut g.ui, fw, fh);
+        }
         match self.screen {
+            Screen::Menu | Screen::Create => self.draw_main_menu(&mut g.ui, fw, fh),
             Screen::Inventory => self.draw_inventory(&mut g.ui, fw, fh),
             Screen::Pause | Screen::Dead => self.draw_menu(&mut g.ui, fw, fh),
             Screen::Play => {}
@@ -1019,26 +1043,8 @@ fn compare(path: &str) -> ! {
     std::process::exit(if diff_chunks == 0 { 0 } else { 1 });
 }
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    let arg = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
-    if let Some(p) = arg("--comparar") {
-        compare(&p);
-    }
-    // roda na pasta do jogo (onde ficam textures/ e worlds/), venha de onde vier
-    let game_dir = arg("--pasta").map(PathBuf::from).unwrap_or_else(|| {
-        let exe = std::env::current_exe().unwrap_or_default();
-        exe.ancestors().find(|d| d.join("textures").is_dir()).map(|d| d.to_path_buf()).unwrap_or_else(|| PathBuf::from("."))
-    });
-    let _ = std::env::set_current_dir(&game_dir);
-    let settings = save::read_settings();
-    sound::init(settings.volume);
-
-    let info = match arg("--mundo") {
-        Some(m) => save::read_world(&PathBuf::from(m)),
-        None => save::latest_world(&PathBuf::from("worlds")),
-    };
-    let seed_arg = arg("--semente").and_then(|s| s.parse::<i32>().ok());
+/// Abre um mundo salvo (ou um mundo só de passeio, com a semente dada) e monta o jogo.
+fn load_game(info: Option<save::WorldInfo>, seed_arg: Option<i32>, settings: save::Settings, read_only: bool) -> Game {
     let mut player = Player::new();
     // a barra inicial do criativo do Java
     let mut inv = Inventory::default();
@@ -1047,7 +1053,7 @@ fn main() {
     }
     let mut vitals = [survival::MAX_HEALTH, survival::MAX_FOOD];
     let spawn: [f64; 3];
-    let (gen, save_dir, name, creative, mut time, day) = match (&info, seed_arg) {
+    let (gen, save_dir, name, creative, time, day) = match (&info, seed_arg) {
         (Some(w), None) => {
             let gen = Generator { seed: w.seed, biome_scale: w.biome_scale };
             match w.player {
@@ -1056,11 +1062,15 @@ fn main() {
                     player.flying = w.creative && w.flying;
                 }
                 None => {
-                    (player.x, player.y, player.z) = (0.5, gen.height_at(0, 0).max(SEA) as f64 + 1.0, 0.5);
+                    // mundo novo (criado pelo menu ou pelo Java e nunca jogado): nasce na terra firme mais perto
+                    let s = gen.find_spawn();
+                    (player.x, player.y, player.z) = (s[0], s[1], s[2]);
                 }
             }
             if !w.inventory.is_empty() {
                 inv = Inventory::parse(&w.inventory);
+            } else if !w.creative {
+                inv = Inventory::default(); // sobrevivência nova começa de mãos vazias
             }
             vitals = [w.health, w.food];
             spawn = w.spawn.unwrap_or([player.x, player.y, player.z]);
@@ -1074,22 +1084,48 @@ fn main() {
             (gen, None, name, true, DAY_LENGTH * 0.3, 1)
         }
     };
-    // --posicao x y z yaw pitch: começa num lugar escolhido (bom para comparar fotos com o Java)
-    if let Some(i) = args.iter().position(|a| a == "--posicao") {
-        let v: Vec<f64> = args[i + 1..].iter().take(5).filter_map(|s| s.parse().ok()).collect();
-        if v.len() == 5 {
-            (player.x, player.y, player.z, player.yaw, player.pitch) = (v[0], v[1], v[2], v[3], v[4]);
-            player.flying = false; // num lugar escolhido começa a pé (use --voando para começar voando)
-        }
-    }
-    // --hora 0..1: fração do dia (0 = nascer do sol, 0,25 = meio-dia, 0,5 = pôr do sol, 0,75 = meia-noite)
-    if let Some(h) = arg("--hora").and_then(|s| s.parse::<f64>().ok()) {
-        time = h.rem_euclid(1.0) * DAY_LENGTH;
-    }
-    if args.iter().any(|a| a == "--voando") {
-        player.flying = true;
-    }
     println!("Mundo de Blocos (Rust): {name} — semente {}, biomas x{}, {}", gen.seed, gen.biome_scale, if creative { "criativo" } else { "sobrevivência" });
+    let mut game = Game::new(gen, if read_only { None } else { save_dir }, name, settings, player, creative, time, day, inv, vitals, spawn);
+    if let Some(w) = &info {
+        for (k, v) in &w.chests {
+            game.chests.insert(k.clone(), containers::parse_slots(v, containers::CHEST_SIZE));
+        }
+        for (k, v) in &w.furnaces {
+            game.furnaces.insert(k.clone(), containers::Furnace::parse(v));
+        }
+        game.player_name = w.player_name.clone();
+        game.load_mobs(&w.mobs, &w.wolves);
+    }
+    game
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let arg = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
+    let arg2 = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 2)).cloned();
+    if let Some(p) = arg("--comparar") {
+        compare(&p);
+    }
+    // roda na pasta do jogo (onde ficam textures/ e worlds/), venha de onde vier
+    let game_dir = arg("--pasta").map(PathBuf::from).unwrap_or_else(|| {
+        let exe = std::env::current_exe().unwrap_or_default();
+        exe.ancestors().find(|d| d.join("textures").is_dir()).map(|d| d.to_path_buf()).unwrap_or_else(|| PathBuf::from("."))
+    });
+    let _ = std::env::set_current_dir(&game_dir);
+    let settings = save::read_settings();
+    sound::init(settings.volume);
+
+    let seed_arg = arg("--semente").and_then(|s| s.parse::<i32>().ok());
+    // com --mundo ou --semente abre direto; senão, o menu (com o último mundo girando ao fundo)
+    let direct = arg("--mundo").is_some() || seed_arg.is_some();
+    let read_only = args.iter().any(|a| a == "--so-ler");
+    // --criar nome semente: cria um mundo de sobrevivência pelo mesmo caminho do botão do menu e abre (testes)
+    let created = arg("--criar").and_then(|n| menu::create_world(&n, &arg2("--criar").unwrap_or_default(), false, "Teste").ok());
+    let direct = direct || created.is_some();
+    let info = match created.as_ref().map(|d| d.to_string_lossy().to_string()).or_else(|| arg("--mundo")) {
+        Some(m) => save::read_world(&PathBuf::from(m)),
+        None => save::latest_world(&PathBuf::from("worlds")),
+    };
 
     let event_loop = EventLoop::new().expect("loop de eventos");
     let wb = WindowBuilder::new().with_title("Mundo de Blocos (Rust, prévia)").with_inner_size(LogicalSize::new(1280.0, 720.0));
@@ -1172,20 +1208,28 @@ fn main() {
     };
     drop(atlas);
 
-    let read_only = args.iter().any(|a| a == "--so-ler");
-    let mut game = Game::new(gen, if read_only { None } else { save_dir.clone() }, name, settings, player, creative, time, day, inv, vitals, spawn);
-    if let Some(w) = &info {
-        for (k, v) in &w.chests {
-            game.chests.insert(k.clone(), containers::parse_slots(v, containers::CHEST_SIZE));
+    let mut game = load_game(info, seed_arg, settings, read_only || !direct);
+    if direct {
+        // --posicao x y z yaw pitch: começa num lugar escolhido (bom para comparar fotos com o Java)
+        if let Some(i) = args.iter().position(|a| a == "--posicao") {
+            let v: Vec<f64> = args[i + 1..].iter().take(5).filter_map(|s| s.parse().ok()).collect();
+            if v.len() == 5 {
+                (game.player.x, game.player.y, game.player.z, game.player.yaw, game.player.pitch) = (v[0], v[1], v[2], v[3], v[4]);
+                game.player.flying = false; // num lugar escolhido começa a pé (use --voando para começar voando)
+            }
         }
-        for (k, v) in &w.furnaces {
-            game.furnaces.insert(k.clone(), containers::Furnace::parse(v));
+        // --hora 0..1: fração do dia (0 = nascer do sol, 0,25 = meio-dia, 0,5 = pôr do sol, 0,75 = meia-noite)
+        if let Some(h) = arg("--hora").and_then(|s| s.parse::<f64>().ok()) {
+            game.time = h.rem_euclid(1.0) * DAY_LENGTH;
         }
-        game.player_name = w.player_name.clone();
-        game.load_mobs(&w.mobs, &w.wolves);
+        if args.iter().any(|a| a == "--voando") {
+            game.player.flying = true;
+        }
+    } else {
+        game.player.pitch = -0.25;
+        game.player.flying = true;
+        game.open_menu();
     }
-    // a leitura dos pedaços salvos continua valendo mesmo em --so-ler (só não grava)
-    let _ = &save_dir;
     // modo de teste: --foto-e-sair N tira uma foto no quadro N e fecha; --andar segura W o tempo todo
     let auto_shot = arg("--foto-e-sair").and_then(|s| s.parse::<u32>().ok());
     if args.iter().any(|a| a == "--andar") {
@@ -1204,6 +1248,7 @@ fn main() {
         Some("inventario") => game.screen = Screen::Inventory,
         Some("pausa") => game.screen = Screen::Pause,
         Some("morte") => game.screen = Screen::Dead,
+        Some("criar") => game.start_create(),
         _ => {}
     }
     if let Some(m) = arg("--mouse") {
@@ -1220,7 +1265,9 @@ fn main() {
     let mut frame_no = 0u32;
     event_loop.set_control_flow(ControlFlow::Poll);
     event_loop
-        .run(move |event, elwt| match event {
+        .run(move |event, elwt| {
+            let mut menu_action: Option<menu::Action> = None;
+            match event {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
                     game.save_all();
@@ -1257,7 +1304,10 @@ fn main() {
                                     KeyCode::Digit7 => Some(6), KeyCode::Digit8 => Some(7), KeyCode::Digit9 => Some(8),
                                     _ => None,
                                 };
-                                if game.screen == Screen::Inventory {
+                                if matches!(game.screen, Screen::Menu | Screen::Create) {
+                                    let action = game.menu_key(code, event.text.as_deref());
+                                    menu_action = Some(action);
+                                } else if game.screen == Screen::Inventory {
                                     if code == KeyCode::KeyE || code == KeyCode::Escape {
                                         game.close_inventory();
                                     } else if let Some(n) = digit {
@@ -1315,7 +1365,11 @@ fn main() {
                     let down = state == ElementState::Pressed;
                     let size = window.inner_size();
                     let (fw, fh) = (size.width as f32, size.height as f32);
-                    if game.screen == Screen::Inventory {
+                    if matches!(game.screen, Screen::Menu | Screen::Create) {
+                        if down && button == MouseButton::Left {
+                            menu_action = Some(game.menu_mouse(fw, fh));
+                        }
+                    } else if game.screen == Screen::Inventory {
                         if down && (button == MouseButton::Left || button == MouseButton::Right) {
                             let shift = game.key(KeyCode::ShiftLeft) || game.key(KeyCode::ShiftRight);
                             game.inv_click(fw, fh, game.mouse.0, game.mouse.1, button == MouseButton::Right, shift);
@@ -1332,8 +1386,11 @@ fn main() {
                                     game.grab_mouse = true;
                                 }
                                 Some("Salvar e sair") => {
+                                    // grava e volta ao menu (o mundo fica girando ao fundo, sem gravar mais nada)
                                     game.save_all();
-                                    elwt.exit();
+                                    game.save_dir = None;
+                                    game.player.flying = true;
+                                    game.open_menu();
                                 }
                                 Some("Renascer") => game.respawn(),
                                 _ => {}
@@ -1374,7 +1431,9 @@ fn main() {
                         MouseScrollDelta::PixelDelta(p) => p.y as f32,
                     };
                     if d != 0.0 {
-                        if game.screen == Screen::Inventory {
+                        if game.screen == Screen::Menu {
+                            game.menu_scroll(d > 0.0);
+                        } else if game.screen == Screen::Inventory {
                             game.inv_scroll(d > 0.0);
                         } else if game.screen == Screen::Play {
                             let n = if d > 0.0 { 8 } else { 1 }; // rodinha para cima volta um espaço
@@ -1464,6 +1523,19 @@ fn main() {
                 window.request_redraw();
             }
             _ => {}
+            }
+            match menu_action {
+                Some(menu::Action::Open(dir)) => {
+                    let settings = game.settings.clone();
+                    unsafe { game.free_gpu(&g) };
+                    g.shadow.dirty = true;
+                    game = load_game(save::read_world(&dir), None, settings, false);
+                    game.save_all(); // marca como jogado agora (e guarda o ponto de nascimento de um mundo novo)
+                    game.grab_mouse = true;
+                }
+                Some(menu::Action::Quit) => elwt.exit(),
+                _ => {}
+            }
         })
         .unwrap();
 }

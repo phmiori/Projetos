@@ -1,5 +1,5 @@
-//! Lê os mundos salvos pelo jogo Java (pasta worlds/<mundo>/meta.properties e chunks/). Por enquanto só lê:
-//! a versão Rust ainda não grava nada, então dá para abrir qualquer mundo sem risco de estragar.
+//! Lê e grava os mundos no formato do jogo Java (pasta worlds/<mundo>/meta.properties e chunks/).
+//! Só as chaves que esta versão conhece são trocadas; o resto do arquivo fica como o Java deixou.
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -130,6 +130,7 @@ pub fn read_chunk(dir: &Path, cx: i32, cz: i32) -> Option<Vec<u8>> {
 }
 
 /// As configurações do jogo Java (settings.properties): a versão Rust usa as mesmas.
+#[derive(Clone)]
 pub struct Settings {
     pub view_dist: i32,
     pub fov: f32,

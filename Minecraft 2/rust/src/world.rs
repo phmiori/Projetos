@@ -196,6 +196,43 @@ impl Generator {
     }
 
     /// Gera o terreno, as cavernas, a decoração e o iglu de um pedaço.
+    /// Ponto de nascimento (World.findSpawn do Java): terra firme mais perto da origem, {x, y, z} dos pés.
+    pub fn find_spawn(&self) -> [f64; 3] {
+        let mut cache: HashMap<(i32, i32), Chunk> = HashMap::new();
+        for r in 0..600i32 {
+            for dx in -r..=r {
+                for dz in -r..=r {
+                    if dx.abs() != r && dz.abs() != r {
+                        continue;
+                    }
+                    if self.height_at(dx, dz) < SEA + 2 {
+                        continue; // água ou praia baixa: nem vale gerar
+                    }
+                    let c = cache.entry((dx >> 4, dz >> 4)).or_insert_with(|| self.generate(dx >> 4, dz >> 4));
+                    let (lx, lz) = (dx & 15, dz & 15);
+                    let mut top = -1;
+                    for y in (0..SY).rev() {
+                        let b = c.blocks[idx(lx, y, lz)];
+                        if b == AIR || block::shape(b) == CROSS {
+                            continue;
+                        }
+                        if (b == GRASS || b == SNOW || b == SAND) && y >= SEA {
+                            top = y;
+                        }
+                        break;
+                    }
+                    if top >= 0 {
+                        let above = if top + 1 < SY { c.blocks[idx(lx, top + 1, lz)] } else { AIR };
+                        if above == AIR || block::shape(above) == CROSS {
+                            return [dx as f64 + 0.5, top as f64 + 1.01, dz as f64 + 0.5];
+                        }
+                    }
+                }
+            }
+        }
+        [0.5, (SY - 1) as f64, 0.5]
+    }
+
     pub fn generate(&self, cx: i32, cz: i32) -> Chunk {
         let mut c = Chunk::new(cx, cz);
         let (x0, z0) = (cx * 16, cz * 16);
