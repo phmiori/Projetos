@@ -100,10 +100,34 @@ final class Inventory {
     }
 
     /** Tem os ingredientes da receita (quantas vezes ela pode ser feita com o que há na mochila)? */
+    /** Quantos há deste ingrediente, contando os que valem por ele (tábuas comuns + de bétula). */
+    int countLike(int item) {
+        if (item == Block.PLANKS) return countOf(Block.PLANKS) + countOf(Block.BIRCH_PLANKS);
+        return countOf(item);
+    }
+
+    /** Tira n do ingrediente, usando os equivalentes se faltar (primeiro o tipo de que há mais). */
+    void removeLike(int item, int n) {
+        if (item != Block.PLANKS) { remove(item, n); return; }
+        int first = countOf(Block.PLANKS) >= countOf(Block.BIRCH_PLANKS) ? Block.PLANKS : Block.BIRCH_PLANKS;
+        int k = Math.min(n, countOf(first));
+        remove(first, k);
+        remove(first == Block.PLANKS ? Block.BIRCH_PLANKS : Block.PLANKS, n - k);
+    }
+
+    /** Qual variante pôr numa casa da grade: a que tem pelo menos n, senão a de que há mais. */
+    int variantFor(int item, int n) {
+        if (item != Block.PLANKS) return item;
+        int a = countOf(Block.PLANKS), b = countOf(Block.BIRCH_PLANKS);
+        if (a >= n) return Block.PLANKS;
+        if (b >= n) return Block.BIRCH_PLANKS;
+        return a >= b ? Block.PLANKS : Block.BIRCH_PLANKS;
+    }
+
     int timesCraftable(Items.Recipe r) {
         int[] in = r.ingredients();
         int times = Integer.MAX_VALUE;
-        for (int i = 0; i < in.length; i += 2) times = Math.min(times, countOf(in[i]) / in[i + 1]);
+        for (int i = 0; i < in.length; i += 2) times = Math.min(times, countLike(in[i]) / in[i + 1]);
         return times == Integer.MAX_VALUE ? 0 : times;
     }
 
@@ -111,7 +135,7 @@ final class Inventory {
     boolean craft(Items.Recipe r) {
         if (timesCraftable(r) < 1) return false;
         int[] in = r.ingredients();
-        for (int i = 0; i < in.length; i += 2) remove(in[i], in[i + 1]);
+        for (int i = 0; i < in.length; i += 2) removeLike(in[i], in[i + 1]);
         int left = add(r.out, r.outCount);
         if (left > 0) { // sem espaço: devolve os ingredientes
             remove(r.out, r.outCount - left);

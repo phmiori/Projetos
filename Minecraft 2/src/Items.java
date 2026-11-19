@@ -220,7 +220,7 @@ final class Items {
         int P = Block.PLANKS, S = STICK;
         // cabem na grade 2x2 do inventário
         r.add(shapeless(Block.PLANKS, 4, Block.LOG));
-        r.add(shapeless(Block.PLANKS, 4, Block.BIRCH_LOG));
+        r.add(shapeless(Block.BIRCH_PLANKS, 4, Block.BIRCH_LOG));
         r.add(shaped(STICK, 4, "P|P", 'P', P));
         r.add(shaped(Block.TABLE, 1, "PP|PP", 'P', P));
         r.add(shaped(Block.TORCH, 4, "C|S", 'C', COAL, 'S', S));
@@ -277,6 +277,11 @@ final class Items {
      * Procura a receita que bate com a grade (size x size, ids linha por linha; 0 = vazio).
      * O desenho pode estar em qualquer canto da grade e espelhado. Retorna null se nada bate.
      */
+    /** Itens que servem um no lugar do outro nas receitas: as tábuas de bétula valem como tábuas. */
+    static int same(int id) {
+        return id == Block.BIRCH_PLANKS ? Block.PLANKS : id;
+    }
+
     static Recipe match(int[] grid, int size) {
         int minX = size, minY = size, maxX = -1, maxY = -1, n = 0;
         for (int y = 0; y < size; y++)
@@ -293,7 +298,7 @@ final class Items {
                 if (r.cells.length != n) continue;
                 int[] a = new int[n], b = r.cells.clone();
                 int k = 0;
-                for (int c : grid) if (c != 0) a[k++] = c;
+                for (int c : grid) if (c != 0) a[k++] = same(c);
                 java.util.Arrays.sort(a);
                 java.util.Arrays.sort(b);
                 if (java.util.Arrays.equals(a, b)) return r;
@@ -305,7 +310,7 @@ final class Items {
                 for (int y = 0; y < h && ok; y++)
                     for (int x = 0; x < w && ok; x++) {
                         int want = r.at(mirror == 0 ? x : w - 1 - x, y);
-                        if (grid[(minY + y) * size + minX + x] != want) ok = false;
+                        if (same(grid[(minY + y) * size + minX + x]) != want) ok = false;
                     }
                 if (ok) return r;
             }
@@ -336,7 +341,7 @@ final class Items {
     static int fuel(int id) {
         switch (id) {
             case COAL: return 8;
-            case Block.LOG: case Block.BIRCH_LOG: case Block.PLANKS: return 2;
+            case Block.LOG: case Block.BIRCH_LOG: case Block.PLANKS: case Block.BIRCH_PLANKS: return 2;
             case STICK: return 1;
             default: return 0;
         }

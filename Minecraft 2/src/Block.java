@@ -34,7 +34,9 @@ final class Block {
     static final int CHEST = 165, FARMLAND = 166, WHEAT = 167;
     /** Fornalha acesa (enquanto assa): mesma fornalha, com fogo na boca e luz. */
     static final int FURNACE_LIT = 170;
-    static final int COUNT = 171;
+    /** Tábuas de bétula: iguais às tábuas comuns, com a madeira clara. */
+    static final int BIRCH_PLANKS = 171;
+    static final int COUNT = 172;
     /** Materiais das escadas e lajes. */
     static final int[] SHAPE_MATS = { PLANKS, COBBLE, STONE_BRICK, BRICK, SANDSTONE };
     private static final String[] SHAPE_MAT_NAMES = { "de tábuas", "de pedregulho", "de tijolos de pedra", "de tijolos", "de arenito" };
@@ -152,6 +154,7 @@ final class Block {
         def(BIRCH_SAPLING, "Muda de bétula", 0.05, CROSS, M_PLANT, -1, BIRCH_SAPLING, 0);
         def(CHEST, "Baú", 1.6, CUBE, M_WOOD, -1, CHEST, 0);
         def(FURNACE_LIT, "Fornalha", 3.0, CUBE, M_ROCK, 0, FURNACE, 13);
+        def(BIRCH_PLANKS, "Tábuas de bétula", 1.4, CUBE, M_WOOD, -1, BIRCH_PLANKS, 0);
         def(FARMLAND, "Terra arada", 0.5, CUBE, M_SOIL, -1, DIRT, 0);
         for (int s = 0; s < 3; s++) def(WHEAT + s, "Trigo", 0.05, CROSS, M_PLANT, -1, Items.SEEDS, 0);
         // duas lajes diferentes no mesmo bloco: cada metade com a textura do seu material

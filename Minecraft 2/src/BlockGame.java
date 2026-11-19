@@ -3972,13 +3972,22 @@ public class BlockGame {
         int sets = max ? Math.min(times, 64) : 1;
         int n = craftSize;
         if (r.shapeless) {
-            for (int k = 0; k < r.cells.length; k++) { inv.remove(r.cells[k], sets); craftGrid.set(k, r.cells[k], sets); }
+            for (int k = 0; k < r.cells.length; k++) fillCell(k, r.cells[k], sets);
         } else {
             for (int y = 0; y < r.h; y++)
                 for (int x = 0; x < r.w; x++)
-                    if (r.at(x, y) != 0) { inv.remove(r.at(x, y), sets); craftGrid.set(y * n + x, r.at(x, y), sets); }
+                    if (r.at(x, y) != 0) fillCell(y * n + x, r.at(x, y), sets);
         }
         Sounds.play("clique", 0.4);
+    }
+
+    /** Põe na casa k da grade sets itens do ingrediente (tábuas: as comuns ou as de bétula, o que houver). */
+    private void fillCell(int k, int item, int sets) {
+        int id = inv.variantFor(item, sets);
+        int n = Math.min(sets, inv.countOf(id));
+        if (n <= 0) return;
+        inv.remove(id, n);
+        craftGrid.set(k, id, n);
     }
 
     /** Espaço desenhado no último quadro que contém o ponto: {área, inventário, índice}, ou null. */

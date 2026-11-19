@@ -45,6 +45,7 @@ final class Textures {
         FILE[Block.CHEST] = "bau";
         FILE[Block.FARMLAND] = "terra_arada";
         FILE[Block.FURNACE_LIT] = "fornalha_acesa";
+        FILE[Block.BIRCH_PLANKS] = "tabuas_betula";
         for (int s = 0; s < 3; s++) FILE[Block.WHEAT + s] = "trigo_" + (s + 1);
         FILE[Block.DOOR_TEX_LOWER] = "porta_baixo";
         FILE[Block.DOOR_TEX_UPPER] = "porta_cima";
@@ -703,6 +704,13 @@ final class Textures {
         set(t, Block.LOG, logSide, logTop, logTop);
         set(t, Block.LEAVES, leaves, leaves, leaves);
         set(t, Block.PLANKS, planks, planks, planks);
+        // tábuas de bétula: o mesmo desenho, com a madeira clara e amarelada da bétula
+        int[] birchPlanks = make(S, (gx, gy, x, y) -> {
+            int c = planksF[y * S + x];
+            double l = (((c >> 16) & 255) * 0.30 + ((c >> 8) & 255) * 0.59 + (c & 255) * 0.11) / 130.0;
+            return mul(rgb(214, 192, 136), l);
+        });
+        set(t, Block.BIRCH_PLANKS, birchPlanks, birchPlanks, birchPlanks);
         set(t, Block.BRICK, brick, brick, brick);
         set(t, Block.SNOW, snow, snow, snow);
         set(t, Block.WATER, water, water, water);
