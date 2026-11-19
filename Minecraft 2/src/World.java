@@ -986,11 +986,11 @@ final class World {
     // =====================================================================
 
     /**
-     * Há um iglu no pedaço (cx, cz)? Retorna {x, y do chão, z} do centro, ou null. Uns 7% dos pedaços sorteiam;
+     * Há um iglu no pedaço (cx, cz)? Retorna {x, y do chão, z} do centro, ou null. Uns 2% dos pedaços sorteiam;
      * o lugar precisa ser tundra, longe da água e quase plano. O iglu inteiro cabe dentro do pedaço.
      */
     int[] iglooSite(int cx, int cz) {
-        if (hash(cx, cz, seed + 90) >= 0.07) return null;
+        if (hash(cx, cz, seed + 90) >= 0.02) return null; // raro: só 2% dos pedaços sorteiam
         int x = cx * 16 + 5 + (int) (hash(cx, cz, seed + 91) * 6), z = cz * 16 + 5 + (int) (hash(cx, cz, seed + 92) * 4);
         int lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE;
         for (int dx = -4; dx <= 4; dx++)

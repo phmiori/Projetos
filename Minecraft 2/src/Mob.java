@@ -14,7 +14,7 @@ final class Mob extends Entity {
             { 0.3, 0.85 }, { 0.25, 0.65 }, { 0.36, 1.55 }, { 0.2, 0.5 }, { 0.55, 1.35 }, { 0.15, 0.3 }, { 0.15, 0.3 }, { 0.2, 0.32 }, { 0.6, 0.9 },
             { 0.42, 1.25 }, { 0.42, 1.25 }, { 0.18, 0.5 }, { 0.3, 0.35 }, { 1.1, 1.8 },
             { 0.6, 1.4 }, { 0.2, 0.84 }, { 0.5, 1.3 }, { 0.6, 0.9 } };
-    private static final double[] MAX_HP = { 10, 8, 4, 20, 16, 3, 10, 20, 20, 12, 8, 12, 4, 30, 3, 3, 4, 25, 30, 30, 8, 8, 40, 30, 6, 20, 20 };
+    private static final double[] MAX_HP = { 10, 8, 4, 20, 16, 3, 10, 20, 20, 12, 8, 12, 4, 30, 3, 3, 4, 25, 30, 30, 8, 8, 40, 30, 6, 20, 24 };
     private static final double[] SPEED = { 1.5, 1.3, 1.6, 2.7, 3.6, 1.5, 1.3, 2.4, 2.3, 2.6, 2.8, 3.0, 2.4, 2.2, 4.5, 1.6, 2.0, 3.2, 3.0, 3.0, 2.2, 2.6, 2.0,
             2.3, 1.1, 1.6, 2.2 };
     /** Lobo domesticado: vida maior. */
@@ -51,6 +51,9 @@ final class Mob extends Entity {
     boolean swimmer() { return type == FISH || type == TROPICAL || type == SALMON || type == SHARK || type == NARWHAL; }
 
     boolean bear() { return type == BEAR || type == POLAR_BEAR; }
+
+    /** Peixes pequenos: o tubarão come. */
+    boolean smallFish() { return type == FISH || type == TROPICAL || type == SALMON; }
 
     /** Revida quando apanha (fica bravo um tempo): lobo, ursos, tigres e o boi-almiscarado. */
     boolean fighter() { return type == WOLF || bear() || tiger() || type == MUSKOX; }
@@ -101,7 +104,7 @@ final class Mob extends Entity {
     boolean hostile() { return type == ZOMBIE || type == SPIDER || type == CREEPER || type == SKELETON; }
 
     double attackDamage() {
-        return type == ZOMBIE || type == WOLF ? 3 : bear() ? 5 : type == SHARK || type == MUSKOX ? 4 : tiger() || type == EMPEROR ? 6 : 2;
+        return type == ZOMBIE || type == WOLF ? 3 : bear() ? 5 : type == SHARK || type == MUSKOX || type == NARWHAL ? 4 : tiger() || type == EMPEROR ? 6 : 2;
     }
 
     void update(double dt, World w, Player p, boolean canTarget, java.util.Random r) {
@@ -251,6 +254,7 @@ final class Mob extends Entity {
         flee -= dt;
         attackCd -= dt;
         wantsAttack = false;
+        wantsBite = false;
         boolean water = Block.isWater(w.get((int) Math.floor(x), (int) Math.floor(y + 0.15), (int) Math.floor(z)));
         inWater = water;
         double look = type == SHARK ? 1.6 : type == NARWHAL ? 1.8 : 0.6; // quanto à frente confere se ainda é água
@@ -261,6 +265,12 @@ final class Mob extends Entity {
             if (type == SHARK && canTarget && preyInWater && d3 < 16) {
                 dirX = dx / d3; dirY = dy / d3; dirZ = dz / d3; // vem atrás de quem está nadando
                 if (d3 < 1.9 && attackCd <= 0) { wantsAttack = true; attackCd = 1.2; }
+            } else if ((type == SHARK || type == NARWHAL) && target != null && target.health > 0) {
+                // tubarão caçando um peixe ou brigando com um narval; narval atacando um tubarão com a presa
+                double ex = target.x - x, ey = target.y + 0.2 - y, ez = target.z - z, d = Math.max(0.01, Math.sqrt(ex * ex + ey * ey + ez * ez));
+                dirX = ex / d; dirY = ey / d; dirZ = ez / d;
+                double reach = type == NARWHAL ? 2.6 : target.smallFish() ? 1.3 : 2.0;
+                if (d < reach && attackCd <= 0) { wantsBite = true; attackCd = type == NARWHAL ? 1.3 : target.smallFish() ? 0.6 : 1.1; }
             } else if (flee > 0 && type != SHARK) { // foge do jogador
                 double ex = x - p.x, ez = z - p.z, l = Math.max(0.01, Math.sqrt(ex * ex + ez * ez));
                 dirX = ex / l; dirZ = ez / l; dirY = 0;
@@ -276,7 +286,7 @@ final class Mob extends Entity {
                 if (type == SHARK && dirY > 0) dirY = 0; // tubarão não pula para fora: fica na superfície
                 else { dirX = -dirX; dirZ = -dirZ; dirY = -dirY * 0.5; aiTimer = 0.8; }
             }
-            double speed = SPEED[type] * (flee > 0 ? 2.2 : 1) * (type == SHARK && wantsAttack ? 0.6 : 1);
+            double speed = SPEED[type] * (flee > 0 ? 2.2 : target != null ? 1.5 : 1) * (type == SHARK && wantsAttack ? 0.6 : 1);
             double k = Math.min(1, dt * (type == SHARK ? 2 : 4));
             vx += (dirX * speed - vx) * k;
             vy += (dirY * speed - vy) * k;
@@ -373,6 +383,8 @@ final class Mob extends Entity {
         if (fighter()) {
             if (tamed) sitting = false; // o lobo domesticado levanta para se defender
             else angry = 25;            // lobo selvagem e urso revidam
+        } else if (type == NARWHAL && target != null) {
+            // narval brigando não foge
         } else if (!hostile() && type != SHARK && !scorpion()) flee = 4;
     }
     /** Itens que a criatura deixa ao morrer: pares {item, quantidade}. */

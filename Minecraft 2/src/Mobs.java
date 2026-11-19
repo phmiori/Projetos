@@ -145,14 +145,18 @@ final class Mobs {
             }
             Player p = nearest(players, m.x, m.z);
             if (m.tamed && !m.sitting) chooseTarget(m);
+            if (m.type == Mob.SHARK || m.type == Mob.NARWHAL) chooseSeaTarget(m);
             m.update(dt, w, p, survival && p.health > 0, rnd);
-            if (m.wantsBite && m.target != null) { // mordida do lobo domesticado
+            if (m.wantsBite && m.target != null) { // mordida do lobo domesticado, do tubarão ou chifrada do narval
                 Mob t = m.target;
-                t.damage(4);
+                boolean eat = m.type == Mob.SHARK && t.smallFish();
+                if ((m.type == Mob.NARWHAL || m.type == Mob.SHARK) && (t.type == Mob.NARWHAL || t.type == Mob.SHARK)) t.target = m; // tubarão e narval revidam
+                t.damage(m.type == Mob.WOLF ? 4 : eat ? 10 : m.attackDamage());
+                if (eat) m.health = Math.min(Mob.maxHealth(m.type), m.health + 3); // o tubarão se recupera comendo
                 double kx = t.x - m.x, kz = t.z - m.z, kl = Math.max(0.01, Math.sqrt(kx * kx + kz * kz));
                 t.vx += kx / kl * 6; t.vz += kz / kl * 6; t.vy = 4;
                 Sounds.playAt("criatura_dano", t.x, t.y + 0.8, t.z, listener, 0.8);
-                if (t.health <= 0) { kills.add(t); m.target = null; }
+                if (t.health <= 0) { if (!eat) kills.add(t); m.target = null; } // peixe comido não deixa nada
             }
             if (m.fuseStarted) Sounds.playAt("pavio", m.x, m.y + 1, m.z, listener, 0.9);
             if (m.exploding) {
@@ -198,6 +202,33 @@ final class Mobs {
         if (fish < 12 * n && rnd.nextDouble() < 0.5) spawnFish(w, p, sharks < n);
         if (birds < 8 * n && daylight > 0.3 && rnd.nextDouble() < 0.3) spawnBirds(w, p);
         if (hostile < 10 * n) spawnHostile(w, p, daylight);
+    }
+
+    /**
+     * No mar: o tubarão caça peixes pequenos por perto (e briga com narvais); o narval ataca tubarões.
+     * Se o alvo morreu, sumiu ou ficou longe, escolhe de novo.
+     */
+    private void chooseSeaTarget(Mob m) {
+        Mob t = m.target;
+        if (t != null && (t.health <= 0 || !list.contains(t) || dist2(m, t) > 20 * 20)) t = m.target = null;
+        if (t != null && !(m.type == Mob.SHARK && t.smallFish())) return; // briga em andamento continua
+        Mob best = null;
+        double bd = (m.type == Mob.SHARK ? 10 : 14) * (m.type == Mob.SHARK ? 10 : 14);
+        for (Mob o : list) {
+            if (o == m || o.health <= 0) continue;
+            boolean foe = m.type == Mob.NARWHAL ? o.type == Mob.SHARK : o.type == Mob.NARWHAL;
+            boolean prey = m.type == Mob.SHARK && o.smallFish();
+            if (!foe && !prey) continue;
+            double d = dist2(m, o);
+            if (foe) d *= 0.5; // briga com narval tem prioridade sobre o lanche
+            if (d < bd) { bd = d; best = o; }
+        }
+        if (best != null) m.target = best;
+    }
+
+    private static double dist2(Mob a, Mob b) {
+        double dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
+        return dx * dx + dy * dy + dz * dz;
     }
 
     /** Lobo domesticado: escolhe o monstro mais perto (até 10 blocos do dono) para atacar. */
