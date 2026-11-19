@@ -1,0 +1,221 @@
+# gerado por rust/ferramentas/ExportarBlocos.java a partir do Block.java (não edite à mão)
+# id|forma|textura|luz|giravel|arquivo|nome|caixas
+0|0|0|0|0|ar|Ar|
+1|0|1|0|1|grama|Grama|
+2|0|2|0|1|terra|Terra|
+3|0|3|0|1|pedra|Pedra|
+4|0|4|0|1|pedregulho|Pedregulho|
+5|0|5|0|1|areia|Areia|
+6|0|6|0|1|tronco|Tronco|
+7|1|7|0|0|folhas|Folhas|
+8|0|8|0|1|tabuas|Tábuas|
+9|0|9|0|1|tijolos|Tijolos|
+10|0|10|0|1|neve|Neve|
+11|3|11|0|0|agua|Água|
+12|0|12|0|1|minerio_carvao|Minério de carvão|
+13|0|13|0|1|minerio_ferro|Minério de ferro|
+14|0|14|0|1|minerio_ouro|Minério de ouro|
+15|0|15|0|1|minerio_cristal|Minério de cristal|
+16|0|16|0|1|cascalho|Cascalho|
+17|0|17|0|1|arenito|Arenito|
+18|1|18|0|0|vidro|Vidro|
+19|2|19|14|0|tocha|Tocha|
+20|0|20|0|1|bancada|Bancada|
+21|0|21|0|1|fornalha|Fornalha|
+22|0|22|0|1|tronco_betula|Tronco de bétula|
+23|1|23|0|0|folhas_betula|Folhas de bétula|
+24|0|24|0|1|cacto|Cacto|
+25|2|25|0|0|grama_alta|Grama alta|
+26|2|26|0|0|flor_amarela|Flor amarela|
+27|2|27|0|0|flor_vermelha|Flor vermelha|
+28|0|28|0|1|gelo|Gelo|
+29|3|29|15|0|lava|Lava|
+30|0|30|0|1|la|Lã|
+31|0|31|0|1|tijolos_pedra|Tijolos de pedra|
+32|0|32|0|1|bloco_ferro|Bloco de ferro|
+33|0|33|0|1|bloco_ouro|Bloco de ouro|
+34|0|34|0|1|rocha_mae|Rocha-mãe|
+35|3|35|0|0|agua|Água corrente|
+36|3|36|0|0|agua|Água corrente|
+37|3|37|0|0|agua|Água corrente|
+38|3|38|0|0|agua|Água corrente|
+39|3|39|0|0|agua|Água corrente|
+40|3|40|0|0|agua|Água corrente|
+41|3|41|0|0|agua|Água corrente|
+42|4|8|0|0|tabuas|Escada de tábuas|0,0,0,1,0.5,1;0,0.5,0.5,1,1,1
+43|4|8|0|0|tabuas|Escada de tábuas|0,0.5,0,1,1,1;0,0,0.5,1,0.5,1
+44|4|8|0|0|tabuas|Escada de tábuas|0,0,0,1,0.5,1;0,0.5,0,0.5,1,1
+45|4|8|0|0|tabuas|Escada de tábuas|0,0.5,0,1,1,1;0,0,0,0.5,0.5,1
+46|4|8|0|0|tabuas|Escada de tábuas|0,0,0,1,0.5,1;0,0.5,0,1,1,0.5
+47|4|8|0|0|tabuas|Escada de tábuas|0,0.5,0,1,1,1;0,0,0,1,0.5,0.5
+48|4|8|0|0|tabuas|Escada de tábuas|0,0,0,1,0.5,1;0.5,0.5,0,1,1,1
+49|4|8|0|0|tabuas|Escada de tábuas|0,0.5,0,1,1,1;0.5,0,0,1,0.5,1
+50|4|4|0|0|pedregulho|Escada de pedregulho|0,0,0,1,0.5,1;0,0.5,0.5,1,1,1
+51|4|4|0|0|pedregulho|Escada de pedregulho|0,0.5,0,1,1,1;0,0,0.5,1,0.5,1
+52|4|4|0|0|pedregulho|Escada de pedregulho|0,0,0,1,0.5,1;0,0.5,0,0.5,1,1
+53|4|4|0|0|pedregulho|Escada de pedregulho|0,0.5,0,1,1,1;0,0,0,0.5,0.5,1
+54|4|4|0|0|pedregulho|Escada de pedregulho|0,0,0,1,0.5,1;0,0.5,0,1,1,0.5
+55|4|4|0|0|pedregulho|Escada de pedregulho|0,0.5,0,1,1,1;0,0,0,1,0.5,0.5
+56|4|4|0|0|pedregulho|Escada de pedregulho|0,0,0,1,0.5,1;0.5,0.5,0,1,1,1
+57|4|4|0|0|pedregulho|Escada de pedregulho|0,0.5,0,1,1,1;0.5,0,0,1,0.5,1
+58|4|31|0|0|tijolos_pedra|Escada de tijolos de pedra|0,0,0,1,0.5,1;0,0.5,0.5,1,1,1
+59|4|31|0|0|tijolos_pedra|Escada de tijolos de pedra|0,0.5,0,1,1,1;0,0,0.5,1,0.5,1
+60|4|31|0|0|tijolos_pedra|Escada de tijolos de pedra|0,0,0,1,0.5,1;0,0.5,0,0.5,1,1
+61|4|31|0|0|tijolos_pedra|Escada de tijolos de pedra|0,0.5,0,1,1,1;0,0,0,0.5,0.5,1
+62|4|31|0|0|tijolos_pedra|Escada de tijolos de pedra|0,0,0,1,0.5,1;0,0.5,0,1,1,0.5
+63|4|31|0|0|tijolos_pedra|Escada de tijolos de pedra|0,0.5,0,1,1,1;0,0,0,1,0.5,0.5
+64|4|31|0|0|tijolos_pedra|Escada de tijolos de pedra|0,0,0,1,0.5,1;0.5,0.5,0,1,1,1
+65|4|31|0|0|tijolos_pedra|Escada de tijolos de pedra|0,0.5,0,1,1,1;0.5,0,0,1,0.5,1
+66|4|9|0|0|tijolos|Escada de tijolos|0,0,0,1,0.5,1;0,0.5,0.5,1,1,1
+67|4|9|0|0|tijolos|Escada de tijolos|0,0.5,0,1,1,1;0,0,0.5,1,0.5,1
+68|4|9|0|0|tijolos|Escada de tijolos|0,0,0,1,0.5,1;0,0.5,0,0.5,1,1
+69|4|9|0|0|tijolos|Escada de tijolos|0,0.5,0,1,1,1;0,0,0,0.5,0.5,1
+70|4|9|0|0|tijolos|Escada de tijolos|0,0,0,1,0.5,1;0,0.5,0,1,1,0.5
+71|4|9|0|0|tijolos|Escada de tijolos|0,0.5,0,1,1,1;0,0,0,1,0.5,0.5
+72|4|9|0|0|tijolos|Escada de tijolos|0,0,0,1,0.5,1;0.5,0.5,0,1,1,1
+73|4|9|0|0|tijolos|Escada de tijolos|0,0.5,0,1,1,1;0.5,0,0,1,0.5,1
+74|4|17|0|0|arenito|Escada de arenito|0,0,0,1,0.5,1;0,0.5,0.5,1,1,1
+75|4|17|0|0|arenito|Escada de arenito|0,0.5,0,1,1,1;0,0,0.5,1,0.5,1
+76|4|17|0|0|arenito|Escada de arenito|0,0,0,1,0.5,1;0,0.5,0,0.5,1,1
+77|4|17|0|0|arenito|Escada de arenito|0,0.5,0,1,1,1;0,0,0,0.5,0.5,1
+78|4|17|0|0|arenito|Escada de arenito|0,0,0,1,0.5,1;0,0.5,0,1,1,0.5
+79|4|17|0|0|arenito|Escada de arenito|0,0.5,0,1,1,1;0,0,0,1,0.5,0.5
+80|4|17|0|0|arenito|Escada de arenito|0,0,0,1,0.5,1;0.5,0.5,0,1,1,1
+81|4|17|0|0|arenito|Escada de arenito|0,0.5,0,1,1,1;0.5,0,0,1,0.5,1
+82|4|8|0|0|tabuas|Laje de tábuas|0,0,0,1,0.5,1
+83|4|8|0|0|tabuas|Laje de tábuas|0,0.5,0,1,1,1
+84|4|4|0|0|pedregulho|Laje de pedregulho|0,0,0,1,0.5,1
+85|4|4|0|0|pedregulho|Laje de pedregulho|0,0.5,0,1,1,1
+86|4|31|0|0|tijolos_pedra|Laje de tijolos de pedra|0,0,0,1,0.5,1
+87|4|31|0|0|tijolos_pedra|Laje de tijolos de pedra|0,0.5,0,1,1,1
+88|4|9|0|0|tijolos|Laje de tijolos|0,0,0,1,0.5,1
+89|4|9|0|0|tijolos|Laje de tijolos|0,0.5,0,1,1,1
+90|4|17|0|0|arenito|Laje de arenito|0,0,0,1,0.5,1
+91|4|17|0|0|arenito|Laje de arenito|0,0.5,0,1,1,1
+92|4|108|0|0|porta_baixo|Porta de madeira|0,0,0.8125,1,1,1
+93|4|108|0|0|porta_baixo|Porta de madeira|0,0,0,0.1875,1,1
+94|4|108|0|0|porta_baixo|Porta de madeira|0,0,0,0.1875,1,1
+95|4|108|0|0|porta_baixo|Porta de madeira|0,0,0,1,1,0.1875
+96|4|108|0|0|porta_baixo|Porta de madeira|0,0,0,1,1,0.1875
+97|4|108|0|0|porta_baixo|Porta de madeira|0.8125,0,0,1,1,1
+98|4|108|0|0|porta_baixo|Porta de madeira|0.8125,0,0,1,1,1
+99|4|108|0|0|porta_baixo|Porta de madeira|0,0,0.8125,1,1,1
+100|4|109|0|0|porta_cima|Porta de madeira|0,0,0.8125,1,1,1
+101|4|109|0|0|porta_cima|Porta de madeira|0,0,0,0.1875,1,1
+102|4|109|0|0|porta_cima|Porta de madeira|0,0,0,0.1875,1,1
+103|4|109|0|0|porta_cima|Porta de madeira|0,0,0,1,1,0.1875
+104|4|109|0|0|porta_cima|Porta de madeira|0,0,0,1,1,0.1875
+105|4|109|0|0|porta_cima|Porta de madeira|0.8125,0,0,1,1,1
+106|4|109|0|0|porta_cima|Porta de madeira|0.8125,0,0,1,1,1
+107|4|109|0|0|porta_cima|Porta de madeira|0,0,0.8125,1,1,1
+108|0|108|0|1|porta_baixo|Porta (textura de baixo)|
+109|0|109|0|1|porta_cima|Porta (textura de cima)|
+110|4|8|0|0|tabuas|Laje vertical de tábuas|0,0,0.5,1,1,1
+111|4|8|0|0|tabuas|Laje vertical de tábuas|0,0,0,0.5,1,1
+112|4|8|0|0|tabuas|Laje vertical de tábuas|0,0,0,1,1,0.5
+113|4|8|0|0|tabuas|Laje vertical de tábuas|0.5,0,0,1,1,1
+114|4|4|0|0|pedregulho|Laje vertical de pedregulho|0,0,0.5,1,1,1
+115|4|4|0|0|pedregulho|Laje vertical de pedregulho|0,0,0,0.5,1,1
+116|4|4|0|0|pedregulho|Laje vertical de pedregulho|0,0,0,1,1,0.5
+117|4|4|0|0|pedregulho|Laje vertical de pedregulho|0.5,0,0,1,1,1
+118|4|31|0|0|tijolos_pedra|Laje vertical de tijolos de pedra|0,0,0.5,1,1,1
+119|4|31|0|0|tijolos_pedra|Laje vertical de tijolos de pedra|0,0,0,0.5,1,1
+120|4|31|0|0|tijolos_pedra|Laje vertical de tijolos de pedra|0,0,0,1,1,0.5
+121|4|31|0|0|tijolos_pedra|Laje vertical de tijolos de pedra|0.5,0,0,1,1,1
+122|4|9|0|0|tijolos|Laje vertical de tijolos|0,0,0.5,1,1,1
+123|4|9|0|0|tijolos|Laje vertical de tijolos|0,0,0,0.5,1,1
+124|4|9|0|0|tijolos|Laje vertical de tijolos|0,0,0,1,1,0.5
+125|4|9|0|0|tijolos|Laje vertical de tijolos|0.5,0,0,1,1,1
+126|4|17|0|0|arenito|Laje vertical de arenito|0,0,0.5,1,1,1
+127|4|17|0|0|arenito|Laje vertical de arenito|0,0,0,0.5,1,1
+128|4|17|0|0|arenito|Laje vertical de arenito|0,0,0,1,1,0.5
+129|4|17|0|0|arenito|Laje vertical de arenito|0.5,0,0,1,1,1
+130|4|8|0|0|tabuas|Cerca de madeira|0.375,0,0.375,0.625,1,0.625;0,0.375,0.4375,0.375,0.5625,0.5625;0.625,0.375,0.4375,1,0.5625,0.5625;0,0.75,0.4375,0.375,0.9375,0.5625;0.625,0.75,0.4375,1,0.9375,0.5625
+131|4|18|0|0|vidro|Painel de vidro|0.4375,0,0.4375,0.5625,1,0.5625;0,0,0.4375,0.4375,1,0.5625;0.5625,0,0.4375,1,1,0.5625
+132|2|19|14|0|tocha|Tocha|
+133|2|19|14|0|tocha|Tocha|
+134|2|19|14|0|tocha|Tocha|
+135|2|19|14|0|tocha|Tocha|
+136|4|8|0|0|tabuas|Lajes empilhadas|0,0,0,1,0.5,1,8;0,0.5,0,1,1,1,8
+137|4|8|0|0|tabuas|Lajes empilhadas|0,0,0,1,0.5,1,8;0,0.5,0,1,1,1,4
+138|4|8|0|0|tabuas|Lajes empilhadas|0,0,0,1,0.5,1,8;0,0.5,0,1,1,1,31
+139|4|8|0|0|tabuas|Lajes empilhadas|0,0,0,1,0.5,1,8;0,0.5,0,1,1,1,9
+140|4|8|0|0|tabuas|Lajes empilhadas|0,0,0,1,0.5,1,8;0,0.5,0,1,1,1,17
+141|4|4|0|0|pedregulho|Lajes empilhadas|0,0,0,1,0.5,1,4;0,0.5,0,1,1,1,8
+142|4|4|0|0|pedregulho|Lajes empilhadas|0,0,0,1,0.5,1,4;0,0.5,0,1,1,1,4
+143|4|4|0|0|pedregulho|Lajes empilhadas|0,0,0,1,0.5,1,4;0,0.5,0,1,1,1,31
+144|4|4|0|0|pedregulho|Lajes empilhadas|0,0,0,1,0.5,1,4;0,0.5,0,1,1,1,9
+145|4|4|0|0|pedregulho|Lajes empilhadas|0,0,0,1,0.5,1,4;0,0.5,0,1,1,1,17
+146|4|31|0|0|tijolos_pedra|Lajes empilhadas|0,0,0,1,0.5,1,31;0,0.5,0,1,1,1,8
+147|4|31|0|0|tijolos_pedra|Lajes empilhadas|0,0,0,1,0.5,1,31;0,0.5,0,1,1,1,4
+148|4|31|0|0|tijolos_pedra|Lajes empilhadas|0,0,0,1,0.5,1,31;0,0.5,0,1,1,1,31
+149|4|31|0|0|tijolos_pedra|Lajes empilhadas|0,0,0,1,0.5,1,31;0,0.5,0,1,1,1,9
+150|4|31|0|0|tijolos_pedra|Lajes empilhadas|0,0,0,1,0.5,1,31;0,0.5,0,1,1,1,17
+151|4|9|0|0|tijolos|Lajes empilhadas|0,0,0,1,0.5,1,9;0,0.5,0,1,1,1,8
+152|4|9|0|0|tijolos|Lajes empilhadas|0,0,0,1,0.5,1,9;0,0.5,0,1,1,1,4
+153|4|9|0|0|tijolos|Lajes empilhadas|0,0,0,1,0.5,1,9;0,0.5,0,1,1,1,31
+154|4|9|0|0|tijolos|Lajes empilhadas|0,0,0,1,0.5,1,9;0,0.5,0,1,1,1,9
+155|4|9|0|0|tijolos|Lajes empilhadas|0,0,0,1,0.5,1,9;0,0.5,0,1,1,1,17
+156|4|17|0|0|arenito|Lajes empilhadas|0,0,0,1,0.5,1,17;0,0.5,0,1,1,1,8
+157|4|17|0|0|arenito|Lajes empilhadas|0,0,0,1,0.5,1,17;0,0.5,0,1,1,1,4
+158|4|17|0|0|arenito|Lajes empilhadas|0,0,0,1,0.5,1,17;0,0.5,0,1,1,1,31
+159|4|17|0|0|arenito|Lajes empilhadas|0,0,0,1,0.5,1,17;0,0.5,0,1,1,1,9
+160|4|17|0|0|arenito|Lajes empilhadas|0,0,0,1,0.5,1,17;0,0.5,0,1,1,1,17
+161|0|161|0|1|dinamite|Dinamite|
+162|4|162|0|1|cama|Cama|0,0,0,1,0.5625,1
+163|2|163|0|0|muda|Muda de árvore|
+164|2|164|0|0|muda_betula|Muda de bétula|
+165|0|165|0|1|bau|Baú|
+166|0|166|0|1|terra_arada|Terra arada|
+167|2|167|0|0|trigo_1|Trigo|
+168|2|168|0|0|trigo_2|Trigo|
+169|2|169|0|0|trigo_3|Trigo|
+170|0|170|13|1|fornalha_acesa|Fornalha|
+171|0|171|0|1|tabuas_betula|Tábuas de bétula|
+172|4|171|0|0|tabuas_betula|Escada de bétula|0,0,0,1,0.5,1;0,0.5,0.5,1,1,1
+173|4|171|0|0|tabuas_betula|Escada de bétula|0,0.5,0,1,1,1;0,0,0.5,1,0.5,1
+174|4|171|0|0|tabuas_betula|Escada de bétula|0,0,0,1,0.5,1;0,0.5,0,0.5,1,1
+175|4|171|0|0|tabuas_betula|Escada de bétula|0,0.5,0,1,1,1;0,0,0,0.5,0.5,1
+176|4|171|0|0|tabuas_betula|Escada de bétula|0,0,0,1,0.5,1;0,0.5,0,1,1,0.5
+177|4|171|0|0|tabuas_betula|Escada de bétula|0,0.5,0,1,1,1;0,0,0,1,0.5,0.5
+178|4|171|0|0|tabuas_betula|Escada de bétula|0,0,0,1,0.5,1;0.5,0.5,0,1,1,1
+179|4|171|0|0|tabuas_betula|Escada de bétula|0,0.5,0,1,1,1;0.5,0,0,1,0.5,1
+180|4|171|0|0|tabuas_betula|Laje de bétula|0,0,0,1,0.5,1
+181|4|171|0|0|tabuas_betula|Laje de bétula|0,0.5,0,1,1,1
+182|4|171|0|0|tabuas_betula|Laje vertical de bétula|0,0,0.5,1,1,1
+183|4|171|0|0|tabuas_betula|Laje vertical de bétula|0,0,0,0.5,1,1
+184|4|171|0|0|tabuas_betula|Laje vertical de bétula|0,0,0,1,1,0.5
+185|4|171|0|0|tabuas_betula|Laje vertical de bétula|0.5,0,0,1,1,1
+186|4|171|0|0|tabuas_betula|Cerca de bétula|0.375,0,0.375,0.625,1,0.625;0,0.375,0.4375,0.375,0.5625,0.5625;0.625,0.375,0.4375,1,0.5625,0.5625;0,0.75,0.4375,0.375,0.9375,0.5625;0.625,0.75,0.4375,1,0.9375,0.5625
+187|4|171|0|0|tabuas_betula|Lajes empilhadas|0,0,0,1,0.5,1,171;0,0.5,0,1,1,1,8
+188|4|171|0|0|tabuas_betula|Lajes empilhadas|0,0,0,1,0.5,1,171;0,0.5,0,1,1,1,4
+189|4|171|0|0|tabuas_betula|Lajes empilhadas|0,0,0,1,0.5,1,171;0,0.5,0,1,1,1,31
+190|4|171|0|0|tabuas_betula|Lajes empilhadas|0,0,0,1,0.5,1,171;0,0.5,0,1,1,1,9
+191|4|171|0|0|tabuas_betula|Lajes empilhadas|0,0,0,1,0.5,1,171;0,0.5,0,1,1,1,17
+192|4|171|0|0|tabuas_betula|Lajes empilhadas|0,0,0,1,0.5,1,171;0,0.5,0,1,1,1,171
+193|4|8|0|0|tabuas|Lajes empilhadas|0,0,0,1,0.5,1,8;0,0.5,0,1,1,1,171
+194|4|4|0|0|pedregulho|Lajes empilhadas|0,0,0,1,0.5,1,4;0,0.5,0,1,1,1,171
+195|4|31|0|0|tijolos_pedra|Lajes empilhadas|0,0,0,1,0.5,1,31;0,0.5,0,1,1,1,171
+196|4|9|0|0|tijolos|Lajes empilhadas|0,0,0,1,0.5,1,9;0,0.5,0,1,1,1,171
+197|4|17|0|0|arenito|Lajes empilhadas|0,0,0,1,0.5,1,17;0,0.5,0,1,1,1,171
+198|4|214|0|0|porta_betula_baixo|Porta de bétula|0,0,0.8125,1,1,1
+199|4|214|0|0|porta_betula_baixo|Porta de bétula|0,0,0,0.1875,1,1
+200|4|214|0|0|porta_betula_baixo|Porta de bétula|0,0,0,0.1875,1,1
+201|4|214|0|0|porta_betula_baixo|Porta de bétula|0,0,0,1,1,0.1875
+202|4|214|0|0|porta_betula_baixo|Porta de bétula|0,0,0,1,1,0.1875
+203|4|214|0|0|porta_betula_baixo|Porta de bétula|0.8125,0,0,1,1,1
+204|4|214|0|0|porta_betula_baixo|Porta de bétula|0.8125,0,0,1,1,1
+205|4|214|0|0|porta_betula_baixo|Porta de bétula|0,0,0.8125,1,1,1
+206|4|215|0|0|porta_betula_cima|Porta de bétula|0,0,0.8125,1,1,1
+207|4|215|0|0|porta_betula_cima|Porta de bétula|0,0,0,0.1875,1,1
+208|4|215|0|0|porta_betula_cima|Porta de bétula|0,0,0,0.1875,1,1
+209|4|215|0|0|porta_betula_cima|Porta de bétula|0,0,0,1,1,0.1875
+210|4|215|0|0|porta_betula_cima|Porta de bétula|0,0,0,1,1,0.1875
+211|4|215|0|0|porta_betula_cima|Porta de bétula|0.8125,0,0,1,1,1
+212|4|215|0|0|porta_betula_cima|Porta de bétula|0.8125,0,0,1,1,1
+213|4|215|0|0|porta_betula_cima|Porta de bétula|0,0,0.8125,1,1,1
+214|0|214|0|1|porta_betula_baixo|Porta de bétula (textura de baixo)|
+215|0|215|0|1|porta_betula_cima|Porta de bétula (textura de cima)|
+216|0|216|0|1|gelo_compacto|Gelo compacto|
+217|0|217|0|1|gelo_azul|Gelo azul|
+218|2|218|0|0|pingente_gelo|Pingente de gelo|

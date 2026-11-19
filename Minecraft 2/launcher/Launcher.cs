@@ -47,7 +47,7 @@ namespace MundoDeBlocos
         readonly string baseDir = Path.GetDirectoryName(typeof(LauncherForm).Assembly.Location); // a pasta do .exe
         readonly Image background;
         readonly List<Btn> buttons = new List<Btn>();
-        readonly Btn playBtn;
+        readonly Btn playBtn, rustBtn;
         Rectangle closeRect, minRect, checkRect;
         Btn hover;
         bool hoverClose, hoverMin, hoverCheck, showMessages, busy;
@@ -75,6 +75,9 @@ namespace MundoDeBlocos
             buttons.Add(playBtn);
             buttons.Add(new Btn(new Rectangle(48, 342, 145, 40), "Pasta do jogo", false, delegate { OpenFolder(baseDir); }));
             buttons.Add(new Btn(new Rectangle(203, 342, 145, 40), "Texturas", false, delegate { OpenFolder(Path.Combine(baseDir, "textures")); }));
+            // a versão nova, em Rust (em transição: por enquanto só dá para voar pelo mundo)
+            rustBtn = new Btn(new Rectangle(48, 428, 300, 38), "Versão Rust (prévia)", false, PlayRust);
+            if (Directory.Exists(Path.Combine(baseDir, "rust"))) buttons.Add(rustBtn);
             closeRect = new Rectangle(ClientSize.Width - 46, 0, 46, 34);
             minRect = new Rectangle(ClientSize.Width - 92, 0, 46, 34);
             checkRect = new Rectangle(48, 400, 300, 22);
@@ -270,6 +273,7 @@ namespace MundoDeBlocos
             if (busy) return;
             busy = true;
             playBtn.Enabled = false;
+            rustBtn.Enabled = false;
             Invalidate();
             bool messages = showMessages;
             Thread t = new Thread(delegate () { PlayWork(messages); });
@@ -281,7 +285,7 @@ namespace MundoDeBlocos
 
         void Done(string msg, bool error)
         {
-            Ui(delegate { busy = false; playBtn.Enabled = true; SetStatus(msg, error); });
+            Ui(delegate { busy = false; playBtn.Enabled = true; rustBtn.Enabled = true; SetStatus(msg, error); });
         }
 
         void PlayWork(bool messages)
@@ -349,8 +353,13 @@ namespace MundoDeBlocos
 
         ProcessStartInfo Psi(string exe, string args, string bin)
         {
+            return Psi(exe, args, bin, baseDir);
+        }
+
+        ProcessStartInfo Psi(string exe, string args, string bin, string workDir)
+        {
             ProcessStartInfo psi = new ProcessStartInfo(exe, args);
-            psi.WorkingDirectory = baseDir;
+            psi.WorkingDirectory = workDir;
             psi.UseShellExecute = false;
             // só o Java escolhido no PATH (o "javapath" e Javas antigos misturam DLLs)
             string sys = Environment.GetEnvironmentVariable("SystemRoot") ?? @"C:\Windows";
@@ -360,12 +369,17 @@ namespace MundoDeBlocos
 
         int Run(string exe, string args, string bin, out string output)
         {
-            ProcessStartInfo psi = Psi(exe, args, bin);
+            return Run(exe, args, bin, baseDir, Encoding.Default, out output);
+        }
+
+        int Run(string exe, string args, string bin, string workDir, Encoding enc, out string output)
+        {
+            ProcessStartInfo psi = Psi(exe, args, bin, workDir);
             psi.CreateNoWindow = true;
             psi.RedirectStandardOutput = true;
             psi.RedirectStandardError = true;
-            psi.StandardOutputEncoding = Encoding.Default;
-            psi.StandardErrorEncoding = Encoding.Default;
+            psi.StandardOutputEncoding = enc;
+            psi.StandardErrorEncoding = enc;
             using (Process p = Process.Start(psi))
             {
                 StringBuilder sb = new StringBuilder();
@@ -382,11 +396,17 @@ namespace MundoDeBlocos
         void StartGame(string bin, string cp, bool messages)
         {
             string args = "-XX:+UseParallelGC -cp \"" + cp + "\" BlockGame";
+            StartProcess(Path.Combine(bin, "javaw.exe"), Path.Combine(bin, "java.exe"), args, bin, messages, "ultimo-jogo.log");
+        }
+
+        /** Abre o jogo (exe sem console; consoleExe quando a caixa de mensagens está marcada) e espera ele fechar. */
+        void StartProcess(string exe, string consoleExe, string args, string bin, bool messages, string logName)
+        {
             if (messages)
             {
                 // janela de console com as mensagens do jogo (fica aberta se o jogo fechar com erro)
                 ProcessStartInfo psi = Psi(Path.Combine(Environment.GetEnvironmentVariable("SystemRoot") ?? @"C:\Windows", @"system32\cmd.exe"),
-                    "/c \"\"" + Path.Combine(bin, "java.exe") + "\" " + args + " || pause\"", bin);
+                    "/c \"\"" + consoleExe + "\" " + args + " || pause\"", bin);
                 psi.CreateNoWindow = false;
                 Process.Start(psi);
                 Ui(delegate { Close(); });
@@ -394,8 +414,10 @@ namespace MundoDeBlocos
             }
             string logDir = Path.Combine(baseDir, "logs");
             Directory.CreateDirectory(logDir);
-            string logFile = Path.Combine(logDir, "ultimo-jogo.log");
-            ProcessStartInfo gp = Psi(Path.Combine(bin, "javaw.exe"), args, bin);
+            string logFile = Path.Combine(logDir, logName);
+            ProcessStartInfo gp = Psi(exe, args, bin);
+            gp.StandardOutputEncoding = Encoding.UTF8;
+            gp.StandardErrorEncoding = Encoding.UTF8;
             gp.CreateNoWindow = true;
             gp.RedirectStandardOutput = true;
             gp.RedirectStandardError = true;
@@ -418,6 +440,83 @@ namespace MundoDeBlocos
             try { using (FileStream fs = new FileStream(logFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) using (StreamReader sr = new StreamReader(fs)) text = sr.ReadToEnd(); } catch { }
             Done("O jogo fechou com um erro.", true);
             Ui(delegate { Show(); Activate(); ShowLog("O jogo fechou com um erro", text); });
+        }
+
+        // ------------------------------------------------------------ versão Rust
+        string RustDir() { return Path.Combine(baseDir, "rust"); }
+        string RustExe() { return Path.Combine(RustDir(), @"target\release\mundo-de-blocos.exe"); }
+
+        /** Pasta do cargo (o compilador do Rust), ou null se o Rust não está instalado. */
+        static string FindCargo()
+        {
+            string c = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), @".cargo\bin");
+            if (File.Exists(Path.Combine(c, "cargo.exe"))) return c;
+            foreach (string d in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(';'))
+            {
+                try { if (d.Length > 0 && File.Exists(Path.Combine(d, "cargo.exe"))) return d; } catch { }
+            }
+            return null;
+        }
+
+        /** Compila só se algum arquivo do código Rust for mais novo que o executável. */
+        bool RustNeedsBuild()
+        {
+            string exe = RustExe();
+            if (!File.Exists(exe)) return true;
+            DateTime built = File.GetLastWriteTimeUtc(exe);
+            List<string> files = new List<string>(Directory.GetFiles(Path.Combine(RustDir(), "src"), "*.rs", SearchOption.AllDirectories));
+            files.Add(Path.Combine(RustDir(), "Cargo.toml"));
+            files.Add(Path.Combine(RustDir(), @"dados\blocos.txt"));
+            foreach (string f in files)
+                if (File.Exists(f) && File.GetLastWriteTimeUtc(f) > built) return true;
+            return false;
+        }
+
+        void PlayRust()
+        {
+            if (busy) return;
+            busy = true;
+            playBtn.Enabled = false;
+            rustBtn.Enabled = false;
+            Invalidate();
+            bool messages = showMessages;
+            Thread t = new Thread(delegate () { RustWork(messages); });
+            t.IsBackground = true;
+            t.Start();
+        }
+
+        void RustWork(bool messages)
+        {
+            try
+            {
+                string cargo = FindCargo();
+                if (RustNeedsBuild())
+                {
+                    if (cargo == null && !File.Exists(RustExe()))
+                    {
+                        Done("Para a versão Rust, instale o Rust (https://rustup.rs) e tente de novo.", true);
+                        return;
+                    }
+                    if (cargo != null)
+                    {
+                        Ui(delegate { SetStatus("Compilando a versão Rust (a primeira vez demora alguns minutos)...", false); });
+                        string output;
+                        int code = Run(Path.Combine(cargo, "cargo.exe"), "build --release", cargo, RustDir(), Encoding.UTF8, out output);
+                        if (code != 0)
+                        {
+                            Done("A versão Rust não compilou.", true);
+                            Ui(delegate { ShowLog("Erro ao compilar a versão Rust", output); });
+                            return;
+                        }
+                    }
+                }
+                Ui(delegate { SetStatus("Abrindo a versão Rust...", false); });
+                StartProcess(RustExe(), RustExe(), "", Path.GetDirectoryName(RustExe()), messages, "ultimo-jogo-rust.log");
+            }
+            catch (Exception ex)
+            {
+                Done("Não consegui abrir a versão Rust: " + ex.Message, true);
+            }
         }
 
         void ShowLog(string title, string text)
