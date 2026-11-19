@@ -87,6 +87,16 @@ impl Region {
         }
         (15 - (top - y + 1) * 3).max(0)
     }
+    fn blk(&self, x: i32, y: i32, z: i32) -> i32 {
+        if !(0..SY).contains(&y) {
+            return 0;
+        }
+        match self.of(x, z) {
+            Some(c) => c.light[idx(x & 15, y, z & 15)] as i32,
+            None => 0,
+        }
+    }
+
     /// Luz do céu com o "vazamento" de lado do Java: embaixo de saliências a luz entra um ou dois blocos.
     fn sky(&self, x: i32, y: i32, z: i32) -> i32 {
         let mut s = self.sky0(x, y, z);
@@ -185,6 +195,7 @@ pub fn build(reg: &Region) -> Mesh {
     let (x0, z0) = (cx * 16, cz * 16);
     let mut occ = [0i32; 4];
     let mut sky = [0i32; 4];
+    let mut blk = [0i32; 4];
     for lx in 0..16 {
         for lz in 0..16 {
             let (x, z) = (x0 + lx, z0 + lz);
@@ -199,7 +210,8 @@ pub fn build(reg: &Region) -> Mesh {
 
                 if shape == CROSS {
                     let s = reg.sky(x, y, z) as u32;
-                    let b2 = l(block::texture(b) as i32 * 6 + 4) | s << 10 | FLAG_PLANT << 18;
+                    let bl = reg.blk(x, y, z) as u32;
+                    let b2 = l(block::texture(b) as i32 * 6 + 4) | s << 10 | bl << 14 | FLAG_PLANT << 18;
                     for q in 0..4 {
                         let f = if q < 2 { 6 } else { 7 };
                         let (a, c) = (CROSS_Q[q][0], CROSS_Q[q][1]);
@@ -215,6 +227,7 @@ pub fn build(reg: &Region) -> Mesh {
                     // escadas, lajes, portas, cama: caixas com a luz da própria célula (cercas e painéis ainda
                     // sem as ligações com os vizinhos)
                     let s = reg.sky(x, y, z) as u32;
+                    let bl = reg.blk(x, y, z) as u32;
                     for (bx, tex) in &block::table().blocks[b as usize].boxes {
                         let p0 = [(bx[0] * 16.0).round() as i32, (bx[1] * 16.0).round() as i32, (bx[2] * 16.0).round() as i32];
                         let p1 = [(bx[3] * 16.0).round() as i32, (bx[4] * 16.0).round() as i32, (bx[5] * 16.0).round() as i32];
@@ -235,7 +248,7 @@ pub fn build(reg: &Region) -> Mesh {
                                 let (r, u) = (R[f], U[f]);
                                 let tu = (c[0] - 8) * r[0] + (c[1] - 8) * r[1] + (c[2] - 8) * r[2] + 8;
                                 let tv = (c[0] - 8) * u[0] + (c[1] - 8) * u[1] + (c[2] - 8) * u[2] + 8;
-                                add(&mut opaque, pos(ox + c[0], oy + c[1], oz + c[2]), l(layer) | s << 10, uv(tu, tv, f as i32, 0, k as i32));
+                                add(&mut opaque, pos(ox + c[0], oy + c[1], oz + c[2]), l(layer) | s << 10 | bl << 14, uv(tu, tv, f as i32, 0, k as i32));
                             }
                         }
                     }
@@ -262,20 +275,25 @@ pub fn build(reg: &Region) -> Mesh {
                         let c = reg.occluder(qx, qy, qz);
                         occ[k] = if s1 == 1 && s2 == 1 { 3 } else { s1 + s2 + c };
                         let mut ns = reg.sky(fx, fy, fz);
+                        let mut nl = reg.blk(fx, fy, fz);
                         let mut cnt = 1;
                         if s1 == 0 {
                             ns += reg.sky(ax, ay, az);
+                            nl += reg.blk(ax, ay, az);
                             cnt += 1;
                         }
                         if s2 == 0 {
                             ns += reg.sky(bx, by, bz);
+                            nl += reg.blk(bx, by, bz);
                             cnt += 1;
                         }
                         if c == 0 && !(s1 == 1 && s2 == 1) {
                             ns += reg.sky(qx, qy, qz);
+                            nl += reg.blk(qx, qy, qz);
                             cnt += 1;
                         }
                         sky[k] = (ns + cnt / 2) / cnt;
+                        blk[k] = (nl + cnt / 2) / cnt;
                     }
                     let lf = if rot == 0 { f } else { local_face(f, rot) };
                     let layer = block::texture(b) as i32 * 6 + lf as i32;
@@ -287,7 +305,7 @@ pub fn build(reg: &Region) -> Mesh {
                         let px = (1 + n[0] + SR[k] * r[0] + SU[k] * u[0]) * 8;
                         let py = (1 + n[1] + SR[k] * r[1] + SU[k] * u[1]) * 8;
                         let pz = (1 + n[2] + SR[k] * r[2] + SU[k] * u[2]) * 8;
-                        let bb = l(layer) | (sky[k] as u32) << 10 | flags << 18 | (surface as u32) << 22;
+                        let bb = l(layer) | (sky[k] as u32) << 10 | (blk[k] as u32) << 14 | flags << 18 | (surface as u32) << 22;
                         let cc = if top_rot != 0 && (f == 2 || f == 3) {
                             top_uv(f, k, top_rot, occ[k])
                         } else {

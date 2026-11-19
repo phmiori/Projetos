@@ -41,6 +41,10 @@ impl Game {
         let (lx, lz) = (x & 15, z & 15);
         let i = idx(lx, y, lz);
         let old = c.blocks[i];
+        let old_rot = c.rot.get(&(i as u16)).copied().unwrap_or(0);
+        if old == b && old_rot == rot {
+            return;
+        }
         c.blocks[i] = b;
         if rot != 0 {
             c.rot.insert(i as u16, rot);
@@ -55,7 +59,19 @@ impl Game {
                 self.dirty.insert((k.0 + dx, k.1 + dz));
             }
         }
-        let _ = old;
+        // luz de tochas/lava: refaz a região se algo que brilha ou tapa a luz mudou perto de luz
+        let light_change = block::light(old) > 0 || block::light(b) > 0;
+        let block_change = block::opaque_cube(old) != block::opaque_cube(b) && self.near_light(x, y, z);
+        if light_change || block_change {
+            self.relight(x, y, z);
+        }
+        // água perto: ela pode escorrer para cá, secar ou mudar de nível
+        if block::is_water(old) || block::is_water(b) || self.water_around(x, y, z) {
+            self.schedule_fluid(x, y, z);
+            for (dx, dy, dz) in [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)] {
+                self.schedule_fluid(x + dx, y + dy, z + dz);
+            }
+        }
         if !block::solid(b) {
             // plantas e tochas sem apoio caem junto
             if y + 1 < SY && block::info(self.get(x, y + 1, z)).needs_support {

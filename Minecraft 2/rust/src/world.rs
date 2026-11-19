@@ -33,11 +33,15 @@ pub struct Chunk {
     pub sky_top: [i8; 256],
     /// direção dos blocos que têm frente (fornalha, baú...): índice -> 0..3
     pub rot: HashMap<u16, u8>,
+    /// luz de tochas e lava (0-15) de cada célula
+    pub light: Vec<u8>,
+    /// veio de um arquivo (e não do gerador): a água corrente salva precisa ser reavaliada
+    pub from_store: bool,
 }
 
 impl Chunk {
     pub fn new(cx: i32, cz: i32) -> Self {
-        Chunk { cx, cz, blocks: vec![AIR; VOLUME], sky_top: [-1; 256], rot: HashMap::new() }
+        Chunk { cx, cz, blocks: vec![AIR; VOLUME], sky_top: [-1; 256], rot: HashMap::new(), light: vec![0; VOLUME], from_store: false }
     }
 
     pub fn compute_sky(&mut self) {
@@ -50,6 +54,48 @@ impl Chunk {
                 self.sky_top[(lx * 16 + lz) as usize] = y as i8;
             }
         }
+    }
+
+    /// Luz das fontes (lava, tochas) espalhada só dentro deste pedaço (Chunk.lightInside do Java);
+    /// a que passa para os vizinhos é tratada pelo mundo quando o pedaço entra.
+    pub fn light_inside(&mut self) {
+        self.light.iter_mut().for_each(|l| *l = 0);
+        let mut queue: Vec<usize> = Vec::new();
+        for i in 0..VOLUME {
+            let l = block::light(self.blocks[i]);
+            if l > 0 {
+                self.light[i] = l;
+                queue.push(i);
+            }
+        }
+        let mut head = 0;
+        while head < queue.len() {
+            let i = queue[head];
+            head += 1;
+            let l = self.light[i] as i32 - 1;
+            if l <= 0 {
+                continue;
+            }
+            let (lx, lz, y) = ((i >> 10) as i32, ((i >> 6) & 15) as i32, (i & 63) as i32);
+            for (dx, dy, dz) in [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)] {
+                let (nx, ny, nz) = (lx + dx, y + dy, lz + dz);
+                if !(0..16).contains(&nx) || !(0..16).contains(&nz) || !(0..SY).contains(&ny) {
+                    continue;
+                }
+                let j = idx(nx, ny, nz);
+                if block::opaque_cube(self.blocks[j]) || self.light[j] as i32 >= l {
+                    continue;
+                }
+                self.light[j] = l as u8;
+                queue.push(j);
+            }
+        }
+    }
+
+    /// Pedaço pronto para entrar no mundo: teto de luz do céu e luz de tochas.
+    pub fn prepare(&mut self) {
+        self.compute_sky();
+        self.light_inside();
     }
 
     pub fn recompute_sky_column(&mut self, lx: i32, lz: i32) {
@@ -100,6 +146,7 @@ impl Chunk {
             }
         }
         c.blocks.copy_from_slice(raw.get(p..p + VOLUME)?);
+        c.from_store = true;
         Some(c)
     }
 }
@@ -166,7 +213,7 @@ impl Generator {
         if let Some(s) = self.igloo_site(cx, cz) {
             self.build_igloo(&mut c, s);
         }
-        c.compute_sky();
+        c.prepare();
         c
     }
 

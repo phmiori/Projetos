@@ -15,6 +15,8 @@
 
 mod block;
 mod edit;
+mod fluid;
+mod light;
 mod mesher;
 mod noise;
 mod physics;
@@ -220,6 +222,9 @@ struct Game {
     modified: HashSet<(i32, i32)>,
     fall_queue: Vec<(i32, i32, i32)>,
     fall_timer: f64,
+    fluid_queue: Vec<(i32, i32, i32)>,
+    fluid_set: HashSet<(i32, i32, i32)>,
+    fluid_timer: f64,
     aim: Option<edit::Hit>,
     hotbar: [i32; 9],
     slot: usize,
@@ -277,7 +282,7 @@ impl Game {
                             let saved = dir.as_ref().and_then(|d| save::read_chunk(d, cx, cz)).and_then(|b| Chunk::from_bytes(cx, cz, &b));
                             let c = match saved {
                                 Some(mut c) => {
-                                    c.compute_sky();
+                                    c.prepare();
                                     c
                                 }
                                 None => gen.generate(cx, cz),
@@ -302,6 +307,9 @@ impl Game {
             modified: HashSet::new(),
             fall_queue: Vec::new(),
             fall_timer: 0.0,
+            fluid_queue: Vec::new(),
+            fluid_set: HashSet::new(),
+            fluid_timer: 0.0,
             aim: None,
             hotbar,
             slot: 0,
@@ -361,7 +369,20 @@ impl Game {
                 Done::Loaded(c) => {
                     let k = (c.cx, c.cz);
                     self.loading.remove(&k);
+                    // água corrente salva é reavaliada: a que não tem mais de onde vir seca aos poucos
+                    let flowing: Vec<(i32, i32, i32)> = if c.from_store {
+                        (0..world::VOLUME)
+                            .filter(|&i| block::water_level(c.blocks[i]) > 0)
+                            .map(|i| (k.0 * 16 + (i >> 10) as i32, (i & 63) as i32, k.1 * 16 + ((i >> 6) & 15) as i32))
+                            .collect()
+                    } else {
+                        Vec::new()
+                    };
                     self.chunks.insert(k, Arc::new(c));
+                    for (x, y, z) in flowing {
+                        self.schedule_fluid(x, y, z);
+                    }
+                    self.spill_light(k.0, k.1);
                     for dx in -1..=1 {
                         for dz in -1..=1 {
                             self.dirty.insert((k.0 + dx, k.1 + dz));
@@ -488,6 +509,7 @@ impl Game {
             left -= step;
         }
         self.tick_falling(dt);
+        self.tick_fluids(dt);
 
         // mira (7 blocos no criativo, 5 na sobrevivência, como no Java)
         let eye = self.eye();

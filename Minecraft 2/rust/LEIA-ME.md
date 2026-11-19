@@ -37,17 +37,20 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
 - Usa a sua barra do inventário salvo; **1-9** e a rodinha escolhem o bloco, o **botão do meio** pega o bloco mirado.
 - Grava os pedaços mudados, a posição, a hora e a barra a cada 30 s e ao fechar (só as chaves que conhece no
   `meta.properties`; baús, fornalhas, bichos e o resto ficam como o Java deixou).
+- Água corrente (traduzida do `World.java`): cai, escorre para o desnível mais perto formando cachoeiras, espalha
+  até 7 blocos no plano, seca quando perde a fonte e leva embora plantas e tochas no caminho.
+- Luz de tochas e lava: cada pedaço calcula a sua, ela passa para os vizinhos quando eles carregam e é refeita em
+  volta quando uma tocha é colocada ou tirada (ou quando um bloco tapa ou destapa a luz).
 - O título da janela mostra o mundo, o dia e a hora, o bioma, a posição, o FPS e o bloco na mão.
 
 **Cuidados**: não abra o mesmo mundo no Java e no Rust ao mesmo tempo (um gravaria por cima do outro). Baús e
-fornalhas ainda não podem ser quebrados aqui (o conteúdo deles fica no `meta.properties`), e a água ainda não corre
-(um buraco ao lado da água fica seco até a versão Rust ganhar a água corrente).
+fornalhas ainda não podem ser quebrados aqui (o conteúdo deles fica no `meta.properties`).
 
 ## Próximos passos (na ordem sugerida)
 
-1. Água corrente, luz de tochas e lava, sombras do sol.
-2. Modo sobrevivência: tempo para quebrar, itens que caem, inventário.
-3. Interface (barra, inventário, menus).
+1. Modo sobrevivência: tempo para quebrar, itens que caem, inventário.
+2. Interface (barra, inventário, menus).
+3. Sombras do sol.
 4. Bichos, receitas, fornalhas, baús.
 5. LAN (o mesmo protocolo do `Net.java`, para dar para jogar Java com Rust durante a transição).
 
