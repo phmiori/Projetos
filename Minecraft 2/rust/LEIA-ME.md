@@ -21,18 +21,24 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
 
 - Mundo infinito: os pedaços são gerados e montados em várias threads ao mesmo tempo.
 - Céu, nuvens, neblina, água transparente com reflexo, oclusão nos cantos, luz do céu (com a luz que entra embaixo de saliências).
-- Voar pelo mundo: **WASD** anda, **Espaço** sobe, **Shift** desce, **Ctrl** acelera, **Esc** solta o mouse (clique
-  para prender), **F2** tira uma foto (pasta `fotos/`), **F3** liga/desliga a sombra dos cantos.
-- O título da janela mostra o mundo, o bioma, a posição e o FPS.
+- Física do jogador (traduzida do `Player.java`/`Entity.java`): gravidade, pulo, colisão com cubos, lajes e escadas,
+  subida sozinha de degraus de meio bloco, nadar, e voar com dois toques no Espaço (só no criativo).
+- Ciclo de dia e noite: sol e lua girando, pôr do sol, estrelas, luz mais fraca de noite. Começa na hora salva do
+  mundo e o dia dura 48 minutos, como no Java.
+- Usa as configurações do Java (`settings.properties`): distância de visão, campo de visão, sensibilidade do mouse,
+  sombra nos cantos, reflexos e vsync.
+- Teclas: **WASD** anda, **Espaço** pula (dois toques: voa), **Shift** desce voando, **Ctrl** corre, **Esc** solta o
+  mouse (clique para prender), **F2** tira uma foto (pasta `fotos/`), **F3** liga/desliga a sombra dos cantos,
+  **F4** (segurando) passa as horas depressa.
+- O título da janela mostra o mundo, o dia e a hora, o bioma, a posição e o FPS.
 
 ## Próximos passos (na ordem sugerida)
 
-1. Física do jogador (andar, pular, colisão, água) e o ciclo de dia e noite.
-2. Quebrar e colocar blocos, salvando no mesmo formato do Java (aí os dois abrem o mesmo mundo com as mudanças).
-3. Luz de tochas e lava, sombras do sol.
-4. Interface (barra, inventário, menus).
-5. Bichos, itens, receitas, fornalhas, baús.
-6. LAN (o mesmo protocolo do `Net.java`, para dar para jogar Java com Rust durante a transição).
+1. Quebrar e colocar blocos, salvando no mesmo formato do Java (aí os dois abrem o mesmo mundo com as mudanças).
+2. Luz de tochas e lava, sombras do sol, água corrente.
+3. Interface (barra, inventário, menus).
+4. Bichos, itens, receitas, fornalhas, baús.
+5. LAN (o mesmo protocolo do `Net.java`, para dar para jogar Java com Rust durante a transição).
 
 ## Ferramentas
 

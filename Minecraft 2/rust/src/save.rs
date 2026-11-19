@@ -11,7 +11,15 @@ pub struct WorldInfo {
     pub biome_scale: f64,
     pub player: Option<[f64; 5]>, // x, y, z, yaw, pitch
     pub last_played: i64,
+    pub creative: bool,
+    pub flying: bool,
+    /// hora do dia em segundos (0 = nascer do sol; o dia inteiro dura DAY_LENGTH)
+    pub time: f64,
+    pub day: i32,
 }
+
+/// Duração de um dia inteiro (dia e noite), em segundos: 48 minutos, como no Java.
+pub const DAY_LENGTH: f64 = 2880.0;
 
 /// Lê um arquivo .properties do Java (chave=valor, com escapes \uXXXX).
 pub fn read_properties(path: &Path) -> Option<HashMap<String, String>> {
@@ -65,6 +73,15 @@ pub fn read_world(dir: &Path) -> Option<WorldInfo> {
         biome_scale: num("tamanhoBiomas").unwrap_or(1.0),
         player,
         last_played: p.get("ultimoJogo").and_then(|v| v.trim().parse().ok()).unwrap_or(0),
+        creative: p.get("modo").map_or(false, |m| m.trim() == "criativo"),
+        flying: p.get("jogador.voando").map_or(false, |v| v.trim() == "true"),
+        time: {
+            // como no Java: se o dia mudou de duração desde que o mundo foi salvo, mantém a hora do dia
+            let saved_day = num("diaDuracao").unwrap_or(720.0);
+            let t = num("hora").unwrap_or(DAY_LENGTH * 0.3);
+            if saved_day > 0.0 { t / saved_day * DAY_LENGTH } else { t }
+        },
+        day: p.get("dia").and_then(|v| v.trim().parse().ok()).unwrap_or(1),
     })
 }
 
@@ -84,4 +101,28 @@ pub fn latest_world(worlds: &Path) -> Option<WorldInfo> {
 /// Um pedaço salvo (pedaços que nunca foram mexidos não têm arquivo: o gerador refaz igualzinho).
 pub fn read_chunk(dir: &Path, cx: i32, cz: i32) -> Option<Vec<u8>> {
     std::fs::read(dir.join("chunks").join(format!("{cx}_{cz}.dat"))).ok()
+}
+
+/// As configurações do jogo Java (settings.properties): a versão Rust usa as mesmas.
+pub struct Settings {
+    pub view_dist: i32,
+    pub fov: f32,
+    pub sensitivity: f64,
+    pub ao: bool,
+    pub reflections: bool,
+    pub vsync: bool,
+}
+
+pub fn read_settings() -> Settings {
+    let p = read_properties(Path::new("settings.properties")).unwrap_or_default();
+    let int = |k: &str, d: i32, lo: i32, hi: i32| p.get(k).and_then(|v| v.trim().parse::<i32>().ok()).unwrap_or(d).clamp(lo, hi);
+    let flag = |k: &str| p.get(k).map_or(true, |v| v.trim() != "false");
+    Settings {
+        view_dist: int("distancia", 96, 32, 384),
+        fov: int("fov", 70, 50, 110) as f32,
+        sensitivity: int("sensibilidade", 5, 1, 20) as f64 * 0.00044,
+        ao: flag("oclusao"),
+        reflections: flag("reflexos"),
+        vsync: flag("vsync"),
+    }
 }

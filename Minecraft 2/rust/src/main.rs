@@ -1,17 +1,20 @@
-//! Mundo de Blocos em Rust — primeira etapa da transição.
+//! Mundo de Blocos em Rust — em transição a partir do jogo Java.
 //!
 //! O que já faz: abre o mesmo mundo salvo pelo jogo Java (ou um novo, pela semente), gera o terreno igualzinho
-//! (mesmo código de geração, traduzido), desenha com os mesmos shaders e texturas, e deixa voar pelo mundo.
-//! Ainda não tem: colocar/quebrar blocos, física de andar, bichos, inventário, LAN, salvar.
+//! (mesmo código de geração, traduzido), desenha com os mesmos shaders e texturas, tem a física do jogador
+//! (andar, pular, nadar, voar no criativo) e o ciclo de dia e noite, e usa as configurações do settings.properties.
+//! Ainda não tem: colocar/quebrar blocos, bichos, inventário, LAN, salvar.
 //!
-//! Teclas: WASD anda, Espaço sobe, Shift desce, Ctrl acelera, Esc solta o mouse (clique para prender de novo),
-//! F2 tira uma foto (pasta fotos/), F3 liga/desliga a oclusão nos cantos.
+//! Teclas: WASD anda, Espaço pula (dois toques: voa, no criativo), Shift desce voando, Ctrl corre,
+//! Esc solta o mouse (clique para prender de novo), F2 foto (pasta fotos/), F3 sombra dos cantos,
+//! F4 (segurando) passa as horas depressa.
 //!
-//! Uso: mundo-de-blocos [--mundo pasta] [--semente N] [--comparar arquivo]
+//! Uso: mundo-de-blocos [--mundo pasta] [--semente N] [--posicao x y z yaw pitch] [--hora 0..1] [--comparar arquivo]
 
 mod block;
 mod mesher;
 mod noise;
+mod physics;
 mod save;
 mod shaders;
 mod textures;
@@ -24,7 +27,9 @@ use glutin::display::GetGlDisplay;
 use glutin::prelude::*;
 use glutin::surface::SwapInterval;
 use glutin_winit::{DisplayBuilder, GlWindow};
+use physics::{Input, Player, EYE};
 use raw_window_handle::HasRawWindowHandle;
+use save::DAY_LENGTH;
 use std::collections::{HashMap, HashSet};
 use std::num::NonZeroU32;
 use std::path::PathBuf;
@@ -37,8 +42,6 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, WindowBuilder};
 use world::{Chunk, Generator, SEA};
-
-const RADIUS: i32 = 8; // pedaços em volta do jogador (8 * 16 = 128 blocos)
 
 enum Job {
     Load(i32, i32),
@@ -58,8 +61,8 @@ struct GpuMesh {
     wquads: i32,
 }
 
-fn as_bytes(v: &[u32]) -> &[u8] {
-    unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, v.len() * 4) }
+fn as_bytes<T>(v: &[T]) -> &[u8] {
+    unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, std::mem::size_of_val(v)) }
 }
 
 // ------------------------------------------------------------------ matrizes (colunas, como o OpenGL espera)
@@ -92,22 +95,26 @@ fn norm(a: [f32; 3]) -> [f32; 3] {
     [a[0] / l, a[1] / l, a[2] / l]
 }
 
-struct Camera {
-    x: f64,
-    y: f64,
-    z: f64,
-    yaw: f64,
-    pitch: f64,
+/// Sol, lua e luz do momento, com as mesmas contas do GLRenderer/World do Java.
+struct Sky {
+    sun: [f32; 3],
+    light: [f32; 3],
+    light_str: f32,
+    daylight: f32,
 }
-impl Camera {
-    /// Mesma convenção do Java: yaw = π olha para -Z, pitch negativo olha para baixo.
-    fn forward(&self) -> [f32; 3] {
-        [
-            (self.yaw.sin() * self.pitch.cos()) as f32,
-            self.pitch.sin() as f32,
-            (self.yaw.cos() * self.pitch.cos()) as f32,
-        ]
-    }
+
+fn sky_at(time: f64) -> Sky {
+    let a = time / DAY_LENGTH * std::f64::consts::PI * 2.0;
+    let (sx, sy, sz) = (a.cos() * 0.92, a.sin(), 0.38);
+    let l = (sx * sx + sy * sy + sz * sz).sqrt();
+    let sun = [(sx / l) as f32, (sy / l) as f32, (sz / l) as f32];
+    let daylight = ((a.sin() + 0.12) / 0.4).clamp(0.0, 1.0) as f32;
+    let (light, light_str) = if sun[1] > 0.02 {
+        (sun, ((sun[1] - 0.02) / 0.25).min(1.0)) // de dia a luz vem do sol
+    } else {
+        ([-sun[0], -sun[1], -sun[2]], 0.16 * ((-sun[1] - 0.02) / 0.2).clamp(0.0, 1.0)) // de noite, fraca, da lua
+    };
+    Sky { sun, light, light_str, daylight }
 }
 
 struct Gl {
@@ -186,10 +193,26 @@ impl Gl {
     }
 }
 
+/// Os pedaços carregados, vistos como um mundo só (para a física).
+struct Loaded<'a>(&'a HashMap<(i32, i32), Arc<Chunk>>);
+impl physics::Blocks for Loaded<'_> {
+    fn get(&self, x: i32, y: i32, z: i32) -> u8 {
+        if !(0..world::SY).contains(&y) {
+            return block::AIR;
+        }
+        match self.0.get(&(x >> 4, z >> 4)) {
+            Some(c) => c.blocks[world::idx(x & 15, y, z & 15)],
+            None => block::AIR,
+        }
+    }
+}
+
 struct Game {
     gen: Generator,
-    save_dir: Option<PathBuf>,
     world_name: String,
+    settings: save::Settings,
+    radius: i32,
+    creative: bool,
     chunks: HashMap<(i32, i32), Arc<Chunk>>,
     loading: HashSet<(i32, i32)>,
     meshing: HashSet<(i32, i32)>,
@@ -197,8 +220,11 @@ struct Game {
     dirty: HashSet<(i32, i32)>,
     jobs: mpsc::Sender<Job>,
     done: mpsc::Receiver<Done>,
-    cam: Camera,
+    player: Player,
+    time: f64,
+    day: i32,
     keys: HashSet<KeyCode>,
+    last_space: Option<Instant>,
     grabbed: bool,
     ao: bool,
     start: Instant,
@@ -210,7 +236,8 @@ struct Game {
 }
 
 impl Game {
-    fn new(gen: Generator, save_dir: Option<PathBuf>, world_name: String, cam: Camera) -> Game {
+    #[allow(clippy::too_many_arguments)]
+    fn new(gen: Generator, save_dir: Option<PathBuf>, world_name: String, settings: save::Settings, player: Player, creative: bool, time: f64, day: i32) -> Game {
         let (jtx, jrx) = mpsc::channel::<Job>();
         let (dtx, drx) = mpsc::channel::<Done>();
         let jrx = Arc::new(Mutex::new(jrx));
@@ -243,10 +270,14 @@ impl Game {
                 .unwrap();
         }
         let now = Instant::now();
+        let radius = (settings.view_dist + 15) / 16;
+        let ao = settings.ao;
         Game {
             gen,
-            save_dir,
             world_name,
+            settings,
+            radius,
+            creative,
             chunks: HashMap::new(),
             loading: HashSet::new(),
             meshing: HashSet::new(),
@@ -254,10 +285,13 @@ impl Game {
             dirty: HashSet::new(),
             jobs: jtx,
             done: drx,
-            cam,
+            player,
+            time,
+            day,
             keys: HashSet::new(),
+            last_space: None,
             grabbed: false,
-            ao: true,
+            ao,
             start: now,
             last: now,
             frames: 0,
@@ -267,21 +301,20 @@ impl Game {
         }
     }
 
-    fn block_at(&self, x: i32, y: i32, z: i32) -> u8 {
-        if !(0..world::SY).contains(&y) {
-            return block::AIR;
-        }
-        match self.chunks.get(&(x >> 4, z >> 4)) {
-            Some(c) => c.blocks[world::idx(x & 15, y, z & 15)],
-            None => block::AIR,
-        }
+    fn eye(&self) -> [f32; 3] {
+        [self.player.x as f32, (self.player.y + EYE) as f32, self.player.z as f32]
+    }
+
+    fn forward(&self) -> [f32; 3] {
+        let (y, p) = (self.player.yaw, self.player.pitch);
+        [(y.sin() * p.cos()) as f32, p.sin() as f32, (y.cos() * p.cos()) as f32]
     }
 
     /// Pede os pedaços que faltam (do mais perto para o mais longe), monta as malhas e solta os que ficaram longe.
     fn stream(&mut self, g: &mut Gl) {
-        let pcx = (self.cam.x.floor() as i32) >> 4;
-        let pcz = (self.cam.z.floor() as i32) >> 4;
-        // resultados prontos
+        let r = self.radius;
+        let pcx = (self.player.x.floor() as i32) >> 4;
+        let pcz = (self.player.z.floor() as i32) >> 4;
         let mut budget = 24;
         while let Ok(d) = self.done.try_recv() {
             match d {
@@ -298,7 +331,7 @@ impl Game {
                 Done::Meshed(m) => {
                     let k = (m.cx, m.cz);
                     self.meshing.remove(&k);
-                    if (k.0 - pcx).abs() > RADIUS + 1 || (k.1 - pcz).abs() > RADIUS + 1 {
+                    if (k.0 - pcx).abs() > r + 1 || (k.1 - pcz).abs() > r + 1 {
                         continue;
                     }
                     unsafe {
@@ -322,10 +355,9 @@ impl Game {
                 }
             }
         }
-        // pedidos novos, em anéis a partir do jogador
         let mut wanted: Vec<(i32, i32, i32)> = Vec::new();
-        for dx in -(RADIUS + 1)..=(RADIUS + 1) {
-            for dz in -(RADIUS + 1)..=(RADIUS + 1) {
+        for dx in -(r + 1)..=(r + 1) {
+            for dz in -(r + 1)..=(r + 1) {
                 wanted.push((dx * dx + dz * dz, pcx + dx, pcz + dz));
             }
         }
@@ -345,83 +377,84 @@ impl Game {
                 break;
             }
             let k = (cx, cz);
-            if (cx - pcx).abs() > RADIUS || (cz - pcz).abs() > RADIUS || self.meshing.contains(&k) {
+            if (cx - pcx).abs() > r || (cz - pcz).abs() > r || self.meshing.contains(&k) {
                 continue;
             }
             if self.meshes.contains_key(&k) && !self.dirty.contains(&k) {
                 continue;
             }
-            let mut ready = true;
             let mut nb: Vec<Arc<Chunk>> = Vec::with_capacity(9);
-            'n: for dx in -1..=1 {
+            for dx in -1..=1 {
                 for dz in -1..=1 {
-                    match self.chunks.get(&(cx + dx, cz + dz)) {
-                        Some(c) => nb.push(c.clone()),
-                        None => {
-                            ready = false;
-                            break 'n;
-                        }
+                    if let Some(c) = self.chunks.get(&(cx + dx, cz + dz)) {
+                        nb.push(c.clone());
                     }
                 }
             }
-            if !ready {
-                continue;
-            }
-            self.dirty.remove(&k);
-            self.meshing.insert(k);
             let c: [Arc<Chunk>; 9] = match nb.try_into() {
                 Ok(a) => a,
-                Err(_) => continue,
+                Err(_) => continue, // falta algum vizinho
             };
+            self.dirty.remove(&k);
+            self.meshing.insert(k);
             let _ = self.jobs.send(Job::Mesh(mesher::Region { c, cx, cz }));
         }
-        // longe demais: solta
-        let far = |k: &(i32, i32), r: i32| (k.0 - pcx).abs() > r || (k.1 - pcz).abs() > r;
-        let gone: Vec<(i32, i32)> = self.meshes.keys().filter(|k| far(k, RADIUS + 2)).cloned().collect();
+        let far = |k: &(i32, i32), d: i32| (k.0 - pcx).abs() > d || (k.1 - pcz).abs() > d;
+        let gone: Vec<(i32, i32)> = self.meshes.keys().filter(|k| far(k, r + 2)).cloned().collect();
         for k in gone {
             if let Some(m) = self.meshes.remove(&k) {
                 unsafe { free(g, m) };
             }
         }
-        self.chunks.retain(|k, _| !far(k, RADIUS + 4));
-        self.dirty.retain(|k| !far(k, RADIUS + 2));
+        self.chunks.retain(|k, _| !far(k, r + 4));
+        self.dirty.retain(|k| !far(k, r + 2));
+    }
+
+    fn key(&self, k: KeyCode) -> bool {
+        self.keys.contains(&k)
     }
 
     fn update(&mut self, dt: f64) {
-        let f = self.cam.forward();
-        let (fx, fz) = (self.cam.yaw.sin(), self.cam.yaw.cos());
-        let (rx, rz) = (-fz, fx); // direita
-        let _ = f;
-        let mut mx = 0.0;
-        let mut mz = 0.0;
-        let mut my = 0.0;
-        if self.keys.contains(&KeyCode::KeyW) { mx += fx; mz += fz; }
-        if self.keys.contains(&KeyCode::KeyS) { mx -= fx; mz -= fz; }
-        if self.keys.contains(&KeyCode::KeyD) { mx += rx; mz += rz; }
-        if self.keys.contains(&KeyCode::KeyA) { mx -= rx; mz -= rz; }
-        if self.keys.contains(&KeyCode::Space) { my += 1.0; }
-        if self.keys.contains(&KeyCode::ShiftLeft) { my -= 1.0; }
-        let fast = self.keys.contains(&KeyCode::ControlLeft);
-        let speed = if fast { 30.0 } else { 11.0 };
-        let l = ((mx * mx + mz * mz) as f64).sqrt();
-        if l > 0.0 {
-            self.cam.x += mx / l * speed * dt;
-            self.cam.z += mz / l * speed * dt;
+        // relógio do mundo (F4 segurado passa as horas 60x mais depressa)
+        self.time += dt * if self.key(KeyCode::F4) { 60.0 } else { 1.0 };
+        while self.time >= DAY_LENGTH {
+            self.time -= DAY_LENGTH;
+            self.day += 1;
         }
-        self.cam.y = (self.cam.y + my * speed * dt).clamp(1.0, 140.0);
+        // física só com o chão em volta carregado (senão cairia no vazio)
+        let (px, pz) = (self.player.x.floor() as i32 >> 4, self.player.z.floor() as i32 >> 4);
+        let ready = (-1..=1).all(|dx| (-1..=1).all(|dz| self.chunks.contains_key(&(px + dx, pz + dz))));
+        if !ready {
+            return;
+        }
+        let input = Input {
+            fwd: self.key(KeyCode::KeyW),
+            back: self.key(KeyCode::KeyS),
+            left: self.key(KeyCode::KeyA),
+            right: self.key(KeyCode::KeyD),
+            jump: self.key(KeyCode::Space),
+            sneak: self.key(KeyCode::ShiftLeft) || self.key(KeyCode::ShiftRight),
+            sprint: self.key(KeyCode::ControlLeft),
+        };
+        // passos de no máximo 1/30 s, como um quadro lento no Java
+        let mut left = dt;
+        while left > 0.0 {
+            let step = left.min(1.0 / 30.0);
+            self.player.update(step, input, &Loaded(&self.chunks));
+            left -= step;
+        }
     }
 
     unsafe fn render(&mut self, g: &mut Gl, w: u32, h: u32) {
         let gl = &g.gl;
         gl.viewport(0, 0, w as i32, h as i32);
-        let view_dist = (RADIUS * 16 - 8) as f32;
-        let tan_y = (70f32.to_radians() / 2.0).tan();
+        let view_dist = self.settings.view_dist as f32;
+        let tan_y = (self.settings.fov.to_radians() / 2.0).tan();
         let tan_x = tan_y * w as f32 / h.max(1) as f32;
-        let f = self.cam.forward();
-        let up0 = [0.0, 1.0, 0.0];
-        let right = norm(cross(f, up0));
+        let f = self.forward();
+        let right = norm(cross(f, [0.0, 1.0, 0.0]));
         let up = cross(right, f);
-        let eye = [self.cam.x as f32, self.cam.y as f32, self.cam.z as f32];
+        let eye = self.eye();
         let view = [
             right[0], up[0], -f[0], 0.0,
             right[1], up[1], -f[1], 0.0,
@@ -429,15 +462,15 @@ impl Game {
             -dot(right, eye), -dot(up, eye), dot(f, eye), 1.0,
         ];
         let vp = mul(&perspective(tan_x, tan_y, 0.05, view_dist + 40.0), &view);
-        let sun = norm([0.35, 0.85, 0.4]);
+        let sky = sky_at(self.time);
         let time = self.start.elapsed().as_secs_f32();
-        let underwater = block::is_water(self.block_at(eye[0].floor() as i32, eye[1].floor() as i32, eye[2].floor() as i32));
+        let underwater = self.player.head_in_water;
         let common = |p: glow::Program| {
             gl.use_program(Some(p));
-            gl.uniform_3_f32(g.u(p, "uSun").as_ref(), sun[0], sun[1], sun[2]);
-            gl.uniform_3_f32(g.u(p, "uLightDir").as_ref(), sun[0], sun[1], sun[2]);
-            gl.uniform_1_f32(g.u(p, "uLightStr").as_ref(), 1.0);
-            gl.uniform_1_f32(g.u(p, "uDaylight").as_ref(), 1.0);
+            gl.uniform_3_f32(g.u(p, "uSun").as_ref(), sky.sun[0], sky.sun[1], sky.sun[2]);
+            gl.uniform_3_f32(g.u(p, "uLightDir").as_ref(), sky.light[0], sky.light[1], sky.light[2]);
+            gl.uniform_1_f32(g.u(p, "uLightStr").as_ref(), sky.light_str);
+            gl.uniform_1_f32(g.u(p, "uDaylight").as_ref(), sky.daylight);
             gl.uniform_3_f32(g.u(p, "uCam").as_ref(), eye[0], eye[1], eye[2]);
             gl.uniform_1_f32(g.u(p, "uTime").as_ref(), time);
             gl.uniform_1_f32(g.u(p, "uViewDist").as_ref(), view_dist);
@@ -469,10 +502,11 @@ impl Game {
         gl.uniform_1_f32(g.u(g.block, "uAOStr").as_ref(), if self.ao { 1.0 } else { 0.0 });
         gl.uniform_1_f32(g.u(g.block, "uWaterDrop").as_ref(), 0.0);
         let uchunk = g.u(g.block, "uChunk");
+        // descarta pedaços fora da visão: atrás da câmera ou longe demais
         let visible = |k: &(i32, i32)| {
-            // descarta pedaços atrás da câmera (teste simples com a esfera do pedaço)
             let c = [k.0 as f32 * 16.0 + 8.0 - eye[0], 32.0 - eye[1], k.1 as f32 * 16.0 + 8.0 - eye[2]];
-            dot(c, f) > -40.0
+            let d2 = c[0] * c[0] + c[2] * c[2];
+            dot(c, f) > -40.0 && d2 < (view_dist + 24.0) * (view_dist + 24.0)
         };
         for (k, m) in &self.meshes {
             if m.quads == 0 || !visible(k) {
@@ -491,7 +525,7 @@ impl Game {
         common(g.water);
         gl.uniform_matrix_4_f32_slice(g.u(g.water, "uViewProj").as_ref(), false, &vp);
         gl.uniform_1_i32(g.u(g.water, "uTex").as_ref(), 0);
-        gl.uniform_1_i32(g.u(g.water, "uReflect").as_ref(), 1);
+        gl.uniform_1_i32(g.u(g.water, "uReflect").as_ref(), self.settings.reflections as i32);
         gl.uniform_1_f32(g.u(g.water, "uWaterDrop").as_ref(), 0.12);
         let wchunk = g.u(g.water, "uChunk");
         let mut order: Vec<(&(i32, i32), &GpuMesh)> = self.meshes.iter().filter(|(k, m)| m.wquads > 0 && visible(k)).collect();
@@ -512,21 +546,15 @@ impl Game {
         gl.blend_func(glow::ONE_MINUS_DST_COLOR, glow::ZERO);
         gl.use_program(Some(g.cross));
         let (sx, sy) = (2.0 / w as f32, 2.0 / h as f32);
-        let quads: [f32; 24] = [
-            -9.0 * sx, -1.0 * sy, 9.0 * sx, -1.0 * sy, 9.0 * sx, 1.0 * sy, -9.0 * sx, -1.0 * sy, 9.0 * sx, 1.0 * sy, -9.0 * sx, 1.0 * sy,
-            -1.0 * sx, -9.0 * sy, 1.0 * sx, -9.0 * sy, 1.0 * sx, -1.0 * sy, -1.0 * sx, -9.0 * sy, 1.0 * sx, -1.0 * sy, -1.0 * sx, -1.0 * sy,
-        ];
+        let rect = |x0: f32, y0: f32, x1: f32, y1: f32| [x0 * sx, y0 * sy, x1 * sx, y0 * sy, x1 * sx, y1 * sy, x0 * sx, y0 * sy, x1 * sx, y1 * sy, x0 * sx, y1 * sy];
+        let mut quads = Vec::with_capacity(36);
+        quads.extend_from_slice(&rect(-9.0, -1.0, 9.0, 1.0));
+        quads.extend_from_slice(&rect(-1.0, -9.0, 1.0, -1.0));
+        quads.extend_from_slice(&rect(-1.0, 1.0, 1.0, 9.0));
         gl.bind_vertex_array(Some(g.cross_vao));
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(g.cross_vbo));
-        let bytes = std::slice::from_raw_parts(quads.as_ptr() as *const u8, quads.len() * 4);
-        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytes, glow::STREAM_DRAW);
-        gl.draw_arrays(glow::TRIANGLES, 0, 12);
-        let quads2: [f32; 12] = [
-            -1.0 * sx, 1.0 * sy, 1.0 * sx, 1.0 * sy, 1.0 * sx, 9.0 * sy, -1.0 * sx, 1.0 * sy, 1.0 * sx, 9.0 * sy, -1.0 * sx, 9.0 * sy,
-        ];
-        let bytes = std::slice::from_raw_parts(quads2.as_ptr() as *const u8, quads2.len() * 4);
-        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, bytes, glow::STREAM_DRAW);
-        gl.draw_arrays(glow::TRIANGLES, 0, 6);
+        gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, as_bytes(&quads), glow::STREAM_DRAW);
+        gl.draw_arrays(glow::TRIANGLES, 0, 18);
         gl.disable(glow::BLEND);
         gl.enable(glow::DEPTH_TEST);
 
@@ -542,20 +570,34 @@ impl Game {
                 }
             }
             let _ = std::fs::create_dir_all("fotos");
-            let name = format!("fotos/rust-{}.png", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0));
+            let name = format!("fotos/rust-{}.png", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0));
             if img.save(&name).is_ok() {
                 println!("foto salva em {name}");
             }
         }
     }
 
+    /// Mesmo relógio do Java: a hora 0 do mundo é 6h da manhã (o sol nascendo).
+    fn clock(&self) -> String {
+        let h = (self.time / DAY_LENGTH * 24.0 + 6.0) % 24.0;
+        format!("{:02}:{:02}", h as i32, ((h - h.floor()) * 60.0) as i32)
+    }
+
     fn title(&self) -> String {
-        let (x, z) = (self.cam.x.floor() as i32, self.cam.z.floor() as i32);
+        let (x, z) = (self.player.x.floor() as i32, self.player.z.floor() as i32);
         let h = self.gen.height_at(x, z);
         let biome = world::BIOME_NAMES[self.gen.biome_at(x, z, h - 1) as usize];
         format!(
-            "Mundo de Blocos (Rust, prévia) — {} · {} · X {:.0} Y {:.0} Z {:.0} · {} FPS · {} pedaços",
-            self.world_name, biome, self.cam.x, self.cam.y, self.cam.z, self.fps, self.meshes.len()
+            "Mundo de Blocos (Rust, prévia) — {} · Dia {}, {} · {} · X {:.0} Y {:.0} Z {:.0}{} · {} FPS",
+            self.world_name,
+            self.day,
+            self.clock(),
+            biome,
+            self.player.x,
+            self.player.y,
+            self.player.z,
+            if self.player.flying { " · voando" } else { "" },
+            self.fps
         )
     }
 }
@@ -602,50 +644,62 @@ fn compare(path: &str) -> ! {
 }
 
 fn main() {
-    // roda na pasta do jogo (onde ficam textures/ e worlds/), venha de onde vier
     let args: Vec<String> = std::env::args().collect();
     let arg = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned();
     if let Some(p) = arg("--comparar") {
         compare(&p);
     }
+    // roda na pasta do jogo (onde ficam textures/ e worlds/), venha de onde vier
     let game_dir = arg("--pasta").map(PathBuf::from).unwrap_or_else(|| {
         let exe = std::env::current_exe().unwrap_or_default();
-        // rust/target/release/mundo-de-blocos.exe -> pasta do jogo (3 acima); senão a pasta atual
         exe.ancestors().find(|d| d.join("textures").is_dir()).map(|d| d.to_path_buf()).unwrap_or_else(|| PathBuf::from("."))
     });
     let _ = std::env::set_current_dir(&game_dir);
+    let settings = save::read_settings();
 
     let info = match arg("--mundo") {
         Some(m) => save::read_world(&PathBuf::from(m)),
         None => save::latest_world(&PathBuf::from("worlds")),
     };
     let seed_arg = arg("--semente").and_then(|s| s.parse::<i32>().ok());
-    let (gen, save_dir, name, cam) = match (&info, seed_arg) {
+    let mut player = Player::default();
+    let (gen, save_dir, name, creative, mut time, day) = match (&info, seed_arg) {
         (Some(w), None) => {
             let gen = Generator { seed: w.seed, biome_scale: w.biome_scale };
-            let cam = match w.player {
-                Some(p) => Camera { x: p[0], y: p[1] + 1.62, z: p[2], yaw: p[3], pitch: p[4] },
-                None => Camera { x: 0.5, y: gen.height_at(0, 0) as f64 + 3.0, z: 0.5, yaw: 0.0, pitch: -0.2 },
-            };
-            (gen, Some(w.dir.clone()), w.name.clone(), cam)
+            match w.player {
+                Some(p) => {
+                    (player.x, player.y, player.z, player.yaw, player.pitch) = (p[0], p[1], p[2], p[3], p[4]);
+                    player.flying = w.creative && w.flying;
+                }
+                None => {
+                    (player.x, player.y, player.z) = (0.5, gen.height_at(0, 0).max(SEA) as f64 + 1.0, 0.5);
+                }
+            }
+            (gen, Some(w.dir.clone()), w.name.clone(), w.creative, w.time, w.day)
         }
         _ => {
             let gen = Generator { seed: seed_arg.unwrap_or(2024), biome_scale: 2.0 };
-            let y = gen.height_at(0, 0).max(SEA) as f64 + 3.0;
-            let cam = Camera { x: 0.5, y, z: 0.5, yaw: 0.0, pitch: -0.2 };
+            (player.x, player.y, player.z) = (0.5, gen.height_at(0, 0).max(SEA) as f64 + 1.0, 0.5);
             let name = format!("semente {}", gen.seed);
-            (gen, None, name, cam)
+            (gen, None, name, true, DAY_LENGTH * 0.3, 1)
         }
     };
     // --posicao x y z yaw pitch: começa num lugar escolhido (bom para comparar fotos com o Java)
-    let mut cam = cam;
     if let Some(i) = args.iter().position(|a| a == "--posicao") {
         let v: Vec<f64> = args[i + 1..].iter().take(5).filter_map(|s| s.parse().ok()).collect();
         if v.len() == 5 {
-            cam = Camera { x: v[0], y: v[1], z: v[2], yaw: v[3], pitch: v[4] };
+            (player.x, player.y, player.z, player.yaw, player.pitch) = (v[0], v[1], v[2], v[3], v[4]);
+            player.flying = false; // num lugar escolhido começa a pé (use --voando para começar voando)
         }
     }
-    println!("Mundo de Blocos (Rust): {name} — semente {}, biomas x{}", gen.seed, gen.biome_scale);
+    // --hora 0..1: fração do dia (0 = nascer do sol, 0,25 = meio-dia, 0,5 = pôr do sol, 0,75 = meia-noite)
+    if let Some(h) = arg("--hora").and_then(|s| s.parse::<f64>().ok()) {
+        time = h.rem_euclid(1.0) * DAY_LENGTH;
+    }
+    if args.iter().any(|a| a == "--voando") {
+        player.flying = true;
+    }
+    println!("Mundo de Blocos (Rust): {name} — semente {}, biomas x{}, {}", gen.seed, gen.biome_scale, if creative { "criativo" } else { "sobrevivência" });
 
     let event_loop = EventLoop::new().expect("loop de eventos");
     let wb = WindowBuilder::new().with_title("Mundo de Blocos (Rust, prévia)").with_inner_size(LogicalSize::new(1280.0, 720.0));
@@ -666,7 +720,7 @@ fn main() {
         let ctx = display.create_context(&gl_config, &ctx_attrs).expect("OpenGL 3.3").make_current(&surface).expect("contexto");
         (surface, ctx)
     };
-    let vsync = !args.iter().any(|a| a == "--sem-vsync");
+    let vsync = settings.vsync && !args.iter().any(|a| a == "--sem-vsync");
     let _ = gl_surface.set_swap_interval(&gl_ctx, if vsync { SwapInterval::Wait(NonZeroU32::new(1).unwrap()) } else { SwapInterval::DontWait });
 
     let gl = unsafe {
@@ -719,9 +773,13 @@ fn main() {
     };
     drop(atlas);
 
-    let mut game = Game::new(gen, save_dir, name, cam);
+    let mut game = Game::new(gen, save_dir, name, settings, player, creative, time, day);
+    // modo de teste: --foto-e-sair N tira uma foto no quadro N e fecha; --andar segura W o tempo todo
     let auto_shot = arg("--foto-e-sair").and_then(|s| s.parse::<u32>().ok());
-    let mut shots_frames = 0u32;
+    if args.iter().any(|a| a == "--andar") {
+        game.keys.insert(KeyCode::KeyW);
+    }
+    let mut frame_no = 0u32;
     event_loop.set_control_flow(ControlFlow::Poll);
     event_loop
         .run(move |event, elwt| match event {
@@ -733,22 +791,37 @@ fn main() {
                     }
                 }
                 WindowEvent::Focused(false) => {
-                    game.keys.clear();
+                    if auto_shot.is_none() {
+                        game.keys.clear();
+                    }
                 }
                 WindowEvent::KeyboardInput { event, .. } => {
                     if let PhysicalKey::Code(code) = event.physical_key {
                         if event.state == ElementState::Pressed {
-                            game.keys.insert(code);
-                            match code {
-                                KeyCode::Escape => {
-                                    game.grabbed = false;
-                                    let _ = window.set_cursor_grab(CursorGrabMode::None);
-                                    window.set_cursor_visible(true);
+                            if !event.repeat {
+                                match code {
+                                    KeyCode::Escape => {
+                                        game.grabbed = false;
+                                        let _ = window.set_cursor_grab(CursorGrabMode::None);
+                                        window.set_cursor_visible(true);
+                                    }
+                                    KeyCode::F2 => game.screenshot = true,
+                                    KeyCode::F3 => game.ao = !game.ao,
+                                    KeyCode::Space => {
+                                        // dois toques rápidos no espaço: voa (só no criativo, como no Java)
+                                        let now = Instant::now();
+                                        if game.creative && game.last_space.map_or(false, |t| now - t < std::time::Duration::from_millis(300)) {
+                                            game.player.flying = !game.player.flying;
+                                            game.player.vy = 0.0;
+                                            game.last_space = None;
+                                        } else {
+                                            game.last_space = Some(now);
+                                        }
+                                    }
+                                    _ => {}
                                 }
-                                KeyCode::F2 => game.screenshot = true,
-                                KeyCode::F3 => game.ao = !game.ao,
-                                _ => {}
                             }
+                            game.keys.insert(code);
                         } else {
                             game.keys.remove(&code);
                         }
@@ -763,17 +836,14 @@ fn main() {
                 }
                 WindowEvent::RedrawRequested => {
                     let now = Instant::now();
-                    let dt = (now - game.last).as_secs_f64().min(0.1);
+                    let dt = (now - game.last).as_secs_f64().min(0.25);
                     game.last = now;
                     game.update(dt);
                     game.stream(&mut g);
                     let size = window.inner_size();
-                    if let Some(n) = auto_shot {
-                        // modo de teste: espera os pedaços carregarem, tira a foto e fecha
-                        shots_frames += 1;
-                        if shots_frames == n {
-                            game.screenshot = true;
-                        }
+                    frame_no += 1;
+                    if auto_shot == Some(frame_no) {
+                        game.screenshot = true;
                     }
                     unsafe { game.render(&mut g, size.width.max(1), size.height.max(1)) };
                     gl_surface.swap_buffers(&gl_ctx).unwrap();
@@ -784,21 +854,20 @@ fn main() {
                         game.fps_time = Instant::now();
                         window.set_title(&game.title());
                         if auto_shot.is_some() {
-                            println!("{}", game.title());
+                            println!("{} · chão: {}", game.title(), game.player.on_ground);
                         }
                     }
-                    if let Some(n) = auto_shot {
-                        if shots_frames > n {
-                            elwt.exit();
-                        }
+                    if auto_shot.map_or(false, |n| frame_no > n) {
+                        elwt.exit();
                     }
                 }
                 _ => {}
             },
             Event::DeviceEvent { event: DeviceEvent::MouseMotion { delta }, .. } => {
                 if game.grabbed {
-                    game.cam.yaw -= delta.0 * 0.0025;
-                    game.cam.pitch = (game.cam.pitch - delta.1 * 0.0025).clamp(-1.55, 1.55);
+                    let s = game.settings.sensitivity;
+                    game.player.yaw -= delta.0 * s; // mouse para a direita gira para a direita
+                    game.player.pitch = (game.player.pitch - delta.1 * s).clamp(-1.55, 1.55);
                 }
             }
             Event::AboutToWait => window.request_redraw(),
