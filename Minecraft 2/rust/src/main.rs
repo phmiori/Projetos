@@ -21,10 +21,13 @@ mod inventory;
 mod items;
 mod light;
 mod mesher;
+mod hand;
 mod menu;
 mod mob;
 mod mobs;
 mod noise;
+mod options;
+mod particles;
 mod physics;
 mod save;
 mod screens;
@@ -67,6 +70,8 @@ pub enum Screen {
     /// menu inicial (lista de mundos) e a tela de criar mundo
     Menu,
     Create,
+    /// configurações (abertas da pausa ou do menu)
+    Settings,
     Play,
     Inventory,
     Pause,
@@ -304,6 +309,14 @@ struct Game {
     menu: menu::Menu,
     /// arco: há quanto tempo a corda está puxada; dinamites acesas (x, y, z, segundos, bloco ainda no mundo)
     bow_charge: f64,
+    /// de onde as configurações foram abertas
+    settings_return: Screen,
+    particles: Vec<particles::Particle>,
+    /// mão: golpe (0,3 s) e quanto andou (balanço)
+    swing: f64,
+    walk_dist: f64,
+    /// pele e camisa do personagem
+    persona: (usize, usize),
     primed: Vec<(i32, i32, i32, f64, bool)>,
     grow_timer: f64,
     l_held: bool,
@@ -432,6 +445,11 @@ impl Game {
             player_name: String::new(),
             menu: menu::Menu::default(),
             bow_charge: 0.0,
+            settings_return: Screen::Pause,
+            particles: Vec::new(),
+            swing: 0.0,
+            walk_dist: 0.0,
+            persona: (0, 0),
             primed: Vec::new(),
             grow_timer: 0.0,
             slot: 0,
@@ -492,6 +510,7 @@ impl Game {
             return;
         }
         self.step_acc += (p.vx * p.vx + p.vz * p.vz).sqrt() * dt;
+        self.walk_dist += (p.vx * p.vx + p.vz * p.vz).sqrt() * dt;
         if self.step_acc < 1.9 {
             return;
         }
@@ -630,7 +649,7 @@ impl Game {
     }
 
     fn update(&mut self, dt: f64) {
-        if self.screen == Screen::Pause {
+        if self.screen == Screen::Pause || self.screen == Screen::Settings {
             return; // pausado: o mundo para, como no Java
         }
         if matches!(self.screen, Screen::Menu | Screen::Create) {
@@ -680,6 +699,8 @@ impl Game {
         self.eat_cd -= dt;
         self.slot_name_timer -= dt;
         self.update_drops(dt);
+        self.update_particles(dt);
+        self.swing = (self.swing - dt).max(0.0);
         self.update_mobs(dt);
         self.blast_flash = (self.blast_flash - dt).max(0.0);
         self.tick_furnaces(dt);
@@ -690,6 +711,10 @@ impl Game {
         self.l_pending = false;
         self.r_pending = false;
         self.m_pending = false;
+        // a mão dá o golpe ao clicar (e fica batendo enquanto segura o botão num bloco)
+        if playing && self.swing <= 0.0 && (lp || rp || (self.l_held && self.aim.is_some() && self.inv.s[self.slot].id != tools::BOW)) {
+            self.swing = 0.3;
+        }
         // criatura na mira (só se estiver mais perto que o bloco mirado)
         let block_dist = self.aim.map_or(99.0, |h| h.t);
         let target = if playing { self.aimed_mob(block_dist.min(3.6)) } else { None };
@@ -901,8 +926,9 @@ impl Game {
         gl.depth_mask(true);
 
         // itens soltos no chão (girando, com a luz de onde estão)
-        if !self.drops.is_empty() || !self.mobs.is_empty() || !self.arrows.is_empty() || !self.primed.is_empty() {
+        if !self.drops.is_empty() || !self.mobs.is_empty() || !self.arrows.is_empty() || !self.primed.is_empty() || !self.particles.is_empty() {
             self.draw_drops(&mut g.ui, sky.daylight);
+            self.draw_particles(&mut g.ui, sky.daylight);
             self.draw_primed(&mut g.ui);
             self.draw_mobs(&mut g.ui, sky.daylight);
             gl.enable(glow::BLEND);
@@ -946,6 +972,18 @@ impl Game {
             gl.draw_arrays(glow::LINES, 0, 24);
         }
 
+        // a mão e o item, por cima da cena (com um campo de visão fixo, para não esticar)
+        let in_world = !matches!(self.screen, Screen::Menu | Screen::Create | Screen::Dead) && !(self.screen == Screen::Settings && self.settings_return == Screen::Menu);
+        if in_world {
+            gl.clear(glow::DEPTH_BUFFER_BIT);
+            gl.enable(glow::DEPTH_TEST);
+            gl.enable(glow::BLEND);
+            gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+            self.draw_hand(&mut g.ui, sky.daylight);
+            let hy = (35f32).to_radians().tan();
+            g.ui.flush(gl, &perspective(hy * w as f32 / h.max(1) as f32, hy, 0.01, 10.0), g.tex);
+            gl.disable(glow::BLEND);
+        }
         // mira (inverte a cor do que está atrás)
         gl.disable(glow::DEPTH_TEST);
         if self.screen == Screen::Play {
@@ -967,12 +1005,13 @@ impl Game {
         gl.enable(glow::BLEND);
         gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
         let (fw, fh) = (w as f32, h as f32);
-        if !matches!(self.screen, Screen::Menu | Screen::Create) {
+        if in_world {
             self.draw_hud(&mut g.ui, fw, fh);
             self.draw_bow_charge(&mut g.ui, fw, fh);
         }
         match self.screen {
             Screen::Menu | Screen::Create => self.draw_main_menu(&mut g.ui, fw, fh),
+            Screen::Settings => self.draw_settings(&mut g.ui, fw, fh),
             Screen::Inventory => self.draw_inventory(&mut g.ui, fw, fh),
             Screen::Pause | Screen::Dead => self.draw_menu(&mut g.ui, fw, fh),
             Screen::Play => {}
@@ -1118,6 +1157,7 @@ fn load_game(info: Option<save::WorldInfo>, seed_arg: Option<i32>, settings: sav
             game.furnaces.insert(k.clone(), containers::Furnace::parse(v));
         }
         game.player_name = w.player_name.clone();
+        game.persona = w.persona;
         game.load_mobs(&w.mobs, &w.wolves);
     }
     game
@@ -1230,6 +1270,7 @@ fn main() {
         g.ensure_indices(1 << 16);
         g
     };
+    particles::set_palette(&atlas);
     drop(atlas);
 
     let mut game = load_game(info, seed_arg, settings, read_only || !direct);
@@ -1277,6 +1318,7 @@ fn main() {
         }
         Some("morte") => game.screen = Screen::Dead,
         Some("criar") => game.start_create(),
+        Some("config") => game.open_settings(),
         _ => {}
     }
     if let Some(m) = arg("--mouse") {
@@ -1350,7 +1392,11 @@ fn main() {
                                     KeyCode::Digit7 => Some(6), KeyCode::Digit8 => Some(7), KeyCode::Digit9 => Some(8),
                                     _ => None,
                                 };
-                                if matches!(game.screen, Screen::Menu | Screen::Create) {
+                                if game.screen == Screen::Settings {
+                                    if code == KeyCode::Escape {
+                                        game.close_settings();
+                                    }
+                                } else if matches!(game.screen, Screen::Menu | Screen::Create) {
                                     let action = game.menu_key(code, event.text.as_deref());
                                     menu_action = Some(action);
                                 } else if game.screen == Screen::Inventory {
@@ -1414,7 +1460,12 @@ fn main() {
                     let down = state == ElementState::Pressed;
                     let size = window.inner_size();
                     let (fw, fh) = (size.width as f32, size.height as f32);
-                    if matches!(game.screen, Screen::Menu | Screen::Create) {
+                    if game.screen == Screen::Settings {
+                        if down && button == MouseButton::Left && game.settings_click(fw, fh) {
+                            let v = if game.settings.vsync { SwapInterval::Wait(NonZeroU32::new(1).unwrap()) } else { SwapInterval::DontWait };
+                            let _ = gl_surface.set_swap_interval(&gl_ctx, v);
+                        }
+                    } else if matches!(game.screen, Screen::Menu | Screen::Create) {
                         if down && button == MouseButton::Left {
                             menu_action = Some(game.menu_mouse(fw, fh));
                         }
@@ -1435,6 +1486,7 @@ fn main() {
                                     game.grab_mouse = true;
                                 }
                                 Some("Controles") => game.controls_open = true,
+                                Some("Configurações") => game.open_settings(),
                                 Some("Voltar") => game.controls_open = false,
                                 Some("Salvar e sair") => {
                                     // grava e volta ao menu (o mundo fica girando ao fundo, sem gravar mais nada)

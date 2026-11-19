@@ -146,6 +146,7 @@ impl Game {
         let b = self.get(x, y, z);
         if self.destroy(x, y, z) {
             self.sfx(crate::sound::break_sound(b), [x as f64 + 0.5, y as f64 + 0.5, z as f64 + 0.5], 0.9);
+            self.block_bits(b, x, y, z, 14);
         }
     }
 

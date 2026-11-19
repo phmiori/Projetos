@@ -212,6 +212,9 @@ impl Game {
                         t.body.vy = 4.0;
                         let at = [t.body.x, t.body.y + 0.8, t.body.z];
                         self.sfx("criatura_dano", at, 0.8);
+                        if mt == mob::SHARK {
+                            self.blood([at[0], at[1] - 0.5, at[2]]);
+                        }
                         let t = &mut mobs[j];
                         if t.health <= 0.0 {
                             if !eat {
@@ -505,6 +508,7 @@ impl Game {
     /// baús e fornalhas, machuca e empurra criaturas e o jogador.
     pub fn explode_at(&mut self, c: [f64; 3], power: f64) {
         self.sfx("explosao", c, 1.0);
+        self.explosion_bits(c, power);
         let rad = power.ceil() as i32;
         let (bx, by, bz) = (c[0].floor() as i32, c[1].floor() as i32, c[2].floor() as i32);
         let mut gone = Vec::new();
@@ -595,6 +599,7 @@ impl Game {
         let can_take = !self.creative && self.health > 0.0 && self.inv.fits(crate::tools::ARROW);
         let (px, py, pz) = (self.player.x, self.player.y, self.player.z);
         let mut killed: Vec<i32> = Vec::new();
+        let mut hits: Vec<[f64; 3]> = Vec::new();
         let mut picked = 0;
         arrows.retain_mut(|a| {
             a.life -= dt;
@@ -648,6 +653,7 @@ impl Game {
                         m.body.vz += a.d[2] * 5.0;
                         m.body.vy = m.body.vy.max(3.5);
                         crate::sound::play_at("flecha_criatura", a.p, ear, yaw, 0.9);
+                        hits.push(a.p);
                         if let Some(v) = mob::voice(m.t) {
                             crate::sound::play_at(v, [m.body.x, m.body.y + 0.8, m.body.z], ear, yaw, 0.6);
                         }
@@ -679,6 +685,9 @@ impl Game {
             true
         });
         self.arrows = arrows;
+        for p in hits {
+            self.hit_bits(p, 0xB02020, 10);
+        }
         // o que a criatura abatida solta fica onde ela caiu
         for id in killed {
             if let Some(m) = mobs.iter().find(|m| m.id == id) {

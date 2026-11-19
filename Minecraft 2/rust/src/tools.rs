@@ -99,6 +99,9 @@ impl Game {
                 continue; // alguém quebrou antes
             }
             p.3 -= dt;
+            if self.rng.next() < dt * 20.0 {
+                self.smoke([p.0 as f64 + 0.5, p.1 as f64 + 1.05, p.2 as f64 + 0.5]);
+            }
             if p.3 <= 0.0 { ready.push(p) } else { keep.push(p) }
         }
         self.primed = keep;
@@ -154,6 +157,7 @@ impl Game {
         let held = self.inv.s[self.slot].id;
         if held == BONE && is_wheat(b) && b < WHEAT + 2 {
             self.set(x, y, z, b + 1, 0); // o trigo cresce uma fase
+            self.hit_bits([x as f64 + 0.5, y as f64 + 0.4, z as f64 + 0.5], 0xE8F0D8, 8);
             if !self.creative {
                 self.inv.take_one(self.slot);
             }
@@ -188,6 +192,7 @@ impl Game {
             self.set(x, y + 1, z, AIR, 0);
         }
         self.set(x, y, z, FARMLAND, 0);
+        self.block_bits(DIRT, x, y + 1, z, 6);
         self.sfx("quebrar_terra", [x as f64 + 0.5, y as f64 + 1.0, z as f64 + 0.5], 0.7);
         if !self.creative && self.inv.use_tool(self.slot) {
             self.notice("Sua ferramenta quebrou!".into());

@@ -78,6 +78,15 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
 - **Cama**: o botão direito define onde você renasce e, de noite (sem monstros por perto), pula para a manhã.
 - **Vida do mundo** (`World.tickGrowth`): folhas sem tronco por perto somem, mudas viram árvores, a grama se espalha
   pela terra e morre debaixo de blocos, terra arada abandonada volta a ser terra.
+- **Configurações** (na pausa e no menu): VSync, volume, distância de visão, sombras, reflexos, sombra nos cantos,
+  campo de visão e sensibilidade do mouse. Mudam na hora e são gravadas no mesmo `settings.properties` do Java
+  (valem para as duas versões).
+- **Mão em primeira pessoa** (`Hand.java`): o braço com a cor da pele e da camisa do personagem e o item na mão (bloco
+  como cubinho com as texturas, ferramentas empunhadas, o resto em pé), balançando ao andar e dando o golpe ao bater,
+  quebrar ou colocar; o arco vem para o meio da tela ao puxar a corda.
+- **Partículas** (`Particles.java`): pedacinhos com as cores da textura saltando do bloco batido ou quebrado,
+  respingos ao acertar criaturas com flecha, sangue da mordida do tubarão, fumaça e fagulhas das explosões e a
+  fumacinha do pavio da dinamite.
 - **Pausa** (**Esc**, ou quando a janela perde o foco) com "Voltar ao jogo" e "Salvar e sair".
 - Grava os pedaços mudados, a posição, a hora, o inventário, a vida, a fome, os baús, as fornalhas e as criaturas a cada
   30 s e ao fechar (só o que conhece no `meta.properties`; amigos da LAN e o resto ficam como o Java deixou).
@@ -91,8 +100,7 @@ soltos no chão não são gravados (no Java também não).
 
 ## Próximos passos (na ordem sugerida)
 
-1. Tela de configurações (hoje usa as do Java), partículas (pedacinhos dos blocos, fumaça) e a mão/item na tela.
-2. LAN (o mesmo protocolo do `Net.java`, para dar para jogar Java com Rust durante a transição).
+1. LAN (o mesmo protocolo do `Net.java`, para dar para jogar Java com Rust durante a transição).
 
 ## Ferramentas
 

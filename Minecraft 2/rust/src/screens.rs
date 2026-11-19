@@ -544,7 +544,7 @@ impl Game {
         let (bw, bh) = (300.0 * k, 44.0 * k);
         let names: Vec<&'static str> = match self.screen {
             Screen::Pause if self.controls_open => vec!["Voltar"],
-            Screen::Pause => vec!["Voltar ao jogo", "Controles", "Salvar e sair"],
+            Screen::Pause => vec!["Voltar ao jogo", "Controles", "Configurações", "Salvar e sair"],
             Screen::Dead => vec!["Renascer"],
             _ => vec![],
         };

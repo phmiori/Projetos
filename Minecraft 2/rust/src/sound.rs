@@ -69,6 +69,12 @@ pub fn init(volume: f32) {
     }
 }
 
+pub fn set_volume(v: f32) {
+    if let Some(Some(m)) = MIXER.get() {
+        *m.master.lock().unwrap() = v.clamp(0.0, 1.0);
+    }
+}
+
 /// Toca um som "na cabeça" do jogador.
 pub fn play(name: &str, volume: f64) {
     voice(name, volume, 0.0, 0.92 + rand() * 0.16);

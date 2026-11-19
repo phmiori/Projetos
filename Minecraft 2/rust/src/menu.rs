@@ -35,6 +35,7 @@ enum Hit {
     Row(usize),
     Play,
     New,
+    Options,
     Quit,
     Field(u8),
     Mode,
@@ -192,12 +193,13 @@ impl Game {
             for i in 0..ROWS.min(self.menu.worlds.len().saturating_sub(self.menu.scroll)) {
                 v.push((Hit::Row(self.menu.scroll + i), [px + 12.0 * k, top + i as f32 * row, pw - 24.0 * k, row - 6.0 * k]));
             }
-            let (bw, bh, gap) = (200.0 * k, 46.0 * k, 16.0 * k);
+            let (bw, bh, gap) = (190.0 * k, 46.0 * k, 14.0 * k);
             let by = top + ROWS as f32 * row + 24.0 * k;
-            let bx = (w - (bw * 3.0 + gap * 2.0)) / 2.0;
+            let bx = (w - (bw * 4.0 + gap * 3.0)) / 2.0;
             v.push((Hit::Play, [bx, by, bw, bh]));
             v.push((Hit::New, [bx + bw + gap, by, bw, bh]));
-            v.push((Hit::Quit, [bx + 2.0 * (bw + gap), by, bw, bh]));
+            v.push((Hit::Options, [bx + 2.0 * (bw + gap), by, bw, bh]));
+            v.push((Hit::Quit, [bx + 3.0 * (bw + gap), by, bw, bh]));
         } else {
             let (pw, ph) = (620.0 * k, 430.0 * k);
             let (px, py) = ((w - pw) / 2.0, (h - ph) / 2.0);
@@ -253,6 +255,7 @@ impl Game {
                 match hit {
                     Hit::Play => button(ui, k, *r, "Jogar", hot(*r) && can_play, true, can_play),
                     Hit::New => button(ui, k, *r, "Criar novo mundo", hot(*r), false, true),
+                    Hit::Options => button(ui, k, *r, "Configurações", hot(*r), false, true),
                     Hit::Quit => button(ui, k, *r, "Sair", hot(*r), false, true),
                     _ => {}
                 }
@@ -318,6 +321,7 @@ impl Game {
             }
             Hit::Play => return self.play_selected(),
             Hit::New => self.start_create(),
+            Hit::Options => self.open_settings(),
             Hit::Quit => return Action::Quit,
             Hit::Field(f) => self.menu.focus = f,
             Hit::Mode => self.menu.creative = !self.menu.creative,

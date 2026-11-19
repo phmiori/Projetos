@@ -159,11 +159,13 @@ impl Game {
         if self.hit_sound_cd <= 0.0 {
             self.hit_sound_cd = 0.25;
             self.sfx(crate::sound::break_sound(b), at, 0.3);
+            self.block_bits(b, x, y, z, 3);
         }
         if self.break_progress < 1.0 {
             return;
         }
         self.sfx(crate::sound::break_sound(b), at, 0.9);
+        self.block_bits(b, x, y, z, 16);
         self.break_progress = 0.0;
         let broken = self.get(x, y, z);
         if !self.destroy(x, y, z) {

@@ -30,6 +30,8 @@ pub struct WorldInfo {
     pub wolves: Vec<String>,
     /// nome do personagem (o dono dos lobos)
     pub player_name: String,
+    /// cor da pele e da camisa do personagem (índices do Persona.java)
+    pub persona: (usize, usize),
 }
 
 /// Duração de um dia inteiro (dia e noite), em segundos: 48 minutos, como no Java.
@@ -102,6 +104,10 @@ pub fn read_world(dir: &Path) -> Option<WorldInfo> {
         mobs: p.iter().filter(|(k, _)| k.starts_with("criatura.")).map(|(_, v)| v.clone()).collect(),
         wolves: p.iter().filter(|(k, _)| k.starts_with("lobo.")).map(|(_, v)| v.clone()).collect(),
         player_name: p.get("personagem.nome").cloned().unwrap_or_default(),
+        persona: (
+            p.get("personagem.pele").and_then(|v| v.trim().parse().ok()).unwrap_or(0),
+            p.get("personagem.camisa").and_then(|v| v.trim().parse().ok()).unwrap_or(0),
+        ),
         chests: p.iter().filter_map(|(k, v)| k.strip_prefix("bau.").map(|k| (k.to_string(), v.clone()))).collect(),
         furnaces: p.iter().filter_map(|(k, v)| k.strip_prefix("fornalha.").map(|k| (k.to_string(), v.clone()))).collect(),
         spawn: match (num("spawn.x"), num("spawn.y"), num("spawn.z")) {
@@ -139,6 +145,8 @@ pub struct Settings {
     pub reflections: bool,
     pub vsync: bool,
     pub shadows: bool,
+    /// sensibilidade do mouse como o Java guarda (1..20)
+    pub sens_level: i32,
     /// 0..1 (o Java guarda 0..10)
     pub volume: f32,
 }
@@ -155,6 +163,7 @@ pub fn read_settings() -> Settings {
         reflections: flag("reflexos"),
         vsync: flag("vsync"),
         shadows: flag("sombras"),
+        sens_level: int("sensibilidade", 5, 1, 20),
         volume: int("volume", 8, 0, 10) as f32 / 10.0,
     }
 }
