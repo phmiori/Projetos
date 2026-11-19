@@ -22,6 +22,9 @@ pub struct WorldInfo {
     pub food: f64,
     /// onde o jogador renasce
     pub spawn: Option<[f64; 3]>,
+    /// baús e fornalhas: "x,y,z" -> conteúdo (o texto do Java)
+    pub chests: Vec<(String, String)>,
+    pub furnaces: Vec<(String, String)>,
 }
 
 /// Duração de um dia inteiro (dia e noite), em segundos: 48 minutos, como no Java.
@@ -91,6 +94,8 @@ pub fn read_world(dir: &Path) -> Option<WorldInfo> {
         inventory: p.get("inventario").cloned().unwrap_or_default(),
         health: num("jogador.vida").unwrap_or(20.0),
         food: num("jogador.fome").unwrap_or(20.0),
+        chests: p.iter().filter_map(|(k, v)| k.strip_prefix("bau.").map(|k| (k.to_string(), v.clone()))).collect(),
+        furnaces: p.iter().filter_map(|(k, v)| k.strip_prefix("fornalha.").map(|k| (k.to_string(), v.clone()))).collect(),
         spawn: match (num("spawn.x"), num("spawn.y"), num("spawn.z")) {
             (Some(x), Some(y), Some(z)) => Some([x, y, z]),
             _ => None,
@@ -141,10 +146,17 @@ pub fn read_settings() -> Settings {
 }
 
 /// Muda só algumas chaves do meta.properties do mundo, deixando todo o resto (baús, fornalhas, bichos...) como está.
-pub fn update_meta(dir: &Path, values: &[(&str, String)]) -> std::io::Result<()> {
+/// `groups`: prefixos (como "bau.") cujas linhas são todas trocadas pelas dadas (chave sem o prefixo, valor).
+pub fn update_meta(dir: &Path, values: &[(&str, String)], groups: &[(&str, Vec<(String, String)>)]) -> std::io::Result<()> {
     let path = dir.join("meta.properties");
     let text = std::fs::read_to_string(&path)?;
     let mut lines: Vec<String> = text.lines().map(|l| l.to_string()).collect();
+    for (prefix, entries) in groups {
+        lines.retain(|l| !l.starts_with(prefix));
+        for (k, v) in entries {
+            lines.push(format!("{prefix}{k}={v}"));
+        }
+    }
     for (k, v) in values {
         let prefix = format!("{k}=");
         let line = format!("{k}={v}");

@@ -394,6 +394,11 @@ impl Generator {
         Some([x, hi, z])
     }
 
+    /// O baú do iglu fica nesta posição? (é enchido na primeira vez que alguém o abre)
+    pub fn igloo_chest(&self, x: i32, y: i32, z: i32) -> bool {
+        self.igloo_site(x >> 4, z >> 4).map_or(false, |s| x == s[0] && y == s[1] && z == s[2] - 3)
+    }
+
     fn near_igloo(&self, x: i32, z: i32) -> bool {
         for cx in (x - 7) >> 4..=(x + 7) >> 4 {
             for cz in (z - 10) >> 4..=(z + 7) >> 4 {

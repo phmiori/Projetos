@@ -14,6 +14,7 @@
 //! Uso: mundo-de-blocos [--mundo pasta] [--semente N] [--posicao x y z yaw pitch] [--hora 0..1] [--comparar arquivo]
 
 mod block;
+mod containers;
 mod edit;
 mod fluid;
 mod inventory;
@@ -272,6 +273,10 @@ struct Game {
     slot_name_timer: f64,
     grab_mouse: bool,
     release_mouse: bool,
+    chests: HashMap<String, Vec<Stack>>,
+    furnaces: HashMap<String, containers::Furnace>,
+    /// baú ou fornalha aberto na tela
+    open: Option<containers::Open>,
     l_held: bool,
     r_held: bool,
     l_pending: bool,
@@ -382,6 +387,9 @@ impl Game {
             slot_name_timer: 0.0,
             grab_mouse: false,
             release_mouse: false,
+            chests: HashMap::new(),
+            furnaces: HashMap::new(),
+            open: None,
             slot: 0,
             l_held: false,
             r_held: false,
@@ -595,6 +603,7 @@ impl Game {
         self.eat_cd -= dt;
         self.slot_name_timer -= dt;
         self.update_drops(dt);
+        self.tick_furnaces(dt);
         self.survival(dt);
         let (lp, rp, mp) = (self.l_pending, self.r_pending, self.m_pending);
         self.l_pending = false;
@@ -658,7 +667,9 @@ impl Game {
             v.push(("jogador.vida", self.health.max(0.0).to_string()));
             v.push(("jogador.fome", self.food.to_string()));
         }
-        if let Err(e) = save::update_meta(&dir, &v) {
+        let chests: Vec<(String, String)> = self.chests.iter().map(|(k, c)| (k.clone(), containers::serialize_slots(c))).collect();
+        let furnaces: Vec<(String, String)> = self.furnaces.iter().map(|(k, f)| (k.clone(), f.serialize())).collect();
+        if let Err(e) = save::update_meta(&dir, &v, &[("bau.", chests), ("fornalha.", furnaces)]) {
             println!("não consegui gravar o meta.properties: {e}");
         }
     }
@@ -1073,6 +1084,14 @@ fn main() {
 
     let read_only = args.iter().any(|a| a == "--so-ler");
     let mut game = Game::new(gen, if read_only { None } else { save_dir.clone() }, name, settings, player, creative, time, day, inv, vitals, spawn);
+    if let Some(w) = &info {
+        for (k, v) in &w.chests {
+            game.chests.insert(k.clone(), containers::parse_slots(v, containers::CHEST_SIZE));
+        }
+        for (k, v) in &w.furnaces {
+            game.furnaces.insert(k.clone(), containers::Furnace::parse(v));
+        }
+    }
     // a leitura dos pedaços salvos continua valendo mesmo em --so-ler (só não grava)
     let _ = &save_dir;
     // modo de teste: --foto-e-sair N tira uma foto no quadro N e fecha; --andar segura W o tempo todo

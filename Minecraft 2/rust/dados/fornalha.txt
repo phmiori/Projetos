@@ -1,0 +1,17 @@
+# gerado por rust/ferramentas/ExportarBlocos.java a partir do Items.java (não edite à mão)
+# id|resultado|combustível
+4|3|0
+5|18|0
+6|201|2
+8|0|2
+13|202|0
+14|203|0
+22|201|2
+171|0|2
+200|0|1
+201|0|8
+206|207|0
+208|209|0
+241|242|0
+243|244|0
+245|246|0

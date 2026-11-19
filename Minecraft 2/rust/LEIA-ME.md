@@ -15,7 +15,7 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
 | Geração do terreno | Traduzida linha por linha do `World.java`: mesma semente = mesmo mundo, bloco por bloco (conferido com `comparar-geracao.bat`). |
 | Blocos | `dados/blocos.txt` é exportado do `Block.java` (`exportar-blocos.bat`): mesmos ids, formas, texturas, caixas, dureza e ferramenta certa. |
 | Itens e receitas | `dados/itens.txt`, `itens.png` e `receitas.txt` são exportados do `Items.java`: mesmos nomes, desenhos, ferramentas, comida, armaduras e receitas. |
-| Inventário, vida e fome | Lidos e gravados no `meta.properties` no mesmo formato do Java. |
+| Inventário, vida, fome, baús e fornalhas | Lidos e gravados no `meta.properties` no mesmo formato do Java. |
 | Texturas | Os mesmos PNGs da pasta `textures/`. |
 | Shaders | Copiados do `GLRenderer.java` (céu, nuvens, neblina, luz, água) e o mesmo formato de vértice do `Mesher.java`. |
 
@@ -46,24 +46,27 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
   item com a picareta certa), o que ele solta cai no chão girando e é puxado para você, as ferramentas gastam e
   quebram, colocar gasta da mão, **Q** joga fora. Vida, fome, fôlego embaixo d'água, dano de queda, lava e cacto,
   armadura que diminui o dano, comer e vestir com o botão direito. Ao morrer os itens caem onde você estava.
+- **Baús e fornalhas** (botão direito abre), guardados no `meta.properties` igual ao Java: o baú do iglu vem com os
+  mesmos itens que viria no Java; as fornalhas assam o tempo todo (8 s por item, com os combustíveis e o que assa
+  exportados do Java) e o bloco acende enquanto assa; quebrar um baú ou uma fornalha espalha o que havia dentro;
+  Shift+clique passa itens entre eles e a mochila.
 - **Pausa** (**Esc**, ou quando a janela perde o foco) com "Voltar ao jogo" e "Salvar e sair".
-- Grava os pedaços mudados, a posição, a hora, o inventário, a vida e a fome a cada 30 s e ao fechar (só as chaves
-  que conhece no `meta.properties`; baús, fornalhas, bichos e o resto ficam como o Java deixou).
+- Grava os pedaços mudados, a posição, a hora, o inventário, a vida, a fome, os baús e as fornalhas a cada 30 s e ao
+  fechar (só o que conhece no `meta.properties`; bichos, amigos da LAN e o resto ficam como o Java deixou).
 - Água corrente (traduzida do `World.java`): cai, escorre para o desnível mais perto formando cachoeiras, espalha
   até 7 blocos no plano, seca quando perde a fonte e leva embora plantas e tochas no caminho.
 - Luz de tochas e lava: cada pedaço calcula a sua, ela passa para os vizinhos quando eles carregam e é refeita em
   volta quando uma tocha é colocada ou tirada (ou quando um bloco tapa ou destapa a luz).
 
-**Cuidados**: não abra o mesmo mundo no Java e no Rust ao mesmo tempo (um gravaria por cima do outro). Baús e
-fornalhas ainda não abrem nem podem ser quebrados aqui (o conteúdo deles fica no `meta.properties`), e os itens
+**Cuidados**: não abra o mesmo mundo no Java e no Rust ao mesmo tempo (um gravaria por cima do outro). Os itens
 soltos no chão não são gravados (no Java também não).
 
 ## Próximos passos (na ordem sugerida)
 
-1. Baús e fornalhas (abrir, guardar, assar).
-2. Bichos.
-3. Sons e sombras do sol.
-4. Menu inicial para escolher e criar mundos.
+1. Bichos.
+2. Sons e sombras do sol.
+3. Menu inicial para escolher e criar mundos.
+4. Cama, enxada e trigo, arco e flechas, dinamite.
 5. LAN (o mesmo protocolo do `Net.java`, para dar para jogar Java com Rust durante a transição).
 
 ## Ferramentas

@@ -23,6 +23,35 @@ impl Stack {
     }
 }
 
+/// Coloca n itens nos espaços dados (Inventory.addRange do Java): completa pilhas, depois ocupa vazios.
+/// Retorna o que não coube.
+pub fn add_to(slots: &mut [Stack], id: i32, mut n: i32, wear: i32) -> i32 {
+    let max = items::max_stack(id);
+    if max > 1 {
+        for st in slots.iter_mut() {
+            if n <= 0 {
+                break;
+            }
+            if st.id == id && st.count > 0 && st.count < max {
+                let k = n.min(max - st.count);
+                st.count += k;
+                n -= k;
+            }
+        }
+    }
+    for st in slots.iter_mut() {
+        if n <= 0 {
+            break;
+        }
+        if st.empty() {
+            let k = n.min(max);
+            *st = Stack::new(id, k, wear);
+            n -= k;
+        }
+    }
+    n
+}
+
 #[derive(Clone)]
 pub struct Inventory {
     pub s: [Stack; TOTAL],
@@ -57,32 +86,8 @@ impl Inventory {
     }
 
     /// Coloca n itens nos espaços [from, to): completa pilhas, depois ocupa vazios. Retorna o que não coube.
-    pub fn add_range(&mut self, id: i32, mut n: i32, wear: i32, from: usize, to: usize) -> i32 {
-        let max = items::max_stack(id);
-        if max > 1 {
-            for i in from..to {
-                if n <= 0 {
-                    break;
-                }
-                let st = &mut self.s[i];
-                if st.id == id && st.count > 0 && st.count < max {
-                    let k = n.min(max - st.count);
-                    st.count += k;
-                    n -= k;
-                }
-            }
-        }
-        for i in from..to {
-            if n <= 0 {
-                break;
-            }
-            if self.s[i].empty() {
-                let k = n.min(max);
-                self.s[i] = Stack::new(id, k, wear);
-                n -= k;
-            }
-        }
-        n
+    pub fn add_range(&mut self, id: i32, n: i32, wear: i32, from: usize, to: usize) -> i32 {
+        add_to(&mut self.s[from..to], id, n, wear)
     }
 
     /// Guarda itens na mochila (barra primeiro, como no Java). Retorna o que não coube.

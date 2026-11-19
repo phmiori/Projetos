@@ -41,6 +41,8 @@ pub struct Recipe {
 }
 
 pub struct Tables {
+    /// fornalha: item -> (no que vira, quantos itens assa como combustível)
+    pub furnace: HashMap<i32, (i32, i32)>,
     pub items: HashMap<i32, ItemInfo>,
     pub recipes: Vec<Recipe>,
     /// ids de item (não bloco) na ordem do Java, para a paleta do criativo
@@ -100,7 +102,14 @@ pub fn tables() -> &'static Tables {
                 cells: p[6].split(',').map(|c| c.trim().parse().unwrap_or(0)).collect(),
             });
         }
-        Tables { items, recipes, order }
+        let mut furnace = HashMap::new();
+        for line in include_str!("../dados/fornalha.txt").lines() {
+            let p: Vec<i32> = line.split('|').filter_map(|v| v.trim().parse().ok()).collect();
+            if !line.starts_with('#') && p.len() == 3 {
+                furnace.insert(p[0], (p[1], p[2]));
+            }
+        }
+        Tables { furnace, items, recipes, order }
     })
 }
 
@@ -119,6 +128,16 @@ pub fn name(id: i32) -> String {
     }
     let b = block::block_of_item(id);
     if b != block::AIR { block::info(b).name.clone() } else { format!("item {id}") }
+}
+
+/// No que o item vira na fornalha (0 = não assa).
+pub fn smelt(id: i32) -> i32 {
+    tables().furnace.get(&id).map_or(0, |f| f.0)
+}
+
+/// Quantos itens o combustível assa (0 = não queima).
+pub fn fuel(id: i32) -> i32 {
+    tables().furnace.get(&id).map_or(0, |f| f.1)
 }
 
 pub fn max_stack(id: i32) -> i32 {

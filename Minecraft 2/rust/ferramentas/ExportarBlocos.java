@@ -72,6 +72,21 @@ public class ExportarBlocos {
         System.out.println("blocos exportados: " + Block.COUNT + " -> " + out);
         exportItems(new File(out.getParentFile(), "itens.txt"), new File(out.getParentFile(), "itens.png"));
         exportRecipes(new File(out.getParentFile(), "receitas.txt"));
+        exportFurnace(new File(out.getParentFile(), "fornalha.txt"));
+    }
+
+    /** Fornalha: id|no que vira ao assar (0 = não assa)|quantos itens assa como combustível (0 = não queima). */
+    static void exportFurnace(File txt) throws Exception {
+        int n = 0;
+        try (Writer w = new OutputStreamWriter(new FileOutputStream(txt), "UTF-8")) {
+            w.write("# gerado por rust/ferramentas/ExportarBlocos.java a partir do Items.java (não edite à mão)" + NL);
+            w.write("# id|resultado|combustível" + NL);
+            for (int id = 1; id <= Items.LAST; id++) {
+                int s = Items.smelt(id), f = Items.fuel(id);
+                if (s != 0 || f != 0) { w.write(id + "|" + s + "|" + f + NL); n++; }
+            }
+        }
+        System.out.println("fornalha exportada: " + n + " itens -> " + txt);
     }
 
     /**

@@ -1,6 +1,7 @@
 //! Telas: a barra e as informações durante o jogo, o inventário (com a paleta do criativo e a grade de criação),
 //! a pausa e a tela de morte. O visual segue o do jogo Java (caixas escuras, borda dourada no espaço escolhido).
 
+use crate::containers::Open;
 use crate::inventory::{Stack, HOTBAR, SIZE};
 use crate::items;
 use crate::survival::MAX_AIR;
@@ -16,6 +17,8 @@ pub enum SlotRef {
     Craft(usize),
     Result,
     Palette(usize),
+    Chest(usize),
+    Furnace(usize),
 }
 
 /// Desenhos em pixel art (8 x 7) para coração, coxa, bolha e armadura: '#' cheio, '+' brilho.
@@ -194,13 +197,32 @@ impl Game {
         let pad = 18.0 * k;
         let pw = 9.0 * pitch + pad * 2.0 - 4.0 * k;
         let mut slots = Vec::new();
-        let top_h = if self.creative { PAL_ROWS as f32 * pitch + 30.0 * k } else { (self.craft_size().max(4)) as f32 * pitch + 30.0 * k };
+        let top_h = if self.open.is_some() {
+            3.0 * pitch + 30.0 * k
+        } else if self.creative {
+            PAL_ROWS as f32 * pitch + 30.0 * k
+        } else {
+            (self.craft_size().max(4)) as f32 * pitch + 30.0 * k
+        };
         let ph = 30.0 * k + top_h + 30.0 * k + 3.0 * pitch + 10.0 * k + pitch + pad;
         // um pouco acima do meio, para não cobrir a barra
         let (px, py) = ((w - pw) / 2.0, ((h - ph) / 2.0 - 40.0 * k).max(4.0 * k));
         let x0 = px + pad;
         let mut y = py + 44.0 * k;
-        if self.creative {
+        if let Some(open) = &self.open {
+            match open {
+                Open::Chest(_) => {
+                    for i in 0..27 {
+                        slots.push((SlotRef::Chest(i), x0 + (i % 9) as f32 * pitch, y + (i / 9) as f32 * pitch));
+                    }
+                }
+                Open::Furnace(_) => {
+                    slots.push((SlotRef::Furnace(0), x0 + 2.5 * pitch, y));
+                    slots.push((SlotRef::Furnace(1), x0 + 2.5 * pitch, y + 2.0 * pitch));
+                    slots.push((SlotRef::Furnace(2), x0 + 5.5 * pitch, y + pitch));
+                }
+            }
+        } else if self.creative {
             for r in 0..PAL_ROWS {
                 for c in 0..PAL_COLS {
                     slots.push((SlotRef::Palette(r * PAL_COLS + c), x0 + c as f32 * pitch, y + r as f32 * pitch));
@@ -248,25 +270,38 @@ impl Game {
     }
 
     fn get_slot(&self, r: SlotRef) -> Stack {
-        match r {
-            SlotRef::Inv(i) => self.inv.s[i],
-            SlotRef::Craft(i) => self.craft[i],
+        match (r, &self.open) {
+            (SlotRef::Inv(i), _) => self.inv.s[i],
+            (SlotRef::Craft(i), _) => self.craft[i],
+            (SlotRef::Chest(i), Some(Open::Chest(k))) => self.chests.get(k).map_or(Stack::default(), |c| c[i]),
+            (SlotRef::Furnace(i), Some(Open::Furnace(k))) => self.furnaces.get(k).map_or(Stack::default(), |f| f.inv[i]),
             _ => Stack::default(),
         }
     }
 
     fn set_slot(&mut self, r: SlotRef, st: Stack) {
-        match r {
-            SlotRef::Inv(i) => self.inv.s[i] = st,
-            SlotRef::Craft(i) => self.craft[i] = st,
+        match (r, self.open.clone()) {
+            (SlotRef::Inv(i), _) => self.inv.s[i] = st,
+            (SlotRef::Craft(i), _) => self.craft[i] = st,
+            (SlotRef::Chest(i), Some(Open::Chest(k))) => {
+                if let Some(c) = self.chests.get_mut(&k) {
+                    c[i] = st;
+                }
+            }
+            (SlotRef::Furnace(i), Some(Open::Furnace(k))) => {
+                if let Some(f) = self.furnaces.get_mut(&k) {
+                    f.inv[i] = st;
+                }
+            }
             _ => {}
         }
     }
 
-    /// Esse item pode ir nesse espaço? (armadura só no espaço da sua peça)
+    /// Esse item pode ir nesse espaço? (armadura só no espaço da sua peça; o resultado da fornalha só sai)
     fn accepts(r: SlotRef, id: i32) -> bool {
         match r {
             SlotRef::Inv(i) if i >= SIZE => items::info(id).map_or(false, |inf| inf.armor_piece == (i - SIZE) as i32),
+            SlotRef::Furnace(2) => false,
             _ => true,
         }
     }
@@ -307,6 +342,7 @@ impl Game {
                 if shift && !st.empty() {
                     // passa direto entre a barra e a mochila (ou da grade para a mochila)
                     let rest = match r {
+                        SlotRef::Inv(_) if self.open.is_some() => self.add_to_open(st),
                         SlotRef::Inv(i) if i < HOTBAR => self.inv.add_range(st.id, st.count, st.wear, HOTBAR, SIZE),
                         SlotRef::Inv(i) if i < SIZE => self.inv.add_range(st.id, st.count, st.wear, 0, HOTBAR),
                         _ => self.inv.add(st.id, st.count, st.wear),
@@ -423,6 +459,7 @@ impl Game {
         }
         self.screen = Screen::Play;
         self.at_table = false;
+        self.open = None;
         self.grab_mouse = true;
     }
 
@@ -432,14 +469,35 @@ impl Game {
         let (p, slots, s) = self.inv_layout(w, h);
         ui.rect(p[0], p[1], p[2], p[3], rgba(38, 38, 44, 240));
         ui.frame(p[0], p[1], p[2], p[3], 3.0 * k, rgba(90, 90, 100, 255));
-        let title = if self.creative { "Criativo" } else if self.at_table { "Bancada" } else { "Inventário" };
+        let title = match &self.open {
+            Some(Open::Chest(_)) => "Baú",
+            Some(Open::Furnace(_)) => "Fornalha",
+            None if self.creative => "Criativo",
+            None if self.at_table => "Bancada",
+            None => "Inventário",
+        };
         ui.shadow(20.0 * k, p[0] + 18.0 * k, p[1] + 30.0 * k, title, rgba(245, 232, 205, 255));
-        if self.creative {
+        if self.creative && self.open.is_none() {
             let rows = self.palette.len().div_ceil(PAL_COLS);
             ui.shadow(11.0 * k, p[0] + p[2] - 150.0 * k, p[1] + 30.0 * k, &format!("rodinha: {}/{}", self.palette_scroll + 1, rows.saturating_sub(PAL_ROWS) + 1), rgba(200, 200, 205, 200));
         }
         let hover = self.slot_at(w, h, self.mouse.0, self.mouse.1);
-        let recipe = if self.creative { None } else { items::match_recipe(&self.craft_grid(), self.craft_size()) };
+        let recipe = if self.creative || self.open.is_some() { None } else { items::match_recipe(&self.craft_grid(), self.craft_size()) };
+        // fornalha: chama (o calor que resta) entre a entrada e o combustível, e a seta com o progresso
+        if let Some(Open::Furnace(key)) = &self.open {
+            if let Some(f) = self.furnaces.get(key) {
+                let pitch = 48.0 * k;
+                let (fx, fy) = (p[0] + 18.0 * k + 2.5 * pitch + s / 2.0, p[1] + 44.0 * k + pitch + s / 2.0);
+                let heat = if f.heat_max > 0.0 { (f.heat / f.heat_max).clamp(0.0, 1.0) as f32 } else { 0.0 };
+                let (fw, fh) = (18.0 * k, 22.0 * k);
+                ui.rect(fx - fw / 2.0, fy - fh / 2.0, fw, fh, rgba(40, 30, 24, 255));
+                ui.rect(fx - fw / 2.0, fy + fh / 2.0 - fh * heat, fw, fh * heat, rgba(255, 140, 30, 255));
+                let (ax, ay) = (p[0] + 18.0 * k + 3.8 * pitch, p[1] + 44.0 * k + pitch + s / 2.0 - 6.0 * k);
+                let aw = 1.4 * pitch;
+                ui.rect(ax, ay, aw, 12.0 * k, rgba(60, 60, 66, 255));
+                ui.rect(ax, ay, aw * f.progress.clamp(0.0, 1.0) as f32, 12.0 * k, rgba(240, 240, 245, 255));
+            }
+        }
         let mut last_y = 0.0;
         for &(r, x, y) in &slots {
             if let SlotRef::Inv(i) = r {
@@ -473,7 +531,7 @@ impl Game {
             }
             ui.item(st, x + 4.0 * k, y + 4.0 * k, s - 8.0 * k, k);
         }
-        if !self.creative {
+        if !self.creative && self.open.is_none() {
             ui.shadow(11.0 * k, p[0] + 18.0 * k + 2.5 * 48.0 * k, p[1] + 40.0 * k, "Criação", rgba(200, 200, 205, 200));
         }
         // nome do item embaixo do mouse

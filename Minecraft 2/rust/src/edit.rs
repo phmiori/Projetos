@@ -152,12 +152,10 @@ impl Game {
         if block::info(b).hardness < 0.0 {
             return false;
         }
-        if b == CHEST || b == FURNACE || b == FURNACE_LIT {
-            // o conteúdo de baús e fornalhas fica no meta.properties, que a versão Rust ainda não mexe
-            self.notice("Baús e fornalhas ainda não podem ser quebrados na versão Rust".into());
-            return false;
-        }
         self.set(x, y, z, AIR, 0);
+        if b == CHEST || b == FURNACE || b == FURNACE_LIT {
+            self.spill_container(x, y, z, b); // o que havia dentro cai no chão
+        }
         // a outra metade da porta vai junto
         let i = block::info(b);
         if i.kind == K_DOOR {
@@ -202,7 +200,7 @@ impl Game {
             return;
         }
         if target == CHEST || target == FURNACE || target == FURNACE_LIT {
-            self.notice("Baús e fornalhas ainda não abrem na versão Rust".into());
+            self.open_container(hx, hy, hz, target);
             return;
         }
         // comida e armadura na mão: come ou veste
