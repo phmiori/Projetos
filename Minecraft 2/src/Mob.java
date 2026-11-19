@@ -264,13 +264,13 @@ final class Mob extends Entity {
             boolean preyInWater = Block.isWater(w.get((int) Math.floor(p.x), (int) Math.floor(p.y + 0.5), (int) Math.floor(p.z)));
             if (type == SHARK && canTarget && preyInWater && d3 < 16) {
                 dirX = dx / d3; dirY = dy / d3; dirZ = dz / d3; // vem atrás de quem está nadando
-                if (d3 < 2.7 && attackCd <= 0) { wantsAttack = true; attackCd = 2.6; } // morde, solta e volta (não fica mordendo sem parar)
+                if (d3 < 2.7 && attackCd <= 0) { wantsAttack = true; attackCd = 4.5; } // morde, solta e volta (não fica mordendo sem parar)
             } else if ((type == SHARK || type == NARWHAL) && target != null && target.health > 0) {
                 // tubarão caçando um peixe ou brigando com um narval; narval atacando um tubarão com a presa
                 double ex = target.x - x, ey = target.y + 0.2 - y, ez = target.z - z, d = Math.max(0.01, Math.sqrt(ex * ex + ey * ey + ez * ez));
                 dirX = ex / d; dirY = ey / d; dirZ = ez / d;
                 double reach = type == NARWHAL ? 2.6 : target.smallFish() ? 1.9 : 2.8;
-                if (d < reach && attackCd <= 0) { wantsBite = true; attackCd = type == NARWHAL ? 1.3 : target.smallFish() ? 1.6 : 2.2; }
+                if (d < reach && attackCd <= 0) { wantsBite = true; attackCd = type == NARWHAL ? 1.3 : target.smallFish() ? 3.0 : 3.5; }
             } else if (flee > 0 && type != SHARK) { // foge do jogador
                 double ex = x - p.x, ez = z - p.z, l = Math.max(0.01, Math.sqrt(ex * ex + ez * ez));
                 dirX = ex / l; dirZ = ez / l; dirY = 0;
@@ -1208,38 +1208,71 @@ final class Mob extends Entity {
         }
         MODELS[SALMON] = sl.toArray(new Box[0]);
 
-        // ---- tubarão ----
-        int gr = 0x6E7A86, grD = 0x55606C, sw = 0xE6E8EA, gum = 0x8A3A40, tooth = 0xF4F4F0;
+        // ---- tubarão (tubarão-branco): focinho pontudo por cima da boca aberta, dentes, barriga branca,
+        //      barbatana alta, nadadeiras compridas e cauda em meia-lua ----
+        int top = 0x5E7484, mid = 0x7A90A0, drk = 0x3E5262, shBel = 0xE8ECEC, gum = 0xB04A58, mo = 0x3A1820, tooth = 0xF6F6F0;
         java.util.List<Box> sk = new java.util.ArrayList<>();
-        sk.add(b(0, 0.45, 0.25, 0.62, 0.6, 0.9, gr));
-        sk.add(b(0, 0.44, -0.35, 0.5, 0.5, 0.5, gr));
-        sk.add(b(0, 0.43, -0.7, 0.32, 0.34, 0.3, gr));
-        sk.add(b(0, 0.43, -0.92, 0.18, 0.2, 0.2, grD));
-        sk.add(b(0, 0.43, 0.82, 0.5, 0.46, 0.3, gr));                      // cabeça
-        sk.add(b(0, 0.42, 1.04, 0.34, 0.3, 0.16, gr));                     // focinho
-        sk.add(b(0, 0.755, 0.2, 0.4, 0.02, 1.0, grD));                     // dorso escuro
-        sk.add(b(0, 0.15, 0.3, 0.5, 0.02, 1.2, sw));                       // barriga branca
-        sk.add(b(0, 0.19, 0.88, 0.4, 0.04, 0.36, sw));
-        sk.add(b(-0.311, 0.3, 0.25, 0.01, 0.2, 0.88, 0xC8CCD0)); sk.add(b(0.311, 0.3, 0.25, 0.01, 0.2, 0.88, 0xC8CCD0));
-        for (int i = 0; i < 4; i++) { // guelras
-            sk.add(b(-0.312, 0.47, 0.5 + i * 0.06, 0.01, 0.2, 0.015, grD)); sk.add(b(0.312, 0.47, 0.5 + i * 0.06, 0.01, 0.2, 0.015, grD));
-        }
-        sk.add(b(0, 0.85, 0.18, 0.06, 0.2, 0.36, grD));                    // barbatana famosa
-        sk.add(b(0, 0.98, 0.12, 0.05, 0.14, 0.22, grD));
-        sk.add(b(0, 1.08, 0.06, 0.04, 0.08, 0.1, grD));
-        sk.add(b(0, 0.66, -0.62, 0.04, 0.08, 0.1, grD));
+        // cabeça e focinho
+        sk.add(b(0, 0.6, 0.92, 0.56, 0.3, 0.46, top));
+        sk.add(b(0, 0.6, 1.22, 0.42, 0.24, 0.16, top));                    // ponta do focinho, por cima da boca
+        sk.add(b(0, 0.6, 1.33, 0.26, 0.16, 0.08, top));
+        sk.add(b(0, 0.475, 1.18, 0.4, 0.04, 0.26, shBel));                   // focinho claro por baixo
+        sk.add(b(0, 0.74, 0.92, 0.46, 0.04, 0.4, drk));                    // topo escuro da cabeça
         for (int s = -1; s <= 1; s += 2) {
-            sk.add(b(s * 0.42, 0.24, 0.4, 0.3, 0.04, 0.24, grD));          // nadadeiras do peito
-            sk.add(b(s * 0.6, 0.2, 0.33, 0.16, 0.03, 0.14, grD));
-            sk.add(b(s * 0.18, 0.2, -0.42, 0.12, 0.03, 0.1, grD));
-            sk.add(b(s * 0.252, 0.52, 0.86, 0.01, 0.06, 0.06, 0x101418));  // olho
-            sk.add(b(s * 0.17, 0.29, 0.9, 0.02, 0.04, 0.03, tooth));
+            sk.add(b(s * 0.281, 0.63, 1.0, 0.01, 0.07, 0.07, 0x0A0C10));  // olho
+            sk.add(b(s * 0.282, 0.63, 1.0, 0.005, 0.025, 0.025, 0x40505C));
         }
-        sk.add(b(0, 0.27, 0.92, 0.32, 0.03, 0.16, gum));                   // boca
-        for (int t = -2; t <= 2; t++) sk.add(b(t * 0.06, 0.29, 1.0, 0.03, 0.04, 0.02, tooth));
-        sk.add(tail(0, 0.6, -1.08, 0.05, 0.24, 0.12, grD, -0.98));         // cauda em duas pontas
-        sk.add(tail(0, 0.82, -1.16, 0.04, 0.24, 0.1, grD, -0.98));
-        sk.add(tail(0, 0.3, -1.07, 0.05, 0.16, 0.1, grD, -0.98));
+        // boca aberta: céu da boca, gengivas e duas fileiras de dentes
+        sk.add(b(0, 0.35, 0.98, 0.46, 0.18, 0.42, mo));                   // boca bem aberta
+        sk.add(b(0, 0.435, 1.02, 0.47, 0.03, 0.38, gum));                  // gengiva de cima
+        for (int t = -3; t <= 3; t++) sk.add(b(t * 0.063, 0.395, 1.19, 0.045, 0.07, 0.025, tooth));
+        for (int s = -1; s <= 1; s += 2)
+            for (int k = 0; k < 3; k++) sk.add(b(s * 0.215, 0.395, 0.9 + k * 0.09, 0.03, 0.07, 0.04, tooth));
+        // mandíbula de baixo, branca, com dentes virados para cima
+        sk.add(b(0, 0.22, 1.0, 0.46, 0.09, 0.4, shBel));                   // mandíbula caída
+        sk.add(b(0, 0.272, 1.0, 0.42, 0.02, 0.34, gum));
+        for (int t = -3; t <= 3; t++) sk.add(b(t * 0.063, 0.3, 1.16, 0.04, 0.06, 0.025, tooth));
+        for (int s = -1; s <= 1; s += 2)
+            for (int k = 0; k < 2; k++) sk.add(b(s * 0.2, 0.3, 0.94 + k * 0.1, 0.03, 0.06, 0.035, tooth));
+        sk.add(b(0, 0.2, 0.84, 0.5, 0.08, 0.3, shBel));                      // queixo e garganta
+        // corpo: grosso na frente e afinando até a cauda; escuro em cima, branco embaixo
+        sk.add(b(0, 0.47, 0.52, 0.66, 0.56, 0.44, mid));
+        sk.add(b(0, 0.46, 0.06, 0.7, 0.6, 0.6, mid));
+        sk.add(b(0, 0.45, -0.44, 0.54, 0.48, 0.48, mid));
+        sk.add(b(0, 0.44, -0.8, 0.34, 0.32, 0.3, mid));
+        sk.add(b(0, 0.44, -1.02, 0.18, 0.18, 0.2, drk));
+        sk.add(b(0, 0.76, 0.52, 0.6, 0.02, 0.44, top));                    // costas escuras
+        sk.add(b(0, 0.77, 0.06, 0.64, 0.02, 0.6, top));
+        sk.add(b(0, 0.695, -0.44, 0.48, 0.02, 0.48, top));
+        sk.add(b(0, 0.605, -0.8, 0.28, 0.02, 0.3, top));
+        sk.add(b(0, 0.16, 0.2, 0.6, 0.02, 1.1, shBel));                      // barriga branca
+        sk.add(b(0, 0.215, -0.44, 0.46, 0.02, 0.44, shBel));
+        for (int s = -1; s <= 1; s += 2) {
+            sk.add(b(s * 0.352, 0.26, 0.2, 0.006, 0.18, 1.0, shBel));        // lados brancos embaixo
+            sk.add(b(s * 0.353, 0.36, 0.2, 0.006, 0.025, 1.0, drk));       // linha que separa o claro do escuro
+            sk.add(b(s * 0.271, 0.33, -0.44, 0.006, 0.12, 0.44, shBel));
+            for (int g = 0; g < 5; g++) sk.add(b(s * 0.334, 0.5, 0.62 + g * 0.06, 0.008, 0.26 - g * 0.02, 0.02, drk)); // guelras
+            // nadadeiras do peito: compridas, descendo para trás em degraus
+            sk.add(b(s * 0.42, 0.24, 0.46, 0.22, 0.09, 0.3, mid));          // emendadas: cada degrau encosta no anterior
+            sk.add(b(s * 0.58, 0.17, 0.38, 0.16, 0.08, 0.24, mid));
+            sk.add(b(s * 0.7, 0.1, 0.29, 0.12, 0.07, 0.18, drk));
+            sk.add(b(s * 0.79, 0.04, 0.21, 0.08, 0.06, 0.12, drk));
+            sk.add(b(s * 0.42, 0.193, 0.46, 0.2, 0.006, 0.26, shBel));
+            sk.add(b(s * 0.18, 0.2, -0.52, 0.12, 0.03, 0.12, drk));        // nadadeiras de trás
+        }
+        // barbatana das costas alta, em degraus
+        sk.add(b(0, 0.86, 0.12, 0.06, 0.18, 0.44, top));
+        sk.add(b(0, 1.0, 0.04, 0.05, 0.14, 0.3, top));
+        sk.add(b(0, 1.12, -0.03, 0.04, 0.12, 0.18, top));
+        sk.add(b(0, 1.22, -0.08, 0.03, 0.08, 0.08, drk));
+        sk.add(b(0, 0.66, -0.84, 0.04, 0.08, 0.1, drk));                   // barbatana pequena perto da cauda
+        // cauda em meia-lua: ponta de cima maior
+        sk.add(tail(0, 0.44, -1.13, 0.08, 0.16, 0.12, drk, -1.05));
+        sk.add(tail(0, 0.7, -1.19, 0.05, 0.4, 0.14, top, -1.05));
+        sk.add(tail(0, 0.95, -1.27, 0.04, 0.22, 0.1, top, -1.05));
+        sk.add(tail(0, 1.08, -1.32, 0.03, 0.1, 0.06, drk, -1.05));
+        sk.add(tail(0, 0.24, -1.17, 0.05, 0.26, 0.12, top, -1.05));
+        sk.add(tail(0, 0.09, -1.23, 0.04, 0.1, 0.08, drk, -1.05));
         MODELS[SHARK] = scaled(sk.toArray(new Box[0]), 1.5); // tubarão grande
     }
 
