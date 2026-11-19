@@ -1264,6 +1264,8 @@ final class World {
         meta[0] = h;
         meta[1] = biome;
         boolean beach = top <= SEA + 1;
+        // no frio a margem fora d'água é de neve, não de areia (a areia fica só no fundo)
+        if (beach && top >= SEA - 1 && (biome == TUNDRA || biome == ICE_FIELD)) beach = false;
         boolean gravelFloor = top < SEA - 1 && noise(x / 9.0, z / 9.0, seed + 70) > 0.62;
 
         for (int y = 0; y < SY; y++) out[base | y] = (byte) Block.AIR;
@@ -1273,13 +1275,13 @@ final class World {
             if (y == 0 || (y == 1 && hash(x, z, seed + 3) < 0.5)) b = Block.BEDROCK;
             else if (depth == 0) {
                 if (gravelFloor) b = Block.GRAVEL;
-                else if (beach || biome == DESERT || biome == ICE_FIELD) b = Block.SAND;
+                else if (beach || biome == DESERT || (biome == ICE_FIELD && top < SEA - 1)) b = Block.SAND;
                 else if (biome == TUNDRA) b = Block.SNOW;
                 else if (biome == MOUNTAINS) b = top >= 49 + (int) (hash(x, z, seed + 5) * 3) ? Block.SNOW : Block.STONE;
                 else b = Block.GRASS;
             } else if (depth < 4) {
                 if (gravelFloor && depth < 2) b = Block.GRAVEL;
-                else if (beach || (biome == ICE_FIELD && depth < 2)) b = Block.SAND;
+                else if (beach || (biome == ICE_FIELD && top < SEA - 1 && depth < 2)) b = Block.SAND;
                 else if (biome == DESERT) b = depth < 3 ? Block.SAND : Block.SANDSTONE;
                 else if (biome == MOUNTAINS) b = Block.STONE;
                 else b = Block.DIRT;
