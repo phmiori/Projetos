@@ -19,8 +19,26 @@ const ARROW_GRAVITY: f64 = 20.0;
 pub struct Arrow {
     pub p: [f64; 3],
     pub v: [f64; 3],
+    /// para onde aponta (fica igual depois de presa)
+    pub d: [f64; 3],
     pub life: f64,
     pub stuck: bool,
+    stuck_time: f64,
+    pub damage: f64,
+    /// criatura que atirou (para não se acertar), -1 = o jogador, -2 = esqueleto
+    pub shooter: i32,
+    /// pode ser recolhida depois de presa (flecha do jogador na sobrevivência)
+    pub pickup: bool,
+}
+
+/// Flecha presa some depois de um minuto (Arrows.LIFE_STUCK); voando, depois de 30 s.
+const LIFE_STUCK: f64 = 60.0;
+
+impl Arrow {
+    pub fn new(p: [f64; 3], v: [f64; 3], damage: f64, shooter: i32, pickup: bool) -> Arrow {
+        let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt().max(1e-6);
+        Arrow { p, v, d: [v[0] / l, v[1] / l, v[2] / l], life: 30.0, stuck: false, stuck_time: 0.0, damage, shooter, pickup }
+    }
 }
 
 fn is_meat(id: i32) -> bool {
@@ -294,7 +312,7 @@ impl Game {
         }
     }
 
-    fn int(&mut self, n: i32) -> i32 {
+    pub fn int(&mut self, n: i32) -> i32 {
         (self.rng.next() * n as f64) as i32
     }
 
@@ -515,7 +533,10 @@ impl Game {
         }
         for &(x, y, z, b) in &gone {
             self.set(x, y, z, block::AIR, 0);
-            if b == block::CHEST || b == block::FURNACE || b == block::FURNACE_LIT {
+            if b == crate::tools::TNT {
+                let s = 0.25 + self.rng.next() * 0.5;
+                self.prime(x, y, z, s, false); // reação em cadeia
+            } else if b == block::CHEST || b == block::FURNACE || b == block::FURNACE_LIT {
                 self.spill_container(x, y, z, b);
             } else if !self.creative && self.rng.next() < 0.3 {
                 let d = block::info(b).drop;
@@ -561,40 +582,96 @@ impl Game {
         let vx = dx / t * (1.0 + (self.rng.next() - 0.5) * e);
         let vz = dz / t * (1.0 + (self.rng.next() - 0.5) * e);
         let vy = (dy / t + 0.5 * ARROW_GRAVITY * t) * (1.0 + (self.rng.next() - 0.5) * e) + 0.4;
-        self.arrows.push(Arrow { p: [s[0] + dx / flat * 0.45, s[1], s[2] + dz / flat * 0.45], v: [vx, vy, vz], life: 30.0, stuck: false });
+        self.arrows.push(Arrow::new([s[0] + dx / flat * 0.45, s[1], s[2] + dz / flat * 0.45], [vx, vy, vz], ARROW_DAMAGE, -2, false));
     }
 
+    /// Flechas (Arrows.update + BlockGame.arrowHit): gravidade, mais freio na água, acertam criaturas e o jogador,
+    /// prendem nos blocos (e caem de novo se o bloco sumir); as do jogador podem ser recolhidas.
     fn update_arrows(&mut self, dt: f64) {
         let mut arrows = std::mem::take(&mut self.arrows);
+        let mut mobs = std::mem::take(&mut self.mobs);
         let e = self.eye();
         let (ear, yaw) = ([e[0] as f64, e[1] as f64, e[2] as f64], self.player.yaw);
+        let can_take = !self.creative && self.health > 0.0 && self.inv.fits(crate::tools::ARROW);
+        let (px, py, pz) = (self.player.x, self.player.y, self.player.z);
+        let mut killed: Vec<i32> = Vec::new();
+        let mut picked = 0;
         arrows.retain_mut(|a| {
             a.life -= dt;
-            if a.life <= 0.0 {
+            if a.life <= 0.0 || a.p[1] < -20.0 {
                 return false;
             }
+            let w = Loaded(&self.chunks);
             if a.stuck {
+                a.stuck_time += dt;
+                let tip = [a.p[0] + a.d[0] * 0.08, a.p[1] + a.d[1] * 0.08, a.p[2] + a.d[2] * 0.08];
+                if !block::solid(w.get(tip[0].floor() as i32, tip[1].floor() as i32, tip[2].floor() as i32)) {
+                    a.stuck = false; // o bloco sumiu: a flecha cai de novo
+                    a.v = [0.0; 3];
+                } else {
+                    let near = (a.p[0] - px).abs() < 1.0 && (a.p[2] - pz).abs() < 1.0 && a.p[1] > py - 0.5 && a.p[1] < py + 2.3;
+                    if a.pickup && can_take && a.stuck_time > 0.4 && near {
+                        picked += 1;
+                        return false;
+                    }
+                    return true;
+                }
+            }
+            let water = block::is_water(w.get(a.p[0].floor() as i32, a.p[1].floor() as i32, a.p[2].floor() as i32));
+            a.v[1] -= ARROW_GRAVITY * dt;
+            let drag = (1.0 - if water { 3.0 } else { 0.25 } * dt).max(0.0);
+            for k in 0..3 {
+                a.v[k] *= drag;
+            }
+            let speed = (a.v[0] * a.v[0] + a.v[1] * a.v[1] + a.v[2] * a.v[2]).sqrt();
+            let len = speed * dt;
+            if len < 1e-7 {
                 return true;
             }
-            a.v[1] -= ARROW_GRAVITY * dt;
-            let steps = 4;
+            if speed > 0.5 {
+                a.d = [a.v[0] / speed, a.v[1] / speed, a.v[2] / speed];
+            }
+            let steps = (len / 0.2).ceil().max(1.0) as i32;
             for _ in 0..steps {
                 for k in 0..3 {
                     a.p[k] += a.v[k] * dt / steps as f64;
                 }
-                let w = Loaded(&self.chunks);
+                // criaturas (nunca quem atirou)
+                for m in mobs.iter_mut() {
+                    if m.id == a.shooter || m.health <= 0.0 {
+                        continue;
+                    }
+                    let b = &m.body;
+                    if (a.p[0] - b.x).abs() < b.hw + 0.05 && (a.p[2] - b.z).abs() < b.hw + 0.05 && a.p[1] > b.y && a.p[1] < b.y + b.h {
+                        m.damage(a.damage);
+                        m.body.vx += a.d[0] * 5.0;
+                        m.body.vz += a.d[2] * 5.0;
+                        m.body.vy = m.body.vy.max(3.5);
+                        crate::sound::play_at("flecha_criatura", a.p, ear, yaw, 0.9);
+                        if let Some(v) = mob::voice(m.t) {
+                            crate::sound::play_at(v, [m.body.x, m.body.y + 0.8, m.body.z], ear, yaw, 0.6);
+                        }
+                        if m.health <= 0.0 {
+                            killed.push(m.id);
+                        }
+                        return false;
+                    }
+                }
                 let hb = w.get(a.p[0].floor() as i32, a.p[1].floor() as i32, a.p[2].floor() as i32);
                 if block::solid(hb) {
                     let hard = block::info(hb).material == block::M_ROCK || hb == 18 || hb == 131;
                     crate::sound::play_at(if hard { "flecha_pedra" } else { "flecha_madeira" }, a.p, ear, yaw, 0.7);
                     a.stuck = true;
-                    a.life = a.life.min(5.0);
+                    a.stuck_time = 0.0;
+                    a.v = [0.0; 3];
+                    a.life = if a.pickup { LIFE_STUCK } else { a.life.min(5.0) };
                     return true;
                 }
+                // o jogador (só flechas que não são dele)
                 let pl = &self.player;
                 let inside = (a.p[0] - pl.x).abs() < pl.hw + 0.1 && a.p[1] > pl.y && a.p[1] < pl.y + pl.h && (a.p[2] - pl.z).abs() < pl.hw + 0.1;
-                if inside && !self.creative && self.health > 0.0 {
-                    self.pending_damage += ARROW_DAMAGE;
+                if a.shooter != -1 && inside && !self.creative && self.health > 0.0 {
+                    self.pending_damage += a.damage;
                     crate::sound::play_at("flecha_criatura", a.p, ear, yaw, 0.9);
                     return false;
                 }
@@ -602,6 +679,20 @@ impl Game {
             true
         });
         self.arrows = arrows;
+        // o que a criatura abatida solta fica onde ela caiu
+        for id in killed {
+            if let Some(m) = mobs.iter().find(|m| m.id == id) {
+                let pos = [m.body.x, m.body.y + 0.4, m.body.z];
+                for (item, n) in m.drops(&mut self.rng) {
+                    self.spawn_drop(Stack::new(item, n, 0), pos, [0.0, 3.0, 0.0], 0.5);
+                }
+            }
+        }
+        self.mobs = mobs;
+        if picked > 0 {
+            self.inv.add(crate::tools::ARROW, picked, 0);
+            crate::sound::play("coletar", 0.7);
+        }
         if self.pending_damage > 0.0 {
             let d = std::mem::take(&mut self.pending_damage);
             self.hit(d);
@@ -744,9 +835,10 @@ impl Game {
         }
         for a in &self.arrows {
             // varetinha na direção em que voa
-            let l = (a.v[0] * a.v[0] + a.v[1] * a.v[1] + a.v[2] * a.v[2]).sqrt().max(0.01);
-            let d = [(a.v[0] / l * 0.35) as f32, (a.v[1] / l * 0.35) as f32, (a.v[2] / l * 0.35) as f32];
-            let p = [a.p[0] as f32, a.p[1] as f32, a.p[2] as f32];
+            let d = [(a.d[0] * 0.35) as f32, (a.d[1] * 0.35) as f32, (a.d[2] * 0.35) as f32];
+            // presa: a ponta fica no bloco e o resto para fora
+            let back = if a.stuck { 0.3 } else { 0.0 };
+            let p = [(a.p[0] - a.d[0] * back) as f32, (a.p[1] - a.d[1] * back) as f32, (a.p[2] - a.d[2] * back) as f32];
             let t = 0.025;
             let col = [0.45, 0.32, 0.18, 1.0];
             ui.solid_quad([[p[0] - d[0], p[1] - d[1] - t, p[2] - d[2]], [p[0] + d[0], p[1] + d[1] - t, p[2] + d[2]], [p[0] + d[0], p[1] + d[1] + t, p[2] + d[2]], [p[0] - d[0], p[1] - d[1] + t, p[2] - d[2]]], col);

@@ -33,6 +33,7 @@ mod shadow;
 mod sound;
 mod survival;
 mod textures;
+mod tools;
 mod ui;
 mod world;
 
@@ -300,6 +301,10 @@ struct Game {
     blast_flash: f64,
     player_name: String,
     menu: menu::Menu,
+    /// arco: há quanto tempo a corda está puxada; dinamites acesas (x, y, z, segundos, bloco ainda no mundo)
+    bow_charge: f64,
+    primed: Vec<(i32, i32, i32, f64, bool)>,
+    grow_timer: f64,
     l_held: bool,
     r_held: bool,
     l_pending: bool,
@@ -425,6 +430,9 @@ impl Game {
             blast_flash: 0.0,
             player_name: String::new(),
             menu: menu::Menu::default(),
+            bow_charge: 0.0,
+            primed: Vec::new(),
+            grow_timer: 0.0,
             slot: 0,
             l_held: false,
             r_held: false,
@@ -674,6 +682,8 @@ impl Game {
         self.update_mobs(dt);
         self.blast_flash = (self.blast_flash - dt).max(0.0);
         self.tick_furnaces(dt);
+        self.tick_primed(dt);
+        self.tick_growth(dt);
         self.survival(dt);
         let (lp, rp, mp) = (self.l_pending, self.r_pending, self.m_pending);
         self.l_pending = false;
@@ -682,7 +692,18 @@ impl Game {
         // criatura na mira (só se estiver mais perto que o bloco mirado)
         let block_dist = self.aim.map_or(99.0, |h| h.t);
         let target = if playing { self.aimed_mob(block_dist.min(3.6)) } else { None };
-        if let Some(i) = target {
+        // arco na mão: segurar o botão esquerdo puxa a corda; soltar dispara
+        let bow = playing && self.inv.s[self.slot].id == tools::BOW;
+        if !bow {
+            self.bow_charge = 0.0;
+        }
+        if bow {
+            self.tick_bow(dt, lp);
+            self.break_progress = 0.0;
+            if rp {
+                self.use_aimed();
+            }
+        } else if let Some(i) = target {
             if lp || (self.l_held && self.cool_l <= 0.0) {
                 self.hit_mob(i);
                 self.cool_l = 0.45;
@@ -879,8 +900,9 @@ impl Game {
         gl.depth_mask(true);
 
         // itens soltos no chão (girando, com a luz de onde estão)
-        if !self.drops.is_empty() || !self.mobs.is_empty() || !self.arrows.is_empty() {
+        if !self.drops.is_empty() || !self.mobs.is_empty() || !self.arrows.is_empty() || !self.primed.is_empty() {
             self.draw_drops(&mut g.ui, sky.daylight);
+            self.draw_primed(&mut g.ui);
             self.draw_mobs(&mut g.ui, sky.daylight);
             gl.enable(glow::BLEND);
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
@@ -946,6 +968,7 @@ impl Game {
         let (fw, fh) = (w as f32, h as f32);
         if !matches!(self.screen, Screen::Menu | Screen::Create) {
             self.draw_hud(&mut g.ui, fw, fh);
+            self.draw_bow_charge(&mut g.ui, fw, fh);
         }
         match self.screen {
             Screen::Menu | Screen::Create => self.draw_main_menu(&mut g.ui, fw, fh),
@@ -1262,6 +1285,24 @@ fn main() {
     }
     let zoo = args.iter().any(|a| a == "--zoologico");
     let hold_left = arg("--segurar-esq").and_then(|s| s.parse::<u32>().ok());
+    let release_left = arg("--soltar-esq").and_then(|s| s.parse::<u32>().ok());
+    // --dar id,qtd (várias vezes): põe itens na barra, a partir do espaço 1; --trocar quadro espaço: troca o espaço
+    let mut give_slot = 0;
+    let mut swaps: Vec<(u32, usize)> = Vec::new();
+    for (i, a) in args.iter().enumerate() {
+        if a == "--dar" {
+            let v: Vec<i32> = args.get(i + 1).map(|s| s.split(',').filter_map(|n| n.parse().ok()).collect()).unwrap_or_default();
+            if v.len() == 2 && give_slot < 9 {
+                game.inv.s[give_slot] = Stack::new(v[0], v[1], 0);
+                give_slot += 1;
+            }
+        }
+        if a == "--trocar" {
+            if let (Some(f), Some(n)) = (args.get(i + 1).and_then(|s| s.parse().ok()), args.get(i + 2).and_then(|s| s.parse::<usize>().ok())) {
+                swaps.push((f, n.clamp(1, 9) - 1));
+            }
+        }
+    }
     let mut frame_no = 0u32;
     event_loop.set_control_flow(ControlFlow::Poll);
     event_loop
@@ -1471,6 +1512,14 @@ fn main() {
                     if hold_left == Some(frame_no) {
                         game.l_held = true; // teste: segura o botão esquerdo a partir daqui
                     }
+                    if release_left == Some(frame_no) {
+                        game.l_held = false;
+                    }
+                    for &(f, n) in &swaps {
+                        if f == frame_no {
+                            game.slot = n;
+                        }
+                    }
                     for &(f, b) in &clicks {
                         if f == frame_no {
                             if b == 'e' { game.l_pending = true } else { game.r_pending = true }
@@ -1488,7 +1537,7 @@ fn main() {
                         game.fps_time = Instant::now();
                         window.set_title(&game.title());
                         if auto_shot.is_some() {
-                            println!("{} · chão: {} · mira: {:?} · bichos: {} · vida: {:.1} · monstros: {} (mais perto {:.0})", game.title(), game.player.on_ground, game.aim.map(|h| h.b), game.mobs.len(), game.health, game.mobs.iter().filter(|m| m.hostile()).count(), game.mobs.iter().filter(|m| m.hostile()).map(|m| ((m.body.x - game.player.x).powi(2) + (m.body.z - game.player.z).powi(2)).sqrt()).fold(999.0f64, f64::min));
+                            println!("{} · chão: {} · mira: {:?} ({}) · flechas: {} · bichos: {} · vida: {:.1} · monstros: {} (mais perto {:.0})", game.title(), game.player.on_ground, game.aim.map(|h| h.b), game.aim.map_or(0, |h| game.get(h.b[0], h.b[1], h.b[2])), game.arrows.len(), game.mobs.len(), game.health, game.mobs.iter().filter(|m| m.hostile()).count(), game.mobs.iter().filter(|m| m.hostile()).map(|m| ((m.body.x - game.player.x).powi(2) + (m.body.z - game.player.z).powi(2)).sqrt()).fold(999.0f64, f64::min));
                         }
                     }
                     if auto_shot.map_or(false, |n| frame_no > n) {

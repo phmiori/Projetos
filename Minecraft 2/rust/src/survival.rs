@@ -210,6 +210,7 @@ impl Game {
         if b == block::TALL_GRASS && self.rng.next() < 0.15 {
             self.drop_at_block(items::SEEDS, x, y, z);
         }
+        self.wheat_loot(b, x, y, z);
     }
 
     // ------------------------------------------------------------------ vida, fome e fôlego

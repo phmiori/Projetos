@@ -68,6 +68,16 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
   esqueleto atira flechas), queimam no sol; bater neles usa o dano da ferramenta e eles soltam o que o Java solta.
   Lobo domesticável com osso (carne cura, mão vazia senta/levanta), tubarão caçando peixes e brigando com narval,
   ovos de criatura no criativo. Os bichos de terra dormem com o pedaço quando você vai longe e voltam depois.
+- **Arco e flechas**: segurar o botão esquerdo puxa a corda (barrinha embaixo da mira), soltar dispara; quanto mais
+  puxado, mais longe e mais forte. As flechas acertam criaturas, prendem nos blocos (e caem se o bloco sumir) e, na
+  sobrevivência, dá para recolher passando por cima. O arco se gasta.
+- **Dinamite**: acende com a pederneira (botão direito), explode em 3 s com a força do Java e acende as outras que
+  estiverem perto (reação em cadeia). Enquanto o pavio queima, o bloco pisca.
+- **Lavoura**: a enxada transforma grama ou terra em terra arada, as sementes viram trigo, o trigo cresce com luz (mais
+  rápido perto da água), o osso serve de adubo e o trigo maduro dá trigo e sementes.
+- **Cama**: o botão direito define onde você renasce e, de noite (sem monstros por perto), pula para a manhã.
+- **Vida do mundo** (`World.tickGrowth`): folhas sem tronco por perto somem, mudas viram árvores, a grama se espalha
+  pela terra e morre debaixo de blocos, terra arada abandonada volta a ser terra.
 - **Pausa** (**Esc**, ou quando a janela perde o foco) com "Voltar ao jogo" e "Salvar e sair".
 - Grava os pedaços mudados, a posição, a hora, o inventário, a vida, a fome, os baús, as fornalhas e as criaturas a cada
   30 s e ao fechar (só o que conhece no `meta.properties`; amigos da LAN e o resto ficam como o Java deixou).
@@ -81,9 +91,8 @@ soltos no chão não são gravados (no Java também não).
 
 ## Próximos passos (na ordem sugerida)
 
-1. Cama, enxada e trigo, arco e flechas do jogador, dinamite.
-2. Tela de configurações (hoje usa as do Java) e partículas (pedacinhos dos blocos, fumaça).
-3. LAN (o mesmo protocolo do `Net.java`, para dar para jogar Java com Rust durante a transição).
+1. Tela de configurações (hoje usa as do Java), partículas (pedacinhos dos blocos, fumaça) e a mão/item na tela.
+2. LAN (o mesmo protocolo do `Net.java`, para dar para jogar Java com Rust durante a transição).
 
 ## Ferramentas
 

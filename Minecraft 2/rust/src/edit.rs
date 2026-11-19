@@ -211,8 +211,16 @@ impl Game {
             self.open_container(hx, hy, hz, target);
             return;
         }
+        // cama, dinamite com pederneira
+        if self.use_farm(target, hx, hy, hz) {
+            return;
+        }
         // comida e armadura na mão: come ou veste; ovo: nasce a criatura
         if self.use_item() || self.use_egg() {
+            return;
+        }
+        // osso no trigo, enxada na terra, sementes na terra arada
+        if self.use_on_soil(target, hx, hy, hz) {
             return;
         }
         let held = block::block_of_item(self.inv.s[self.slot].id);
