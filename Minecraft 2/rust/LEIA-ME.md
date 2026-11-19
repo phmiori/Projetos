@@ -11,7 +11,7 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
 
 | O quê | Como |
 |---|---|
-| Mundos salvos (`worlds/`) | Abre o último mundo jogado no Java, na posição salva do jogador, lendo os pedaços salvos (só leitura por enquanto: nada é gravado). |
+| Mundos salvos (`worlds/`) | Abre o último mundo jogado no Java, na posição salva, e grava as mudanças no mesmo formato: o que você constrói aqui aparece no Java, e vice-versa. |
 | Geração do terreno | Traduzida linha por linha do `World.java`: mesma semente = mesmo mundo, bloco por bloco (conferido com `comparar-geracao.bat`). |
 | Blocos | `dados/blocos.txt` é exportado do `Block.java` (`exportar-blocos.bat`): mesmos ids, formas, texturas e caixas. |
 | Texturas | Os mesmos PNGs da pasta `textures/`. |
@@ -30,14 +30,25 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
 - Teclas: **WASD** anda, **Espaço** pula (dois toques: voa), **Shift** desce voando, **Ctrl** corre, **Esc** solta o
   mouse (clique para prender), **F2** tira uma foto (pasta `fotos/`), **F3** liga/desliga a sombra dos cantos,
   **F4** (segurando) passa as horas depressa.
-- O título da janela mostra o mundo, o dia e a hora, o bioma, a posição e o FPS.
+- Quebrar e colocar blocos (só em mundos no modo criativo, por enquanto), com as regras do Java: escadas viradas para
+  onde você olha e invertidas na metade de cima, lajes em cima/embaixo e laje sobre laje virando bloco inteiro, lajes
+  verticais, portas de dois blocos (botão direito abre e fecha), tochas na parede, pingentes pendurados, blocos com
+  frente virados para você. Plantas e tochas sem apoio caem, e areia e cascalho despencam. Contorno no bloco mirado.
+- Usa a sua barra do inventário salvo; **1-9** e a rodinha escolhem o bloco, o **botão do meio** pega o bloco mirado.
+- Grava os pedaços mudados, a posição, a hora e a barra a cada 30 s e ao fechar (só as chaves que conhece no
+  `meta.properties`; baús, fornalhas, bichos e o resto ficam como o Java deixou).
+- O título da janela mostra o mundo, o dia e a hora, o bioma, a posição, o FPS e o bloco na mão.
+
+**Cuidados**: não abra o mesmo mundo no Java e no Rust ao mesmo tempo (um gravaria por cima do outro). Baús e
+fornalhas ainda não podem ser quebrados aqui (o conteúdo deles fica no `meta.properties`), e a água ainda não corre
+(um buraco ao lado da água fica seco até a versão Rust ganhar a água corrente).
 
 ## Próximos passos (na ordem sugerida)
 
-1. Quebrar e colocar blocos, salvando no mesmo formato do Java (aí os dois abrem o mesmo mundo com as mudanças).
-2. Luz de tochas e lava, sombras do sol, água corrente.
+1. Água corrente, luz de tochas e lava, sombras do sol.
+2. Modo sobrevivência: tempo para quebrar, itens que caem, inventário.
 3. Interface (barra, inventário, menus).
-4. Bichos, itens, receitas, fornalhas, baús.
+4. Bichos, receitas, fornalhas, baús.
 5. LAN (o mesmo protocolo do `Net.java`, para dar para jogar Java com Rust durante a transição).
 
 ## Ferramentas
@@ -45,5 +56,6 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
 - `exportar-blocos.bat`: depois de criar ou mudar blocos no Java, atualiza `dados/blocos.txt`.
 - `comparar-geracao.bat`: gera pedaços com o Java e com o Rust e confere se saíram iguais (rode depois de
   mexer na geração do mundo em qualquer um dos dois).
-- Linha de comando: `mundo-de-blocos.exe [--mundo worlds\nome] [--semente N] [--posicao x y z yaw pitch] [--voando] [--hora 0..1] [--sem-vsync]`
+- Linha de comando: `mundo-de-blocos.exe [--mundo worlds\nome] [--semente N] [--posicao x y z yaw pitch] [--voando] [--hora 0..1] [--so-ler] [--sem-vsync]`
+  (`--so-ler`: abre sem gravar nada)
   (`--hora`: 0 = nascer do sol, 0,25 = meio-dia, 0,5 = pôr do sol, 0,75 = meia-noite).

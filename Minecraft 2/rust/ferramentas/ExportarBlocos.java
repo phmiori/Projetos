@@ -9,17 +9,29 @@ import java.lang.reflect.Field;
  * Assim os dois jogos usam exatamente os mesmos ids, formas, texturas e caixas: quando um bloco novo entrar
  * no Java, é só rodar rust/exportar-blocos.bat de novo.
  *
- * Uma linha por bloco: id|forma|textura|luz|giravel|arquivo|nome|caixas
+ * Uma linha por bloco: id|forma|textura|luz|giravel|arquivo|nome|caixas|tipo|material|direcao|marca|metade|apoio|item|solta|dureza
+ *   tipo: 0 comum, 1 escada, 2 laje, 3 laje vertical, 4 porta, 5 lajes empilhadas, 6 cerca/painel, 7 tocha na parede
+ *   material: das escadas/lajes (índice em SHAPE_MATS) ou madeira da porta; marca: escada invertida, laje em cima, porta aberta
+ *   apoio: precisa de chão firme (plantas, tochas); item: é a forma de item (aparece no criativo); solta: o que dá ao quebrar
+ * E uma linha "@item|id|bloco" para cada item que coloca um bloco de id 200+ (o gelo do campo de gelo).
  *   forma: 0 cubo, 1 recortado (folhas, vidro), 2 cruzado (plantas, tochas), 3 líquido, 4 modelo (escadas, lajes...)
  *   textura: id do bloco cujas texturas este usa (variantes usam as do material)
  *   arquivo: nome do PNG na pasta textures (vazio = usa o do bloco da textura)
  *   caixas: x0,y0,z0,x1,y1,z1[,bloco da textura];... de 0 a 1 (só nos modelos)
  */
 public class ExportarBlocos {
+    /** Tabela interna do Block.java (tipo de cada peça: material, direção, marca, metade). */
+    static int[] arr(String name) throws Exception {
+        Field f = Block.class.getDeclaredField(name);
+        f.setAccessible(true);
+        return (int[]) f.get(null);
+    }
+
     public static void main(String[] a) throws Exception {
         Field ff = Textures.class.getDeclaredField("FILE");
         ff.setAccessible(true);
         String[] files = (String[]) ff.get(null);
+        int[] SMAT = arr("SMAT"), SFACE = arr("SFACE"), SFLAG = arr("SFLAG"), SHALF = arr("SHALF");
         File out = new File(a.length > 0 ? a[0] : "rust/dados/blocos.txt");
         out.getParentFile().mkdirs();
         try (Writer w = new OutputStreamWriter(new FileOutputStream(out), "UTF-8")) {
@@ -41,8 +53,19 @@ public class ExportarBlocos {
                             sb.append(v == (int) v ? String.valueOf((int) v) : String.valueOf(v));
                         }
                     }
+                int kind = Block.isStair(b) ? 1 : Block.isSlab(b) ? 2 : Block.isVSlab(b) ? 3 : Block.isDoor(b) ? 4 : Block.isMixedSlab(b) ? 5
+                        : Block.isFence(b) || b == Block.GLASS_PANE ? 6 : Block.isWallTorch(b) ? 7 : 0;
+                int mat = kind >= 1 && kind <= 4 ? SMAT[b] : 0;
+                int face = kind == 7 ? Block.wallTorchFacing(b) : kind == 1 || kind == 3 || kind == 4 ? SFACE[b] : 0;
+                int flag = kind == 1 || kind == 2 || kind == 4 ? SFLAG[b] : 0;
+                int half = kind == 4 ? SHALF[b] : 0;
+                sb.append('|').append(kind).append('|').append(mat).append('|').append(face).append('|').append(flag).append('|').append(half)
+                        .append('|').append(Block.needsSupport(b) ? 1 : 0).append('|').append(Block.isItemForm(b) ? 1 : 0)
+                        .append('|').append(Block.drop(b)).append('|').append(Block.hardness(b));
                 w.write(sb.append('\n').toString());
             }
+            for (int i = Items.BLOCK_ITEM_BASE; i <= Items.LAST; i++)
+                if (Items.isPlacer(i)) w.write("@item|" + i + "|" + Items.blockOf(i) + "\n");
         }
         System.out.println("blocos exportados: " + Block.COUNT + " -> " + out);
     }

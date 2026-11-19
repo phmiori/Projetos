@@ -162,3 +162,14 @@ pub const CROSSHAIR_FS: &str = r#"#version 330 core
 out vec4 frag;
 void main(){ frag = vec4(1.0); }
 "#;
+
+/// Contorno do bloco mirado (linhas pretas, meio transparentes).
+pub const LINE_VS: &str = r#"#version 330 core
+layout(location=0) in vec3 aPos;
+uniform mat4 uViewProj;
+void main(){ gl_Position = uViewProj * vec4(aPos, 1.0); }
+"#;
+pub const LINE_FS: &str = r#"#version 330 core
+out vec4 frag;
+void main(){ frag = vec4(0.0, 0.0, 0.0, 0.55); }
+"#;

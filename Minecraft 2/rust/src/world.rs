@@ -24,6 +24,7 @@ pub fn idx(lx: i32, y: i32, lz: i32) -> usize {
     ((lx << 10) | (lz << 6) | y) as usize
 }
 
+#[derive(Clone)]
 pub struct Chunk {
     pub cx: i32,
     pub cz: i32,
@@ -49,6 +50,31 @@ impl Chunk {
                 self.sky_top[(lx * 16 + lz) as usize] = y as i8;
             }
         }
+    }
+
+    pub fn recompute_sky_column(&mut self, lx: i32, lz: i32) {
+        let mut y = SY - 1;
+        while y >= 0 && !block::opaque_cube(self.blocks[idx(lx, y, lz)]) {
+            y -= 1;
+        }
+        self.sky_top[(lx * 16 + lz) as usize] = y as i8;
+    }
+
+    /// Grava no mesmo formato do Chunk.toBytes do Java (gzip: versão 1, direções, blocos).
+    pub fn to_bytes(&self) -> Vec<u8> {
+        use std::io::Write;
+        let mut raw = Vec::with_capacity(VOLUME + 16);
+        raw.push(1u8);
+        let rots: Vec<(&u16, &u8)> = self.rot.iter().filter(|(_, r)| **r != 0).collect();
+        raw.extend_from_slice(&(rots.len() as i32).to_be_bytes());
+        for (i, r) in rots {
+            raw.extend_from_slice(&i.to_be_bytes());
+            raw.push(*r);
+        }
+        raw.extend_from_slice(&self.blocks);
+        let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+        enc.write_all(&raw).unwrap();
+        enc.finish().unwrap()
     }
 
     /// Lê um pedaço salvo pelo jogo Java (worlds/<mundo>/chunks/cx_cz.dat: gzip com versão, direções e blocos).

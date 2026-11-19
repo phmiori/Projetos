@@ -56,10 +56,30 @@ pub struct Info {
     pub name: String,
     /// caixas dos modelos: x0,y0,z0,x1,y1,z1 (0..1) e o bloco da textura de cada caixa
     pub boxes: Vec<([f32; 6], u16)>,
+    /// 0 comum, 1 escada, 2 laje, 3 laje vertical, 4 porta, 5 lajes empilhadas, 6 cerca/painel, 7 tocha na parede
+    pub kind: u8,
+    /// material da escada/laje (índice em SHAPE_MATS) ou madeira da porta
+    pub mat: u8,
+    /// direção (0 +Z, 1 -X, 2 -Z, 3 +X)
+    pub face: u8,
+    /// escada invertida, laje em cima, porta aberta
+    pub flag: u8,
+    /// metade da porta (0 de baixo, 1 de cima)
+    pub half: u8,
+    /// precisa de chão firme embaixo (plantas, tochas)
+    pub needs_support: bool,
+    /// é a forma de item (o que vai para a mão)
+    pub item_form: bool,
+    /// o que dá ao quebrar (pode ser um id de item)
+    pub drop: i32,
+    /// segundos para quebrar com a mão (-1 = inquebrável)
+    pub hardness: f64,
 }
 
 pub struct Table {
     pub blocks: Vec<Info>,
+    /// itens que colocam blocos de id 200+ (o gelo do campo de gelo): item -> bloco
+    pub placers: Vec<(i32, u8)>,
 }
 
 static BLOCKS: OnceLock<Table> = OnceLock::new();
@@ -68,11 +88,18 @@ pub fn table() -> &'static Table {
     BLOCKS.get_or_init(|| {
         let text = include_str!("../dados/blocos.txt");
         let mut blocks = vec![Info::default(); 256];
+        let mut placers = Vec::new();
         for line in text.lines() {
             if line.starts_with('#') || line.trim().is_empty() {
                 continue;
             }
             let p: Vec<&str> = line.split('|').collect();
+            if p[0] == "@item" && p.len() >= 3 {
+                if let (Ok(i), Ok(b)) = (p[1].parse(), p[2].parse()) {
+                    placers.push((i, b));
+                }
+                continue;
+            }
             if p.len() < 8 {
                 continue;
             }
@@ -85,7 +112,20 @@ pub fn table() -> &'static Table {
                 file: p[5].to_string(),
                 name: p[6].to_string(),
                 boxes: Vec::new(),
+                ..Default::default()
             };
+            if p.len() >= 17 {
+                let n = |i: usize| p[i].parse::<u8>().unwrap_or(0);
+                info.kind = n(8);
+                info.mat = n(9);
+                info.face = n(10);
+                info.flag = n(11);
+                info.half = n(12);
+                info.needs_support = p[13] == "1";
+                info.item_form = p[14] == "1";
+                info.drop = p[15].parse().unwrap_or(0);
+                info.hardness = p[16].parse().unwrap_or(1.0);
+            }
             if !p[7].is_empty() {
                 for b in p[7].split(';') {
                     let v: Vec<f32> = b.split(',').map(|s| s.parse().unwrap_or(0.0)).collect();
@@ -99,7 +139,7 @@ pub fn table() -> &'static Table {
                 blocks[id] = info;
             }
         }
-        Table { blocks }
+        Table { blocks, placers }
     })
 }
 
@@ -143,4 +183,76 @@ pub fn opaque_cube(b: u8) -> bool {
 #[inline]
 pub fn is_leaves(b: u8) -> bool {
     b == LEAVES || b == BIRCH_LEAVES
+}
+
+#[inline]
+pub fn info(b: u8) -> &'static Info {
+    &table().blocks[b as usize]
+}
+
+/// Tem colisão (o jogador não atravessa): tudo menos ar, líquidos e plantas/tochas.
+#[inline]
+pub fn solid(b: u8) -> bool {
+    b != AIR && shape(b) != LIQUID && shape(b) != CROSS
+}
+
+pub const K_STAIR: u8 = 1;
+pub const K_SLAB: u8 = 2;
+pub const K_VSLAB: u8 = 3;
+pub const K_DOOR: u8 = 4;
+pub const WALL_TORCH_BASE: u8 = 132;
+/// Bloco inteiro de cada material de escada/laje (Block.SHAPE_MATS do Java).
+pub const SHAPE_MATS: [u8; 6] = [8, 4, 31, 9, 17, 171];
+pub const DIR_X: [i32; 4] = [0, -1, 0, 1];
+pub const DIR_Z: [i32; 4] = [1, 0, -1, 0];
+
+/// A variante de um tipo de peça (escada, laje, porta...) com estes detalhes; procura na tabela do Java.
+pub fn variant(kind: u8, mat: u8, face: u8, flag: u8, half: u8) -> u8 {
+    table()
+        .blocks
+        .iter()
+        .position(|i| i.kind == kind && i.mat == mat && i.face == face && i.flag == flag && i.half == half && !i.name.is_empty())
+        .map(|i| i as u8)
+        .unwrap_or(AIR)
+}
+
+/// Duas lajes de materiais diferentes no mesmo bloco (Block.mixedSlab do Java).
+pub fn mixed_slab(lower: u8, upper: u8) -> u8 {
+    if lower < 5 && upper < 5 {
+        136 + lower * 5 + upper
+    } else {
+        187 + if lower == 5 { upper } else { 6 + lower }
+    }
+}
+
+/// Direção para onde o jogador olha (0 +Z, 1 -X, 2 -Z, 3 +X), como Block.facingFromYaw.
+pub fn facing_from_yaw(yaw: f64) -> u8 {
+    let (fx, fz) = (yaw.sin(), yaw.cos());
+    if fz.abs() >= fx.abs() {
+        if fz > 0.0 { 0 } else { 2 }
+    } else if fx < 0.0 {
+        1
+    } else {
+        3
+    }
+}
+
+/// O bloco que um item coloca (o próprio id para blocos; os itens 400+ colocam o gelo), ou 0.
+pub fn block_of_item(item: i32) -> u8 {
+    if item > 0 && item < 200 && (item as usize) < count() {
+        return item as u8;
+    }
+    table().placers.iter().find(|p| p.0 == item).map_or(AIR, |p| p.1)
+}
+
+/// O item que se pega com o botão do meio num bloco (variantes viram a forma de item).
+pub fn item_for_block(b: u8) -> i32 {
+    let i = info(b);
+    if i.item_form {
+        return b as i32;
+    }
+    if let Some(p) = table().placers.iter().find(|p| p.1 == b) {
+        return p.0;
+    }
+    i.drop
 }

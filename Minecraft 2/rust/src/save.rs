@@ -16,6 +16,8 @@ pub struct WorldInfo {
     /// hora do dia em segundos (0 = nascer do sol; o dia inteiro dura DAY_LENGTH)
     pub time: f64,
     pub day: i32,
+    /// os 9 espaços da barra (ids de bloco ou item; 0 = vazio), lidos do inventário salvo
+    pub hotbar: [i32; 9],
 }
 
 /// Duração de um dia inteiro (dia e noite), em segundos: 48 minutos, como no Java.
@@ -82,6 +84,17 @@ pub fn read_world(dir: &Path) -> Option<WorldInfo> {
             if saved_day > 0.0 { t / saved_day * DAY_LENGTH } else { t }
         },
         day: p.get("dia").and_then(|v| v.trim().parse().ok()).unwrap_or(1),
+        hotbar: {
+            let mut h = [0i32; 9];
+            if let Some(inv) = p.get("inventario") {
+                for (i, slot) in inv.split(',').take(9).enumerate() {
+                    let id: i32 = slot.split(':').next().and_then(|v| v.trim().parse().ok()).unwrap_or(0);
+                    let count: i32 = slot.split(':').nth(1).and_then(|v| v.trim().parse().ok()).unwrap_or(0);
+                    h[i] = if count > 0 { id } else { 0 };
+                }
+            }
+            h
+        },
     })
 }
 
@@ -125,4 +138,36 @@ pub fn read_settings() -> Settings {
         reflections: flag("reflexos"),
         vsync: flag("vsync"),
     }
+}
+
+/// Muda só algumas chaves do meta.properties do mundo, deixando todo o resto (baús, fornalhas, bichos...) como está.
+pub fn update_meta(dir: &Path, values: &[(&str, String)]) -> std::io::Result<()> {
+    let path = dir.join("meta.properties");
+    let text = std::fs::read_to_string(&path)?;
+    let mut lines: Vec<String> = text.lines().map(|l| l.to_string()).collect();
+    for (k, v) in values {
+        let prefix = format!("{k}=");
+        let line = format!("{k}={v}");
+        match lines.iter().position(|l| l.starts_with(&prefix)) {
+            Some(i) => lines[i] = line,
+            None => lines.push(line),
+        }
+    }
+    let tmp = dir.join("meta.properties.tmp");
+    std::fs::write(&tmp, lines.join("\n") + "\n")?;
+    std::fs::rename(&tmp, &path)
+}
+
+/// Troca os 9 primeiros espaços (a barra) do inventário salvo, mantendo o resto.
+pub fn hotbar_inventory(dir: &Path, hotbar: &[i32; 9]) -> Option<String> {
+    let p = read_properties(&dir.join("meta.properties"))?;
+    let mut slots: Vec<String> = p.get("inventario")?.split(',').map(|s| s.to_string()).collect();
+    for (i, id) in hotbar.iter().enumerate() {
+        if i < slots.len() {
+            let wear = slots[i].split(':').nth(2).unwrap_or("0").to_string();
+            slots[i] = if *id > 0 { format!("{id}:64:{wear}") } else { "0:0:0".to_string() };
+        }
+    }
+    // o Java grava os dois-pontos escapados (\:)
+    Some(slots.join(",").replace(':', "\\:"))
 }
