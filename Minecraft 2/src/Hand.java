@@ -65,7 +65,7 @@ final class Hand {
                 t = Tf.mul(t, Tf.rotY(0.35 - c * 0.3));
                 t = Tf.mul(t, Tf.rotX(-0.15));
                 t = Tf.mul(t, Tf.scale(0.62));
-            } else if (Items.isBlock(item) && Block.shape(item) != Block.CROSS) {
+            } else if (Items.blockOf(item) > 0 && Block.shape(Items.blockOf(item)) != Block.CROSS) {
                 t = Tf.mul(arm, Tf.translate(-0.02, 0.18, -0.64));
                 t = Tf.mul(t, Tf.rotY(0.75));
                 t = Tf.mul(t, Tf.scale(0.27));
@@ -133,14 +133,15 @@ final class Hand {
 
     /** O item é um bloco desenhado como cubo (e não uma figura plana)? */
     static boolean isCubeItem(int item) {
-        return Items.isBlock(item) && Block.shape(item) != Block.CROSS && !Block.isDoor(item);
+        int b = Items.blockOf(item);
+        return b > 0 && Block.shape(b) != Block.CROSS && !Block.isDoor(b);
     }
 
     private static synchronized float[] model(int item) {
         float[] m = MODELS.get(item);
         if (m == null) {
             if (Items.isBlock(item) && Block.isDoor(item)) m = flatModel(doorPixels(Block.doorWood(item)));
-            else m = Items.isBlock(item) && Block.shape(item) != Block.CROSS ? cubeModel(item, 16) : flatModel(Items.pixels16(item));
+            else m = isCubeItem(item) ? cubeModel(Items.blockOf(item), 16) : flatModel(Items.pixels16(item));
             MODELS.put(item, m);
         }
         return m;

@@ -995,32 +995,37 @@ final class World {
         return Math.min(a, b) - 0.012 * noise(x / 5.0, z / 5.0, seed + 162);
     }
 
-    /** Escreve a camada de gelo com as trincheiras na coluna (x, z) do campo de gelo. */
+    /**
+     * Escreve a camada de gelo na coluna (x, z) de água fria. A altura cresce aos poucos: perto da margem (água rasa)
+     * e na borda do frio o gelo fica no nível da água, como o gelo comum da tundra, e vai subindo em rampa conforme
+     * a água fica funda e o frio aumenta, até o planalto (uns 2 a 6 blocos acima da água). As trincheiras só cortam
+     * o gelo onde ele já está alto, então sempre dá para chegar no topo andando.
+     */
     private void iceField(int x, int z, int top, byte[] out, int base) {
+        double t = fbm(x / 260.0, z / 260.0, 3, seed + 11);
+        double cold = Math.max(0, Math.min(1, (0.43 - t) / 0.02));       // 0 na borda da tundra, 1 bem no frio
+        double deep = Math.max(0, Math.min(1, (SEA - 1 - top) / 8.0));   // 0 na margem, 1 em água funda
+        deep = deep * deep * (3 - 2 * deep);
+        double rise = (2.5 + fbm(x / 30.0, z / 30.0, 3, seed + 163) * 4.5) * cold * deep;
+        int topY = SEA - 1 + (int) Math.round(rise + (noise(x / 4.0, z / 4.0, seed + 164) - 0.5) * 0.6 * cold * deep);
+        if (topY <= SEA - 1) return; // no nível da água: fica a placa de gelo comum
         double c = channel(x, z);
         final double W = 0.035; // abaixo disso é canal (água)
-        if (c < W) return;
-        // altura do gelo: planalto ondulado de 5 a 15 blocos acima da água
-        int topY = SEA + 4 + (int) (fbm(x / 30.0, z / 30.0, 3, seed + 163) * 12 + noise(x / 4.0, z / 4.0, seed + 164) * 1.2);
-        topY = Math.min(topY, SY - 12);
-        boolean undercut = c < W + 0.012; // perto do canal as ondas cavam a parede na linha d'água
+        boolean carve = rise >= 2.5;
+        if (carve && c < W) return;
+        boolean undercut = carve && topY >= SEA + 2 && c < W + 0.012; // perto do canal as ondas cavam a parede na linha d'água
         boolean streak = noise(x / 2.5, z / 2.5, seed + 165) > 0.68; // listras azuis descendo pela parede
-        for (int y = Math.max(top + 1, SEA - 4); y <= topY; y++) {
-            if (undercut && (y == SEA || (y == SEA + 1 && c < W + 0.006))) continue;
+        for (int y = Math.max(top + 1, SEA - 3); y <= topY; y++) {
+            if (undercut && y == SEA) continue;
             int b;
             if (y == topY) b = Block.SNOW;
             else if (y == topY - 1 && hash(x, z, seed + 166) < 0.6) b = Block.SNOW;
-            else if (y <= SEA + 1 || (streak && y < SEA + 6)) b = Block.BLUE_ICE;
+            else if (y <= SEA || streak) b = Block.BLUE_ICE;
             else b = Block.PACKED_ICE;
             out[base | y] = (byte) b;
         }
         // pingentes embaixo do recorte
-        if (undercut)
-            for (int y = SEA; y <= SEA + 1; y++)
-                if (out[base | y] == Block.AIR && out[base | (y + 1)] != Block.AIR && hash3(x, y, z, seed + 167) < 0.55) {
-                    out[base | y] = (byte) Block.ICICLE;
-                    break;
-                }
+        if (undercut && out[base | (SEA + 1)] != Block.AIR && hash3(x, SEA, z, seed + 167) < 0.55) out[base | SEA] = (byte) Block.ICICLE;
     }
 
     // =====================================================================
@@ -1218,12 +1223,12 @@ final class World {
             out[base | y] = (byte) b;
         }
         for (int y = h; y < SEA; y++)
-            out[base | y] = (byte) (biome == TUNDRA && y == SEA - 1 ? Block.ICE : Block.WATER);
-        if (biome == ICE_FIELD) {
+            out[base | y] = (byte) ((biome == TUNDRA || biome == ICE_FIELD) && y == SEA - 1 ? Block.ICE : Block.WATER);
+        if (biome == ICE_FIELD && channel(x, z) < 0.035) {
             // nos canais, placas de gelo soltas boiando
-            if (noise(x / 5.0, z / 5.0, seed + 155) * 0.75 + hash(x, z, seed + 156) * 0.25 > 0.66) out[base | (SEA - 1)] = (byte) Block.ICE;
+            if (noise(x / 5.0, z / 5.0, seed + 155) * 0.75 + hash(x, z, seed + 156) * 0.25 <= 0.66) out[base | (SEA - 1)] = (byte) Block.WATER;
         }
-        if (biome == ICE_FIELD) iceField(x, z, top, out, base);
+        if ((biome == ICE_FIELD || biome == TUNDRA) && top < SEA - 1) iceField(x, z, top, out, base);
 
         // cavernas: túneis (dois ruídos 3D perto de 0.5 ao mesmo tempo) e salões
         boolean canOpen = top >= SEA + 3; // não abre cavernas debaixo de água

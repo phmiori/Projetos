@@ -831,6 +831,8 @@ public class BlockGame {
                 toast("Sementes só crescem em terra arada: use a enxada na terra");
             } else if (sel != null && Items.isBlock(held)) {
                 placeBlock(held, lx, ly, lz);
+            } else if (sel != null && Items.isPlacer(held)) {
+                placeIce(held);
             }
         }
         lPending = rPending = false;
@@ -894,6 +896,16 @@ public class BlockGame {
         if (!supported || (Block.solid(place) && player.intersects(bx, by, bz)) || mobBlocks(bx, by, bz, place)) return;
         // blocos com "frente" (fornalha, bancada, baú, cama...) ficam com a frente virada para quem os colocou
         setAndPay(bx, by, bz, place, held, Block.rotatable(place) ? (facing + 2) & 3 : 0);
+    }
+
+    /** Coloca um bloco de gelo do campo de gelo (o pingente precisa de um bloco firme em cima para ficar pendurado). */
+    private void placeIce(int held) {
+        int bx = sel[3], by = sel[4], bz = sel[5];
+        if (!isReplaceable(bx, by, bz)) return;
+        int place = Items.blockOf(held);
+        if (place == Block.ICICLE && (by + 1 >= World.SY || !Block.solid(world.get(bx, by + 1, bz)))) return;
+        if ((Block.solid(place) && player.intersects(bx, by, bz)) || mobBlocks(bx, by, bz, place)) return;
+        setAndPay(bx, by, bz, place, held);
     }
 
     private static int dirIndex(int dx, int dz) {
@@ -3664,7 +3676,8 @@ public class BlockGame {
     static {
         List<Integer> l = new ArrayList<>();
         for (int b = 1; b < Block.COUNT; b++) if (Block.isItemForm(b)) l.add(b); // só a forma de item (sem variantes)
-        for (int i = Items.FIRST_ITEM; i <= Items.LAST; i++) if (Items.exists(i)) l.add(i);
+        for (int i = Items.BLOCK_ITEM_BASE; i <= Items.LAST; i++) l.add(i);     // gelo do campo de gelo, junto com os blocos
+        for (int i = Items.FIRST_ITEM; i < Items.BLOCK_ITEM_BASE; i++) if (Items.exists(i)) l.add(i);
         ALL_ITEMS = new int[l.size()];
         for (int i = 0; i < l.size(); i++) ALL_ITEMS[i] = l.get(i);
     }
@@ -4383,7 +4396,7 @@ public class BlockGame {
             else if (button == 3) { rHeld = true; rPending = true; }
             else if (button == 2 && creative && sel != null) {
                 int b = world.get(sel[0], sel[1], sel[2]);
-                if (!Block.isItemForm(b)) b = Block.drop(b); // variantes viram a forma de item
+                if (!Block.isItemForm(b)) b = Items.placerFor(b) > 0 ? Items.placerFor(b) : Block.drop(b); // variantes viram a forma de item
                 inv.set(slot, b, Inventory.MAX);
                 slotNameTimer = 2;
             }

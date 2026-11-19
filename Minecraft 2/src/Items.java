@@ -33,7 +33,22 @@ final class Items {
     static final int LAST_ARMOR = 263;
     /** Ovos de criatura (criativo): id = SPAWN_EGG + tipo da criatura (Mob). */
     static final int SPAWN_EGG = 265;
-    static final int LAST = SPAWN_EGG + Mob.TYPES - 1;
+    static final int LAST_EGG = SPAWN_EGG + Mob.TYPES - 1;
+    /**
+     * Itens que colocam blocos com id 200+ (os ids de bloco abaixo de 200 acabaram): o gelo do campo de gelo.
+     * id = BLOCK_ITEM_BASE + posição em PLACES. Começa longe dos ovos para sobrar espaço para bichos novos.
+     */
+    static final int BLOCK_ITEM_BASE = 400;
+    private static final int[] PLACES = { Block.PACKED_ICE, Block.BLUE_ICE, Block.ICICLE };
+    static final int LAST = BLOCK_ITEM_BASE + PLACES.length - 1;
+    static boolean isPlacer(int id) { return id >= BLOCK_ITEM_BASE && id <= LAST; }
+    /** O bloco que o item coloca (o próprio id para blocos comuns), ou 0 se não coloca nada. */
+    static int blockOf(int id) { return isBlock(id) ? id : isPlacer(id) ? PLACES[id - BLOCK_ITEM_BASE] : 0; }
+    /** O item que coloca o bloco b (para pegar com o botão do meio no criativo), ou 0. */
+    static int placerFor(int b) {
+        for (int i = 0; i < PLACES.length; i++) if (PLACES[i] == b) return BLOCK_ITEM_BASE + i;
+        return 0;
+    }
     /** Cores do ovo de cada criatura: fundo e pintas (na ordem dos tipos de Mob). */
     private static final int[][] EGG_COLORS = {
             { 0xF0A6B0, 0xD27C8A }, { 0xE8E8E2, 0xB8B0A8 }, { 0xB4B4B4, 0xD02828 }, { 0x2E8A8A, 0x6E9A68 }, { 0x352A28, 0xA01818 },
@@ -43,7 +58,7 @@ final class Items {
             { 0xE07A1E, 0x1A1410 }, { 0xF2EEE6, 0x2E2824 }, { 0xD8902E, 0xF4E6CC }, { 0xE8C040, 0x5A4010 }, { 0x1C1E26, 0x34405A },
             { 0xF4F0E4, 0x141414 }, { 0x1C1E24, 0xF0B030 }, { 0x3A2A1E, 0xC8B48C }, { 0x8A96A0, 0xEDE6D2 } };
 
-    static boolean isEgg(int id) { return id >= SPAWN_EGG && id <= LAST; }
+    static boolean isEgg(int id) { return id >= SPAWN_EGG && id <= LAST_EGG; }
     static int eggMob(int id) { return id - SPAWN_EGG; }
 
     private static final String[] ITEM_NAMES = {
@@ -71,7 +86,7 @@ final class Items {
     /** Item que não empilha e gasta com o uso: ferramentas, armaduras e a pederneira. */
     static boolean isDurable(int id) { return isTool(id) || isArmor(id) || id == FLINT_STEEL || id == BOW; }
     static boolean exists(int id) {
-        return isBlock(id) || (id >= FIRST_ITEM && id <= LAST_SIMPLE) || (id >= FIRST_EXTRA && id <= LAST_EXTRA) || id == ARROW || isDurable(id) || isEgg(id);
+        return isBlock(id) || (id >= FIRST_ITEM && id <= LAST_SIMPLE) || (id >= FIRST_EXTRA && id <= LAST_EXTRA) || id == ARROW || isDurable(id) || isEgg(id) || isPlacer(id);
     }
     static int toolKind(int id) { return (id - TOOL_BASE) / 4; }
     static int toolMat(int id) { return (id - TOOL_BASE) % 4; }
@@ -89,6 +104,7 @@ final class Items {
 
     static String name(int id) {
         if (isBlock(id)) return Block.NAMES[id];
+        if (isPlacer(id)) return Block.NAMES[blockOf(id)];
         if (isTool(id)) return TOOL_KIND[toolKind(id)] + " " + TOOL_MAT[toolMat(id)];
         if (isArmor(id)) return ARMOR_PIECE[armorPiece(id)] + " " + ARMOR_MAT[armorMat(id)];
         if (isEgg(id)) { String n = Mob.NAMES[eggMob(id)]; return "Ovo de " + (n.equals("Creeper") ? n : n.toLowerCase()); }
@@ -378,7 +394,8 @@ final class Items {
         if (id <= 0 || id > LAST) return null;
         if (ICONS[id] != null) return ICONS[id];
         BufferedImage img;
-        if (isBlock(id)) img = Block.shape(id) == Block.CROSS ? Textures.flatIcon(id) : Textures.cube(id);
+        int bk = blockOf(id);
+        if (bk > 0) img = Block.shape(bk) == Block.CROSS ? Textures.flatIcon(bk) : Textures.cube(bk);
         else img = sprite(id);
         ICONS[id] = img;
         return img;
@@ -391,7 +408,7 @@ final class Items {
 
     /** Pixels 16x16 (ARGB) da figura plana do item: itens desenhados, ou a textura de plantas/tocha. */
     static int[] pixels16(int id) {
-        if (isBlock(id)) return Textures.get(16)[id * 6 + 4];
+        if (blockOf(id) > 0) return Textures.get(16)[blockOf(id) * 6 + 4];
         return spritePixels(id);
     }
 
