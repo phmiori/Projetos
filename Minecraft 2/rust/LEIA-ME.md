@@ -87,7 +87,7 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
 - **Partículas** (`Particles.java`): pedacinhos com as cores da textura saltando do bloco batido ou quebrado,
   respingos ao acertar criaturas com flecha, sangue da mordida do tubarão, fumaça e fagulhas das explosões e a
   fumacinha do pavio da dinamite.
-- **Pausa** (**Esc**, ou quando a janela perde o foco) com "Voltar ao jogo" e "Salvar e sair".
+- **Pausa** (**Esc**, ou quando a janela perde o foco) com "Voltar ao jogo", "Controles" (todas as teclas), "Configurações" e "Salvar e sair" (volta ao menu).
 - Grava os pedaços mudados, a posição, a hora, o inventário, a vida, a fome, os baús, as fornalhas e as criaturas a cada
   30 s e ao fechar (só o que conhece no `meta.properties`; amigos da LAN e o resto ficam como o Java deixou).
 - Água corrente (traduzida do `World.java`): cai, escorre para o desnível mais perto formando cachoeiras, espalha
