@@ -143,7 +143,10 @@ impl Game {
     pub fn break_aimed(&mut self) {
         let Some(h) = self.aim else { return };
         let [x, y, z] = h.b;
-        self.destroy(x, y, z);
+        let b = self.get(x, y, z);
+        if self.destroy(x, y, z) {
+            self.sfx(crate::sound::break_sound(b), [x as f64 + 0.5, y as f64 + 0.5, z as f64 + 0.5], 0.9);
+        }
     }
 
     /// Tira o bloco (e a outra metade, se for porta). Retorna false se não pode ser quebrado aqui.
@@ -169,6 +172,10 @@ impl Game {
 
     /// Colocou um bloco: na sobrevivência gasta um da mão.
     fn pay(&mut self) {
+        if let Some(h) = self.aim {
+            let [x, y, z] = h.prev;
+            self.sfx("colocar", [x as f64 + 0.5, y as f64 + 0.5, z as f64 + 0.5], 0.7);
+        }
         if !self.creative {
             self.inv.take_one(self.slot);
         }
@@ -190,6 +197,7 @@ impl Game {
             if block::info(self.get(hx, other_y, hz)).kind == K_DOOR {
                 self.set(hx, other_y, hz, block::variant(K_DOOR, ti.mat, ti.face, open, 1 - ti.half), 0);
             }
+            self.sfx("quebrar_madeira", [hx as f64 + 0.5, hy.min(other_y) as f64 + 1.0, hz as f64 + 0.5], 0.5);
             return;
         }
         if target == block::TABLE {

@@ -129,6 +129,18 @@ pub fn data() -> &'static Data {
     })
 }
 
+/// A voz de cada criatura (Mob.SOUNDS), na ordem dos tipos.
+const SOUNDS: [Option<&str>; 27] = [
+    Some("porco"), Some("ovelha"), Some("galinha"), Some("morto_vivo"), Some("aranha"), None, Some("vaca"), None,
+    Some("esqueleto"), Some("lobo"), Some("raposa"), None, None, Some("urso"), Some("passaro"), None, None, None,
+    Some("rugido"), Some("rugido"), Some("miau"), Some("aranha"), Some("aranha"), Some("urso"), Some("pinguim"),
+    Some("boi"), None,
+];
+
+pub fn voice(t: usize) -> Option<&'static str> {
+    SOUNDS.get(t).copied().flatten()
+}
+
 pub fn info(t: usize) -> &'static MobInfo {
     &data().info[t]
 }
@@ -149,6 +161,8 @@ pub struct Mob {
     pub attack_cd: f64,
     pub flee: f64,
     pub burn: f64,
+    /// segundos até o próximo som da criatura
+    pub idle_sound: f64,
     pub tamed: bool,
     pub sitting: bool,
     pub owner_name: String,
@@ -205,6 +219,7 @@ impl Mob {
             attack_cd: 0.0,
             flee: 0.0,
             burn: 0.0,
+            idle_sound: 2.0 + rng.next() * 8.0,
             tamed: false,
             sitting: false,
             owner_name: String::new(),

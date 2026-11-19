@@ -157,8 +157,21 @@ impl Game {
                 let w = Loaded(&self.chunks);
                 let sight = Sight { w: &w, p, can_target: survival, owner, target, line_of_sight: los };
                 let mut rng = std::mem::replace(&mut self.rng, crate::survival::Rng::new());
+                let fuse0 = mobs[i].fuse;
                 mobs[i].update(dt, &sight, &mut rng);
                 self.rng = rng;
+                let m = &mut mobs[i];
+                let at = [m.body.x, m.body.y + 1.0, m.body.z];
+                if fuse0 <= 0.0 && m.fuse > 0.0 {
+                    self.sfx("pavio", at, 0.9);
+                }
+                m.idle_sound -= dt;
+                if m.idle_sound <= 0.0 {
+                    m.idle_sound = 6.0 + self.rng.next() * 10.0;
+                    if let Some(v) = mob::voice(m.t) {
+                        self.sfx(v, at, 0.65);
+                    }
+                }
             }
             // mordida do lobo domesticado, do tubarão ou chifrada do narval
             if mobs[i].wants_bite {
@@ -179,6 +192,9 @@ impl Game {
                         t.body.vx += kx / kl * 6.0;
                         t.body.vz += kz / kl * 6.0;
                         t.body.vy = 4.0;
+                        let at = [t.body.x, t.body.y + 0.8, t.body.z];
+                        self.sfx("criatura_dano", at, 0.8);
+                        let t = &mut mobs[j];
                         if t.health <= 0.0 {
                             if !eat {
                                 // o que os lobos derrubam deixa o que tinha
@@ -203,6 +219,9 @@ impl Game {
             }
             if m.wants_attack {
                 player_hits.push((m.attack_damage(), m.body.x, m.body.z));
+                if let Some(v) = mob::voice(m.t) {
+                    self.sfx(v, [m.body.x, m.body.y + 1.0, m.body.z], 0.9);
+                }
             }
             let (dx, dz) = (m.body.x - p[0], m.body.z - p[2]);
             let dist = (dx * dx + dz * dz).sqrt();
@@ -467,6 +486,7 @@ impl Game {
     /// Explosão (World.explode + BlockGame.explodeAt do Java): quebra os blocos em volta, espalha o que havia em
     /// baús e fornalhas, machuca e empurra criaturas e o jogador.
     pub fn explode_at(&mut self, c: [f64; 3], power: f64) {
+        self.sfx("explosao", c, 1.0);
         let rad = power.ceil() as i32;
         let (bx, by, bz) = (c[0].floor() as i32, c[1].floor() as i32, c[2].floor() as i32);
         let mut gone = Vec::new();
@@ -533,6 +553,7 @@ impl Game {
     /// Flecha do esqueleto (em m) para o jogador: arco calculado para a distância, com um pouco de erro.
     fn shoot_arrow(&mut self, m: [f64; 3]) {
         let s = [m[0], m[1] + 1.45, m[2]];
+        self.sfx("arco_disparo", s, 0.8);
         let (dx, dy, dz) = (self.player.x - s[0], self.player.y + 1.0 - s[1], self.player.z - s[2]);
         let flat = (dx * dx + dz * dz).sqrt().max(0.5);
         let t = flat / ARROW_SPEED;
@@ -545,6 +566,8 @@ impl Game {
 
     fn update_arrows(&mut self, dt: f64) {
         let mut arrows = std::mem::take(&mut self.arrows);
+        let e = self.eye();
+        let (ear, yaw) = ([e[0] as f64, e[1] as f64, e[2] as f64], self.player.yaw);
         arrows.retain_mut(|a| {
             a.life -= dt;
             if a.life <= 0.0 {
@@ -560,7 +583,10 @@ impl Game {
                     a.p[k] += a.v[k] * dt / steps as f64;
                 }
                 let w = Loaded(&self.chunks);
-                if block::solid(w.get(a.p[0].floor() as i32, a.p[1].floor() as i32, a.p[2].floor() as i32)) {
+                let hb = w.get(a.p[0].floor() as i32, a.p[1].floor() as i32, a.p[2].floor() as i32);
+                if block::solid(hb) {
+                    let hard = block::info(hb).material == block::M_ROCK || hb == 18 || hb == 131;
+                    crate::sound::play_at(if hard { "flecha_pedra" } else { "flecha_madeira" }, a.p, ear, yaw, 0.7);
                     a.stuck = true;
                     a.life = a.life.min(5.0);
                     return true;
@@ -569,6 +595,7 @@ impl Game {
                 let inside = (a.p[0] - pl.x).abs() < pl.hw + 0.1 && a.p[1] > pl.y && a.p[1] < pl.y + pl.h && (a.p[2] - pl.z).abs() < pl.hw + 0.1;
                 if inside && !self.creative && self.health > 0.0 {
                     self.pending_damage += ARROW_DAMAGE;
+                    crate::sound::play_at("flecha_criatura", a.p, ear, yaw, 0.9);
                     return false;
                 }
             }
@@ -610,6 +637,12 @@ impl Game {
             return;
         }
         m.damage(dmg);
+        let (at, voice) = ([m.body.x, m.body.y + 0.8, m.body.z], mob::voice(m.t));
+        self.sfx("criatura_dano", at, 0.9);
+        if let Some(v) = voice {
+            self.sfx(v, at, 0.6);
+        }
+        let m = &mut self.mobs[i];
         let (kx, kz) = (m.body.x - px, m.body.z - pz);
         let kl = (kx * kx + kz * kz).sqrt().max(0.01);
         m.body.vx += kx / kl * 7.0;
@@ -640,6 +673,13 @@ impl Game {
         }
         let name = self.player_name.clone();
         let roll = self.int(3);
+        let m = &self.mobs[i];
+        let at = [m.body.x, m.body.y + 0.6, m.body.z];
+        if !m.tamed && held == mob::BONE {
+            self.sfx(if roll == 0 { "domar" } else { "lobo" }, at, if roll == 0 { 1.0 } else { 0.8 });
+        } else if m.tamed && is_meat(held) {
+            self.sfx("comer", at, 0.7);
+        }
         let m = &mut self.mobs[i];
         let msg = if !m.tamed {
             if held != mob::BONE {
@@ -678,6 +718,7 @@ impl Game {
         }
         let Some(h) = self.aim else { return true };
         let [x, y, z] = h.prev;
+        self.sfx(mob::voice(t as usize).unwrap_or("colocar"), [x as f64 + 0.5, y as f64 + 0.5, z as f64 + 0.5], 0.8);
         if let Some(i) = self.add_mob(t as usize, x as f64 + 0.5, y as f64 + 0.01, z as f64 + 0.5) {
             self.mobs[i].yaw = self.player.yaw + std::f64::consts::PI;
         }

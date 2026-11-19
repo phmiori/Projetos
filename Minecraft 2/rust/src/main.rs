@@ -28,6 +28,7 @@ mod physics;
 mod save;
 mod screens;
 mod shaders;
+mod sound;
 mod survival;
 mod textures;
 mod ui;
@@ -267,6 +268,10 @@ struct Game {
     starve_timer: f64,
     last_hurt: f64,
     hurt_flash: f64,
+    /// sons: passos andados desde o último, e o martelar do bloco sendo quebrado
+    step_acc: f64,
+    was_in_water: bool,
+    hit_sound_cd: f64,
     clock_s: f64,
     eat_cd: f64,
     break_progress: f64,
@@ -392,6 +397,9 @@ impl Game {
             hurt_flash: 0.0,
             clock_s: 0.0,
             eat_cd: 0.0,
+            step_acc: 0.0,
+            was_in_water: false,
+            hit_sound_cd: 0.0,
             break_progress: 0.0,
             break_pos: None,
             spawn,
@@ -448,6 +456,33 @@ impl Game {
 
     fn eye(&self) -> [f32; 3] {
         [self.player.x as f32, (self.player.y + EYE) as f32, self.player.z as f32]
+    }
+
+    /// Toca um som vindo de um ponto do mundo (mais baixo de longe, do lado certo).
+    fn sfx(&self, name: &str, at: [f64; 3], volume: f64) {
+        let e = self.eye();
+        sound::play_at(name, at, [e[0] as f64, e[1] as f64, e[2] as f64], self.player.yaw, volume);
+    }
+
+    /// Passos (a cada ~1,9 bloco andado no chão) e respingo ao cair na água (BlockGame.footsteps).
+    fn footsteps(&mut self, dt: f64) {
+        let p = &self.player;
+        if p.in_water && !self.was_in_water && p.vy < -2.5 {
+            sound::play("respingo", 0.7);
+        }
+        self.was_in_water = p.in_water;
+        if !p.on_ground || p.flying || p.in_water {
+            return;
+        }
+        self.step_acc += (p.vx * p.vx + p.vz * p.vz).sqrt() * dt;
+        if self.step_acc < 1.9 {
+            return;
+        }
+        self.step_acc = 0.0;
+        let below = self.get(p.x.floor() as i32, (p.y - 0.1).floor() as i32, p.z.floor() as i32);
+        if below != block::AIR {
+            sound::play(sound::step_sound(below), 0.4);
+        }
     }
 
     fn forward(&self) -> [f32; 3] {
@@ -612,6 +647,7 @@ impl Game {
         }
         self.tick_falling(dt);
         self.tick_fluids(dt);
+        self.footsteps(dt);
 
         // mira (7 blocos no criativo, 5 na sobrevivência, como no Java)
         let eye = self.eye();
@@ -981,6 +1017,7 @@ fn main() {
     });
     let _ = std::env::set_current_dir(&game_dir);
     let settings = save::read_settings();
+    sound::init(settings.volume);
 
     let info = match arg("--mundo") {
         Some(m) => save::read_world(&PathBuf::from(m)),
@@ -1269,7 +1306,11 @@ fn main() {
                         }
                     } else if game.screen == Screen::Pause || game.screen == Screen::Dead {
                         if down && button == MouseButton::Left {
-                            match game.menu_click(fw, fh) {
+                            let clicked = game.menu_click(fw, fh);
+                            if clicked.is_some() {
+                                sound::play("clique", 0.4);
+                            }
+                            match clicked {
                                 Some("Voltar ao jogo") => {
                                     game.screen = Screen::Play;
                                     game.grab_mouse = true;

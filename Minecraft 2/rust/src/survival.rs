@@ -129,6 +129,7 @@ impl Game {
         // itens iguais parados um em cima do outro viram uma pilha só
         self.drops = drops;
         if picked {
+            crate::sound::play("coletar", 0.7);
             self.slot_name_timer = self.slot_name_timer.max(0.0);
         }
     }
@@ -153,16 +154,27 @@ impl Game {
         let held = self.inv.s[self.slot].id;
         let (speed, drops) = items::mining(held, b);
         self.break_progress += if hard == 0.0 { 1.0 } else { dt * speed / hard };
+        let at = [x as f64 + 0.5, y as f64 + 0.5, z as f64 + 0.5];
+        self.hit_sound_cd -= dt;
+        if self.hit_sound_cd <= 0.0 {
+            self.hit_sound_cd = 0.25;
+            self.sfx(crate::sound::break_sound(b), at, 0.3);
+        }
         if self.break_progress < 1.0 {
             return;
         }
+        self.sfx(crate::sound::break_sound(b), at, 0.9);
         self.break_progress = 0.0;
         let broken = self.get(x, y, z);
         if !self.destroy(x, y, z) {
             return;
         }
         if drops {
+            let before = self.drops.len();
             self.drop_loot(broken, x, y, z);
+            if self.drops.len() > before {
+                self.sfx("drop", [x as f64 + 0.5, y as f64 + 0.5, z as f64 + 0.5], 0.8);
+            }
         }
         if self.inv.use_tool(self.slot) {
             self.notice("Sua ferramenta quebrou!".into());
@@ -280,6 +292,7 @@ impl Game {
             return;
         }
         self.health -= n;
+        crate::sound::play("dano", 0.8);
         self.last_hurt = self.clock_s;
         self.hurt_flash = 0.45;
     }
@@ -324,6 +337,7 @@ impl Game {
                 return self.food >= MAX_FOOD || self.creative;
             }
             self.food = (self.food + info.food as f64).min(MAX_FOOD);
+            crate::sound::play("comer", 0.8);
             self.inv.take_one(self.slot);
             self.eat_cd = 0.6;
             return true;
