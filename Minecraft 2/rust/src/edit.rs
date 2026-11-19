@@ -203,8 +203,8 @@ impl Game {
             self.open_container(hx, hy, hz, target);
             return;
         }
-        // comida e armadura na mão: come ou veste
-        if self.use_item() {
+        // comida e armadura na mão: come ou veste; ovo: nasce a criatura
+        if self.use_item() || self.use_egg() {
             return;
         }
         let held = block::block_of_item(self.inv.s[self.slot].id);

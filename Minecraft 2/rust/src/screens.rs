@@ -70,6 +70,9 @@ impl Game {
 
     pub fn draw_hud(&mut self, ui: &mut Ui, w: f32, h: f32) {
         let k = Self::ui_scale(h as u32);
+        if self.blast_flash > 0.0 {
+            ui.rect(0.0, 0.0, w, h, [1.0, 0.95, 0.85, (self.blast_flash / 0.35 * 0.6) as f32]);
+        }
         if self.hurt_flash > 0.0 {
             ui.rect(0.0, 0.0, w, h, [0.8, 0.0, 0.0, (self.hurt_flash / 0.45 * 0.43) as f32]);
         }

@@ -158,6 +158,12 @@ impl Ui {
         );
     }
 
+    /// Quadrilátero de uma cor só (em 3D: as criaturas e as flechas).
+    pub fn solid_quad(&mut self, p: [[f32; 3]; 4], c: Color) {
+        let t = 2.0 / ATLAS as f32;
+        self.quad(p, [[t, t]; 4], -1.0, c);
+    }
+
     pub fn rect(&mut self, x: f32, y: f32, w: f32, h: f32, c: Color) {
         let t = 2.0 / ATLAS as f32;
         self.quad2(x, y, x + w, y + h, [t, t, t, t], -1.0, c);

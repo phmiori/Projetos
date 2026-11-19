@@ -21,6 +21,8 @@ mod inventory;
 mod items;
 mod light;
 mod mesher;
+mod mob;
+mod mobs;
 mod noise;
 mod physics;
 mod save;
@@ -277,6 +279,15 @@ struct Game {
     furnaces: HashMap<String, containers::Furnace>,
     /// baú ou fornalha aberto na tela
     open: Option<containers::Open>,
+    mobs: Vec<mob::Mob>,
+    /// criaturas de pedaços descarregados: voltam quando o pedaço carregar (texto do Java)
+    sleeping: HashMap<(i32, i32), Vec<String>>,
+    mob_spawn_timer: f64,
+    mob_id: i32,
+    arrows: Vec<mobs::Arrow>,
+    pending_damage: f64,
+    blast_flash: f64,
+    player_name: String,
     l_held: bool,
     r_held: bool,
     l_pending: bool,
@@ -390,6 +401,14 @@ impl Game {
             chests: HashMap::new(),
             furnaces: HashMap::new(),
             open: None,
+            mobs: Vec::new(),
+            sleeping: HashMap::new(),
+            mob_spawn_timer: 0.0,
+            mob_id: 1,
+            arrows: Vec::new(),
+            pending_damage: 0.0,
+            blast_flash: 0.0,
+            player_name: String::new(),
             slot: 0,
             l_held: false,
             r_held: false,
@@ -603,13 +622,27 @@ impl Game {
         self.eat_cd -= dt;
         self.slot_name_timer -= dt;
         self.update_drops(dt);
+        self.update_mobs(dt);
+        self.blast_flash = (self.blast_flash - dt).max(0.0);
         self.tick_furnaces(dt);
         self.survival(dt);
         let (lp, rp, mp) = (self.l_pending, self.r_pending, self.m_pending);
         self.l_pending = false;
         self.r_pending = false;
         self.m_pending = false;
-        if playing {
+        // criatura na mira (só se estiver mais perto que o bloco mirado)
+        let block_dist = self.aim.map_or(99.0, |h| h.t);
+        let target = if playing { self.aimed_mob(block_dist.min(3.6)) } else { None };
+        if let Some(i) = target {
+            if lp || (self.l_held && self.cool_l <= 0.0) {
+                self.hit_mob(i);
+                self.cool_l = 0.45;
+            }
+            self.break_progress = 0.0;
+            if rp {
+                self.use_on_mob(i);
+            }
+        } else if playing {
             if self.creative {
                 // segurando o botão, repete a cada 0,2 s
                 if (lp || (self.l_held && self.cool_l <= 0.0)) && self.aim.is_some() {
@@ -667,9 +700,12 @@ impl Game {
             v.push(("jogador.vida", self.health.max(0.0).to_string()));
             v.push(("jogador.fome", self.food.to_string()));
         }
+        let (mob_lines, wolf_lines) = self.save_mobs();
+        let mob_lines: Vec<(String, String)> = mob_lines.into_iter().enumerate().map(|(i, s)| (i.to_string(), s)).collect();
+        let wolf_lines: Vec<(String, String)> = wolf_lines.into_iter().enumerate().map(|(i, s)| (i.to_string(), s)).collect();
         let chests: Vec<(String, String)> = self.chests.iter().map(|(k, c)| (k.clone(), containers::serialize_slots(c))).collect();
         let furnaces: Vec<(String, String)> = self.furnaces.iter().map(|(k, f)| (k.clone(), f.serialize())).collect();
-        if let Err(e) = save::update_meta(&dir, &v, &[("bau.", chests), ("fornalha.", furnaces)]) {
+        if let Err(e) = save::update_meta(&dir, &v, &[("bau.", chests), ("fornalha.", furnaces), ("criatura.", mob_lines), ("lobo.", wolf_lines)]) {
             println!("não consegui gravar o meta.properties: {e}");
         }
     }
@@ -771,8 +807,9 @@ impl Game {
         gl.depth_mask(true);
 
         // itens soltos no chão (girando, com a luz de onde estão)
-        if !self.drops.is_empty() {
+        if !self.drops.is_empty() || !self.mobs.is_empty() || !self.arrows.is_empty() {
             self.draw_drops(&mut g.ui, sky.daylight);
+            self.draw_mobs(&mut g.ui, sky.daylight);
             gl.enable(glow::BLEND);
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
             g.ui.flush(gl, &vp, g.tex);
@@ -1091,6 +1128,8 @@ fn main() {
         for (k, v) in &w.furnaces {
             game.furnaces.insert(k.clone(), containers::Furnace::parse(v));
         }
+        game.player_name = w.player_name.clone();
+        game.load_mobs(&w.mobs, &w.wolves);
     }
     // a leitura dos pedaços salvos continua valendo mesmo em --so-ler (só não grava)
     let _ = &save_dir;
@@ -1123,6 +1162,7 @@ fn main() {
     if let Some(s) = arg("--espaco").and_then(|s| s.parse::<usize>().ok()) {
         game.slot = s.clamp(1, 9) - 1;
     }
+    let zoo = args.iter().any(|a| a == "--zoologico");
     let hold_left = arg("--segurar-esq").and_then(|s| s.parse::<u32>().ok());
     let mut frame_no = 0u32;
     event_loop.set_control_flow(ControlFlow::Poll);
@@ -1294,6 +1334,24 @@ fn main() {
                     game.stream(&mut g);
                     let size = window.inner_size();
                     frame_no += 1;
+                    if zoo && frame_no == 100 {
+                        // teste: um de cada criatura em duas filas na frente da câmera
+                        let (fx, fz) = (game.player.yaw.sin(), game.player.yaw.cos());
+                        let (rx, rz) = (-fz, fx);
+                        for t in 0..mob::TYPES {
+                            let (row, col) = ((t / 14) as f64, (t % 14) as f64 - 6.5);
+                            let (x, z) = (game.player.x + fx * (7.0 + row * 4.0) + rx * col * 2.2, game.player.z + fz * (7.0 + row * 4.0) + rz * col * 2.2);
+                            let mut y = world::SY - 1;
+                            while y > 0 && !block::solid(game.get(x.floor() as i32, y, z.floor() as i32)) {
+                                y -= 1;
+                            }
+                            let id = game.mob_id;
+                            game.mob_id += 1;
+                            let mut m = mob::Mob::new(t, x, y as f64 + 1.0, z, id, &mut game.rng);
+                            m.yaw = game.player.yaw + std::f64::consts::PI;
+                            game.mobs.push(m);
+                        }
+                    }
                     if hold_left == Some(frame_no) {
                         game.l_held = true; // teste: segura o botão esquerdo a partir daqui
                     }
@@ -1314,7 +1372,7 @@ fn main() {
                         game.fps_time = Instant::now();
                         window.set_title(&game.title());
                         if auto_shot.is_some() {
-                            println!("{} · chão: {} · mira: {:?}", game.title(), game.player.on_ground, game.aim.map(|h| h.b));
+                            println!("{} · chão: {} · mira: {:?} · bichos: {} · vida: {:.1} · monstros: {} (mais perto {:.0})", game.title(), game.player.on_ground, game.aim.map(|h| h.b), game.mobs.len(), game.health, game.mobs.iter().filter(|m| m.hostile()).count(), game.mobs.iter().filter(|m| m.hostile()).map(|m| ((m.body.x - game.player.x).powi(2) + (m.body.z - game.player.z).powi(2)).sqrt()).fold(999.0f64, f64::min));
                         }
                     }
                     if auto_shot.map_or(false, |n| frame_no > n) {

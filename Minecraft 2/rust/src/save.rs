@@ -25,6 +25,11 @@ pub struct WorldInfo {
     /// baús e fornalhas: "x,y,z" -> conteúdo (o texto do Java)
     pub chests: Vec<(String, String)>,
     pub furnaces: Vec<(String, String)>,
+    /// criaturas ("criatura.N") e lobos domesticados ("lobo.N"), no texto do Java
+    pub mobs: Vec<String>,
+    pub wolves: Vec<String>,
+    /// nome do personagem (o dono dos lobos)
+    pub player_name: String,
 }
 
 /// Duração de um dia inteiro (dia e noite), em segundos: 48 minutos, como no Java.
@@ -94,6 +99,9 @@ pub fn read_world(dir: &Path) -> Option<WorldInfo> {
         inventory: p.get("inventario").cloned().unwrap_or_default(),
         health: num("jogador.vida").unwrap_or(20.0),
         food: num("jogador.fome").unwrap_or(20.0),
+        mobs: p.iter().filter(|(k, _)| k.starts_with("criatura.")).map(|(_, v)| v.clone()).collect(),
+        wolves: p.iter().filter(|(k, _)| k.starts_with("lobo.")).map(|(_, v)| v.clone()).collect(),
+        player_name: p.get("personagem.nome").cloned().unwrap_or_default(),
         chests: p.iter().filter_map(|(k, v)| k.strip_prefix("bau.").map(|k| (k.to_string(), v.clone()))).collect(),
         furnaces: p.iter().filter_map(|(k, v)| k.strip_prefix("fornalha.").map(|k| (k.to_string(), v.clone()))).collect(),
         spawn: match (num("spawn.x"), num("spawn.y"), num("spawn.z")) {

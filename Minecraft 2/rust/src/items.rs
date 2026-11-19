@@ -152,6 +152,21 @@ pub fn is_durable(id: i32) -> bool {
     durability(id) > 0
 }
 
+/// Dano ao bater numa criatura com o item na mão (Items.damage do Java).
+pub fn damage(id: i32) -> f64 {
+    match info(id) {
+        Some(i) if i.tool_kind >= 0 => {
+            let m = i.tool_mat as f64;
+            match i.tool_kind {
+                SWORD => 4.0 + m * 1.5,
+                AXE => 3.0 + m,
+                _ => 2.0 + m * 0.5,
+            }
+        }
+        _ => 1.0,
+    }
+}
+
 /// Velocidade de quebrar o bloco com o item na mão, e se o bloco dá algo (Items.mining do Java).
 pub fn mining(id: i32, b: u8) -> (f64, bool) {
     let bi = block::info(b);

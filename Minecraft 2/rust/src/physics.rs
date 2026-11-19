@@ -241,6 +241,11 @@ fn overlapping<W: Blocks>(px: f64, py: f64, pz: f64, hw: f64, h: f64, w: &W) -> 
 }
 
 impl Player {
+    /// A caixa do corpo está dentro de algum bloco sólido?
+    pub fn collides<W: Blocks>(&self, w: &W) -> bool {
+        !overlapping(self.x, self.y, self.z, self.hw, self.h, w).is_empty()
+    }
+
     /// Encosta em algum bloco do tipo b (com uma folguinha)? Para o cacto espetar.
     pub fn touching<W: Blocks>(&self, w: &W, b: u8) -> bool {
         let e = 0.05;

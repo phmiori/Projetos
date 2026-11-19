@@ -15,6 +15,7 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
 | Geração do terreno | Traduzida linha por linha do `World.java`: mesma semente = mesmo mundo, bloco por bloco (conferido com `comparar-geracao.bat`). |
 | Blocos | `dados/blocos.txt` é exportado do `Block.java` (`exportar-blocos.bat`): mesmos ids, formas, texturas, caixas, dureza e ferramenta certa. |
 | Itens e receitas | `dados/itens.txt`, `itens.png` e `receitas.txt` são exportados do `Items.java`: mesmos nomes, desenhos, ferramentas, comida, armaduras e receitas. |
+| Criaturas | `dados/bichos.txt` é exportado do `Mob.java`: os 27 desenhos (com as variações), tamanhos, vidas e velocidades. As criaturas salvas no Java aparecem aqui, e as daqui voltam no Java. |
 | Inventário, vida, fome, baús e fornalhas | Lidos e gravados no `meta.properties` no mesmo formato do Java. |
 | Texturas | Os mesmos PNGs da pasta `textures/`. |
 | Shaders | Copiados do `GLRenderer.java` (céu, nuvens, neblina, luz, água) e o mesmo formato de vértice do `Mesher.java`. |
@@ -50,9 +51,15 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
   mesmos itens que viria no Java; as fornalhas assam o tempo todo (8 s por item, com os combustíveis e o que assa
   exportados do Java) e o bloco acende enquanto assa; quebrar um baú ou uma fornalha espalha o que havia dentro;
   Shift+clique passa itens entre eles e a mochila.
+- **Criaturas** (traduzidas do `Mob.java`/`Mobs.java`): os 27 bichos com os desenhos do Java (pernas, asas e caudas
+  balançando), nascendo nos mesmos lugares (animais por bioma, peixes, tubarão e narval, pássaros, monstros no
+  escuro), fugindo, pastando, revidando, voando e nadando. Monstros atacam (o creeper explode quebrando blocos, o
+  esqueleto atira flechas), queimam no sol; bater neles usa o dano da ferramenta e eles soltam o que o Java solta.
+  Lobo domesticável com osso (carne cura, mão vazia senta/levanta), tubarão caçando peixes e brigando com narval,
+  ovos de criatura no criativo. Os bichos de terra dormem com o pedaço quando você vai longe e voltam depois.
 - **Pausa** (**Esc**, ou quando a janela perde o foco) com "Voltar ao jogo" e "Salvar e sair".
-- Grava os pedaços mudados, a posição, a hora, o inventário, a vida, a fome, os baús e as fornalhas a cada 30 s e ao
-  fechar (só o que conhece no `meta.properties`; bichos, amigos da LAN e o resto ficam como o Java deixou).
+- Grava os pedaços mudados, a posição, a hora, o inventário, a vida, a fome, os baús, as fornalhas e as criaturas a cada
+  30 s e ao fechar (só o que conhece no `meta.properties`; amigos da LAN e o resto ficam como o Java deixou).
 - Água corrente (traduzida do `World.java`): cai, escorre para o desnível mais perto formando cachoeiras, espalha
   até 7 blocos no plano, seca quando perde a fonte e leva embora plantas e tochas no caminho.
 - Luz de tochas e lava: cada pedaço calcula a sua, ela passa para os vizinhos quando eles carregam e é refeita em
@@ -63,10 +70,9 @@ soltos no chão não são gravados (no Java também não).
 
 ## Próximos passos (na ordem sugerida)
 
-1. Bichos.
-2. Sons e sombras do sol.
-3. Menu inicial para escolher e criar mundos.
-4. Cama, enxada e trigo, arco e flechas, dinamite.
+1. Sons e sombras do sol.
+2. Menu inicial para escolher e criar mundos.
+3. Cama, enxada e trigo, arco e flechas do jogador, dinamite.
 5. LAN (o mesmo protocolo do `Net.java`, para dar para jogar Java com Rust durante a transição).
 
 ## Ferramentas
@@ -74,6 +80,6 @@ soltos no chão não são gravados (no Java também não).
 - `exportar-blocos.bat`: depois de criar ou mudar blocos, itens ou receitas no Java, atualiza os arquivos de `dados/`.
 - `comparar-geracao.bat`: gera pedaços com o Java e com o Rust e confere se saíram iguais (rode depois de
   mexer na geração do mundo em qualquer um dos dois).
-- Linha de comando: `mundo-de-blocos.exe [--mundo worlds\nome] [--semente N] [--posicao x y z yaw pitch] [--voando] [--hora 0..1] [--so-ler] [--sem-vsync]`
+- Linha de comando: `mundo-de-blocos.exe [--mundo worlds\nome] [--semente N] [--posicao x y z yaw pitch] [--voando] [--hora 0..1] [--so-ler] [--zoologico] [--sem-vsync]`
   (`--so-ler`: abre sem gravar nada)
   (`--hora`: 0 = nascer do sol, 0,25 = meio-dia, 0,5 = pôr do sol, 0,75 = meia-noite).

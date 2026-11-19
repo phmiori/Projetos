@@ -73,6 +73,62 @@ public class ExportarBlocos {
         exportItems(new File(out.getParentFile(), "itens.txt"), new File(out.getParentFile(), "itens.png"));
         exportRecipes(new File(out.getParentFile(), "receitas.txt"));
         exportFurnace(new File(out.getParentFile(), "fornalha.txt"));
+        exportMobs(new File(out.getParentFile(), "bichos.txt"));
+    }
+
+    static Object mobField(String name) throws Exception {
+        Field f = Mob.class.getDeclaredField(name);
+        f.setAccessible(true);
+        return f.get(null);
+    }
+
+    /** Uma lista de caixas do modelo: cx|cy|cz|sx|sy|sz|cor|perna|brilho|pivô. */
+    static void writeBoxes(Writer w, String name, Object[] boxes) throws Exception {
+        w.write("@modelo|" + name + NL);
+        for (Object b : boxes) {
+            Class<?> c = b.getClass();
+            StringBuilder sb = new StringBuilder();
+            for (String f : new String[] { "cx", "cy", "cz", "sx", "sy", "sz", "color", "leg", "glow", "piv" }) {
+                Field fl = c.getDeclaredField(f);
+                fl.setAccessible(true);
+                Object v = fl.get(b);
+                if (sb.length() > 0) sb.append('|');
+                if (v instanceof Boolean) sb.append((Boolean) v ? 1 : 0);
+                else if (v instanceof Double && ((Double) v).isNaN()) sb.append("nan");
+                else sb.append(v);
+            }
+            w.write(sb + NL);
+        }
+    }
+
+    /**
+     * Criaturas: tamanho, vida, velocidade e o desenho de cada uma (caixas coloridas que as pernas, asas e caudas
+     * movem), mais as variações (lobo sentado/domesticado, esqueleto mirando, cervo macho) e as paletas de cor.
+     */
+    static void exportMobs(File txt) throws Exception {
+        double[][] size = (double[][]) mobField("SIZE");
+        double[] hp = (double[]) mobField("MAX_HP"), speed = (double[]) mobField("SPEED");
+        Object[][] models = (Object[][]) mobField("MODELS");
+        try (Writer w = new OutputStreamWriter(new FileOutputStream(txt), "UTF-8")) {
+            w.write("# gerado por rust/ferramentas/ExportarBlocos.java a partir do Mob.java (não edite à mão)" + NL);
+            w.write("# @bicho|tipo|nome|meia largura|altura|vida|velocidade e, depois, os modelos e as paletas" + NL);
+            for (int t = 0; t < Mob.TYPES; t++)
+                w.write("@bicho|" + t + "|" + Mob.NAMES[t] + "|" + size[t][0] + "|" + size[t][1] + "|" + hp[t] + "|" + speed[t] + NL);
+            for (int t = 0; t < Mob.TYPES; t++) writeBoxes(w, String.valueOf(t), models[t]);
+            for (String v : new String[] { "SKELETON_AIM", "WOLF_SIT", "WOLF_TAMED", "WOLF_SIT_TAMED", "DEER_STAG" })
+                writeBoxes(w, v, (Object[]) mobField(v));
+            for (String p : new String[] { "BIRD_COLORS", "TROPICAL_COLORS", "CAT_COLORS", "TIGER_COLORS", "WHITE_TIGER_COLORS", "SCORPION_COLORS", "EMPEROR_COLORS" }) {
+                Object o = mobField(p);
+                int[][] pal = o instanceof int[][] ? (int[][]) o : new int[][] { (int[]) o };
+                StringBuilder sb = new StringBuilder();
+                for (int[] row : pal) {
+                    if (sb.length() > 0) sb.append(';');
+                    for (int i = 0; i < row.length; i++) sb.append(i > 0 ? "," : "").append(row[i]);
+                }
+                w.write("@paleta|" + p + "|" + sb + NL);
+            }
+        }
+        System.out.println("criaturas exportadas: " + Mob.TYPES + " -> " + txt);
     }
 
     /** Fornalha: id|no que vira ao assar (0 = não assa)|quantos itens assa como combustível (0 = não queima). */
