@@ -28,6 +28,7 @@ mod physics;
 mod save;
 mod screens;
 mod shaders;
+mod shadow;
 mod sound;
 mod survival;
 mod textures;
@@ -157,6 +158,7 @@ struct Gl {
     ebo_quads: usize,
     tex: glow::Texture,
     ui: ui::Ui,
+    shadow: shadow::Shadow,
 }
 
 unsafe fn compile(gl: &glow::Context, vs: &str, fs: &str) -> glow::Program {
@@ -540,6 +542,7 @@ impl Game {
                             (Some(a), Some(b), q)
                         };
                         self.meshes.insert(k, GpuMesh { vao, vbo, quads, wvao, wvbo, wquads });
+                        g.shadow.chunk_changed(k.0, k.1);
                     }
                     budget -= 1;
                     if budget == 0 {
@@ -747,9 +750,15 @@ impl Game {
     }
 
     unsafe fn render(&mut self, g: &mut Gl, w: u32, h: u32) {
+        let view_dist = self.settings.view_dist as f32;
+        let sky = sky_at(self.time);
+        // sombras do sol (só de dia, com o sol alto o bastante)
+        let cast_shadows = self.settings.shadows && sky.light[1] > 0.1 && sky.light_str > 0.05;
+        if cast_shadows {
+            g.shadow.pass(&g.gl, &self.meshes, g.tex, sky.light, self.eye(), view_dist);
+        }
         let gl = &g.gl;
         gl.viewport(0, 0, w as i32, h as i32);
-        let view_dist = self.settings.view_dist as f32;
         let tan_y = (self.settings.fov.to_radians() / 2.0).tan();
         let tan_x = tan_y * w as f32 / h.max(1) as f32;
         let f = self.forward();
@@ -763,7 +772,6 @@ impl Game {
             -dot(right, eye), -dot(up, eye), dot(f, eye), 1.0,
         ];
         let vp = mul(&perspective(tan_x, tan_y, 0.05, view_dist + 40.0), &view);
-        let sky = sky_at(self.time);
         let time = self.start.elapsed().as_secs_f32();
         let underwater = self.player.head_in_water;
         let common = |p: glow::Program| {
@@ -802,6 +810,13 @@ impl Game {
         gl.uniform_1_i32(g.u(g.block, "uTex").as_ref(), 0);
         gl.uniform_1_f32(g.u(g.block, "uAOStr").as_ref(), if self.ao { 1.0 } else { 0.0 });
         gl.uniform_1_f32(g.u(g.block, "uWaterDrop").as_ref(), 0.0);
+        gl.uniform_matrix_4_f32_slice(g.u(g.block, "uShadowMat").as_ref(), false, &g.shadow.mat);
+        gl.uniform_1_i32(g.u(g.block, "uShadowMap").as_ref(), 1);
+        gl.uniform_1_i32(g.u(g.block, "uShadows").as_ref(), cast_shadows as i32);
+        gl.uniform_1_f32(g.u(g.block, "uShadowTexel").as_ref(), 1.0 / shadow::SIZE as f32);
+        gl.active_texture(glow::TEXTURE1);
+        gl.bind_texture(glow::TEXTURE_2D, Some(g.shadow.tex));
+        gl.active_texture(glow::TEXTURE0);
         let uchunk = g.u(g.block, "uChunk");
         // descarta pedaços fora da visão: atrás da câmera ou longe demais
         let visible = |k: &(i32, i32)| {
@@ -1150,7 +1165,8 @@ fn main() {
         gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_WRAP_T, glow::REPEAT as i32);
         let ebo = gl.create_buffer().unwrap();
         let ui = ui::Ui::new(&gl);
-        let mut g = Gl { gl, block: block_p, water: water_p, sky: sky_p, cross: cross_p, empty_vao, cross_vao, cross_vbo, line: line_p, line_vao, line_vbo, ebo, ebo_quads: 0, tex, ui };
+        let shadow = shadow::Shadow::new(&gl);
+        let mut g = Gl { shadow, gl, block: block_p, water: water_p, sky: sky_p, cross: cross_p, empty_vao, cross_vao, cross_vbo, line: line_p, line_vao, line_vbo, ebo, ebo_quads: 0, tex, ui };
         g.ensure_indices(1 << 16);
         g
     };

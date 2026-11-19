@@ -137,6 +137,7 @@ pub struct Settings {
     pub ao: bool,
     pub reflections: bool,
     pub vsync: bool,
+    pub shadows: bool,
     /// 0..1 (o Java guarda 0..10)
     pub volume: f32,
 }
@@ -152,6 +153,7 @@ pub fn read_settings() -> Settings {
         ao: flag("oclusao"),
         reflections: flag("reflexos"),
         vsync: flag("vsync"),
+        shadows: flag("sombras"),
         volume: int("volume", 8, 0, 10) as f32 / 10.0,
     }
 }
