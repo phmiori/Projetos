@@ -287,12 +287,15 @@ final class Mobs {
         int ground = w.get(x, top, z), biome = w.biomeAt(x, z, top);
         boolean desert = ground == Block.SAND && biome == World.DESERT;
         if (ground != Block.GRASS && !(ground == Block.SNOW && biome == World.TUNDRA) && !desert) return;
+        boolean berg = biome == World.TUNDRA && w.heightAt(x, z) < World.SEA; // em cima do campo de gelo
         // cada bioma tem seus bichos: fazenda nas planícies, selvagens nas florestas e na tundra
         int[] pool;
         if (desert) // deserto: escorpiões (o imperador é raro) e alguns coelhos
             pool = new int[] { Mob.SCORPION, Mob.SCORPION, Mob.SCORPION, Mob.RABBIT, Mob.EMPEROR };
         else if (biome == World.FOREST || biome == World.BIRCH_FOREST)
             pool = new int[] { Mob.DEER, Mob.DEER, Mob.FOX, Mob.RABBIT, Mob.WOLF, Mob.PIG, Mob.COW, Mob.BEAR, Mob.TIGER };
+        else if (berg) // no campo de gelo: pinguins e, às vezes, um urso-polar
+            pool = new int[] { Mob.PENGUIN, Mob.PENGUIN, Mob.PENGUIN, Mob.POLAR_BEAR, Mob.POLAR_BEAR };
         else if (biome == World.TUNDRA)
             pool = new int[] { Mob.WOLF, Mob.FOX, Mob.RABBIT, Mob.BEAR, Mob.DEER, Mob.WHITE_TIGER,
                     Mob.POLAR_BEAR, Mob.PENGUIN, Mob.PENGUIN, Mob.MUSKOX, Mob.MUSKOX };
@@ -333,7 +336,8 @@ final class Mobs {
                     return;
                 }
                 int biome = w.biomeAt(x, z, w.heightAt(x, z) - 1);
-                if (biome == World.TUNDRA && depth >= 5 && r > 14 && rnd.nextDouble() < 0.18) { // mar gelado: narvais
+                boolean cold = biome == World.TUNDRA || biome == World.ICE_FIELD;
+                if (cold && depth >= 5 && r > 14 && rnd.nextDouble() < (biome == World.ICE_FIELD ? 0.3 : 0.18)) { // mar gelado: narvais
                     int nn = 1 + rnd.nextInt(2);
                     for (int i = 0; i < nn; i++) {
                         Mob nw = new Mob(Mob.NARWHAL, x + 0.5 + i * 1.5, y - depth / 2.0, z + 0.5);
@@ -343,7 +347,7 @@ final class Mobs {
                 }
                 double roll = rnd.nextDouble();
                 int type = biome == World.DESERT || (biome == World.PLAINS && roll < 0.35) ? Mob.TROPICAL
-                        : (biome == World.TUNDRA || biome == World.FOREST || biome == World.MOUNTAINS) && roll < 0.5 ? Mob.SALMON : Mob.FISH;
+                        : (cold || biome == World.FOREST || biome == World.MOUNTAINS) && roll < 0.5 ? Mob.SALMON : Mob.FISH;
                 int n = 1 + rnd.nextInt(3);
                 for (int i = 0; i < n; i++) {
                     double fx = x + 0.5 + (rnd.nextDouble() - 0.5), fz = z + 0.5 + (rnd.nextDouble() - 0.5);

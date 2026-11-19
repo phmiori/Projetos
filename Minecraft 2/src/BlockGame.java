@@ -1325,7 +1325,7 @@ public class BlockGame {
 
     /** Som de quebrar/bater conforme o material do bloco. */
     private static String breakSound(int b) {
-        if (b == Block.GLASS || b == Block.ICE) return "quebrar_vidro";
+        if (b == Block.GLASS || Block.isIce(b)) return "quebrar_vidro";
         if (b == Block.SAND || b == Block.GRAVEL || b == Block.SNOW) return "quebrar_areia";
         if (b == Block.WOOL) return "quebrar_planta";
         switch (Block.material(b)) {

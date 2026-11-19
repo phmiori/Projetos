@@ -270,7 +270,29 @@ final class Mesher {
             return (s == Block.CUBE || s == Block.CUTOUT) ? 1 : 0;
         }
 
+        /**
+         * Luz do céu da célula. A conta é por coluna, então embaixo de uma saliência daria preto; por isso a luz
+         * de uma coluna a céu aberto ao lado "vaza" um ou dois blocos para dentro (recortes, pingentes, bocas de caverna).
+         */
         int sky(int x, int y, int z) {
+            int s = sky0(x, y, z);
+            if (s >= 11) return s;
+            for (int f = 0; f < 4; f++) {
+                int dx = Block.DIR_X[f], dz = Block.DIR_Z[f];
+                if (Block.opaqueCube(blockAt(x + dx, y, z + dz))) continue; // a luz não atravessa parede
+                s = Math.max(s, sky0(x + dx, y, z + dz) - 4);
+                if (s < 8 && !Block.opaqueCube(blockAt(x + 2 * dx, y, z + 2 * dz))) s = Math.max(s, sky0(x + 2 * dx, y, z + 2 * dz) - 7);
+            }
+            return s;
+        }
+
+        private int blockAt(int x, int y, int z) {
+            if (y < 0 || y >= World.SY) return Block.AIR;
+            Chunk ch = of(x, z);
+            return ch == null ? Block.AIR : ch.blocks[Chunk.idx(x & 15, y, z & 15)] & 0xFF;
+        }
+
+        private int sky0(int x, int y, int z) {
             if (y >= World.SY) return 15;
             Chunk ch = of(x, z);
             if (ch == null) return 15;

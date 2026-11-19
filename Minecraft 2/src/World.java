@@ -11,8 +11,8 @@ final class World {
     static final int SY = 64, SEA = 24;
     static final double DAY_LENGTH = 2880; // segundos por dia completo (dia e noite): 48 minutos
 
-    static final int PLAINS = 0, FOREST = 1, BIRCH_FOREST = 2, DESERT = 3, TUNDRA = 4, MOUNTAINS = 5;
-    static final String[] BIOME_NAMES = { "Planície", "Floresta", "Bosque de bétulas", "Deserto", "Tundra", "Montanhas" };
+    static final int PLAINS = 0, FOREST = 1, BIRCH_FOREST = 2, DESERT = 3, TUNDRA = 4, MOUNTAINS = 5, ICE_FIELD = 6;
+    static final String[] BIOME_NAMES = { "Planície", "Floresta", "Bosque de bétulas", "Deserto", "Tundra", "Montanhas", "Campo de gelo" };
 
     /** Onde ficam guardados os pedaços modificados que saíram da memória (disco, ou memória no amigo). */
     interface Store {
@@ -442,6 +442,7 @@ final class World {
         if (y + 1 < SY && !Block.solid(b)) {
             int above = get(x, y + 1, z);
             if (Block.needsSupport(above)) set(x, y + 1, z, Block.AIR);
+            if (y > 0 && get(x, y - 1, z) == Block.ICICLE) set(x, y - 1, z, Block.AIR); // pingente pendurado aqui cai
             // tochas presas nesta parede também caem
             for (int f = 0; f < 4; f++) {
                 int tx = x - Block.DIR_X[f], tz = z - Block.DIR_Z[f];
@@ -953,7 +954,7 @@ final class World {
         double t = fbm(x / 260.0, z / 260.0, 3, seed + 11);
         double m = fbm(x / 210.0, z / 210.0, 3, seed + 12);
         if (t > 0.58 && m < 0.5) return DESERT;
-        if (t < 0.43) return TUNDRA;
+        if (t < 0.43) return top < SEA - 3 ? ICE_FIELD : TUNDRA; // mar frio e fundo: campo de gelo com trincheiras
         if (m > 0.56) return t > 0.5 ? BIRCH_FOREST : FOREST;
         return PLAINS;
     }
@@ -979,6 +980,47 @@ final class World {
         int[] igloo = iglooSite(cx, cz);
         if (igloo != null) buildIgloo(c, igloo);
         return c;
+    }
+
+    // =====================================================================
+    // campo de gelo: no mar frio e fundo, uma camada grossa de gelo sobe acima da água e é cortada por
+    // trincheiras (canais de água com paredes de gelo retas). Na linha d'água o gelo é azul e as ondas cavam
+    // um recorte embaixo da parede, de onde pendem pingentes. Só depende da semente e da posição.
+    // =====================================================================
+
+    /** Quanto a coluna fica longe de um canal: 0 = no meio do canal; acima de ~0,05 = gelo. */
+    private double channel(int x, int z) {
+        double a = Math.abs(fbm(x / 46.0, z / 46.0, 2, seed + 160) - 0.5);           // canais largos e compridos
+        double b = Math.abs(fbm(x / 23.0 + 50, z / 23.0, 2, seed + 161) - 0.5) * 1.6; // canais menores que os cruzam
+        return Math.min(a, b) - 0.012 * noise(x / 5.0, z / 5.0, seed + 162);
+    }
+
+    /** Escreve a camada de gelo com as trincheiras na coluna (x, z) do campo de gelo. */
+    private void iceField(int x, int z, int top, byte[] out, int base) {
+        double c = channel(x, z);
+        final double W = 0.035; // abaixo disso é canal (água)
+        if (c < W) return;
+        // altura do gelo: planalto ondulado de 5 a 15 blocos acima da água
+        int topY = SEA + 4 + (int) (fbm(x / 30.0, z / 30.0, 3, seed + 163) * 12 + noise(x / 4.0, z / 4.0, seed + 164) * 1.2);
+        topY = Math.min(topY, SY - 12);
+        boolean undercut = c < W + 0.012; // perto do canal as ondas cavam a parede na linha d'água
+        boolean streak = noise(x / 2.5, z / 2.5, seed + 165) > 0.68; // listras azuis descendo pela parede
+        for (int y = Math.max(top + 1, SEA - 4); y <= topY; y++) {
+            if (undercut && (y == SEA || (y == SEA + 1 && c < W + 0.006))) continue;
+            int b;
+            if (y == topY) b = Block.SNOW;
+            else if (y == topY - 1 && hash(x, z, seed + 166) < 0.6) b = Block.SNOW;
+            else if (y <= SEA + 1 || (streak && y < SEA + 6)) b = Block.BLUE_ICE;
+            else b = Block.PACKED_ICE;
+            out[base | y] = (byte) b;
+        }
+        // pingentes embaixo do recorte
+        if (undercut)
+            for (int y = SEA; y <= SEA + 1; y++)
+                if (out[base | y] == Block.AIR && out[base | (y + 1)] != Block.AIR && hash3(x, y, z, seed + 167) < 0.55) {
+                    out[base | y] = (byte) Block.ICICLE;
+                    break;
+                }
     }
 
     // =====================================================================
@@ -1162,13 +1204,13 @@ final class World {
             if (y == 0 || (y == 1 && hash(x, z, seed + 3) < 0.5)) b = Block.BEDROCK;
             else if (depth == 0) {
                 if (gravelFloor) b = Block.GRAVEL;
-                else if (beach || biome == DESERT) b = Block.SAND;
+                else if (beach || biome == DESERT || biome == ICE_FIELD) b = Block.SAND;
                 else if (biome == TUNDRA) b = Block.SNOW;
                 else if (biome == MOUNTAINS) b = top >= 49 + (int) (hash(x, z, seed + 5) * 3) ? Block.SNOW : Block.STONE;
                 else b = Block.GRASS;
             } else if (depth < 4) {
                 if (gravelFloor && depth < 2) b = Block.GRAVEL;
-                else if (beach) b = Block.SAND;
+                else if (beach || (biome == ICE_FIELD && depth < 2)) b = Block.SAND;
                 else if (biome == DESERT) b = depth < 3 ? Block.SAND : Block.SANDSTONE;
                 else if (biome == MOUNTAINS) b = Block.STONE;
                 else b = Block.DIRT;
@@ -1177,6 +1219,11 @@ final class World {
         }
         for (int y = h; y < SEA; y++)
             out[base | y] = (byte) (biome == TUNDRA && y == SEA - 1 ? Block.ICE : Block.WATER);
+        if (biome == ICE_FIELD) {
+            // nos canais, placas de gelo soltas boiando
+            if (noise(x / 5.0, z / 5.0, seed + 155) * 0.75 + hash(x, z, seed + 156) * 0.25 > 0.66) out[base | (SEA - 1)] = (byte) Block.ICE;
+        }
+        if (biome == ICE_FIELD) iceField(x, z, top, out, base);
 
         // cavernas: túneis (dois ruídos 3D perto de 0.5 ao mesmo tempo) e salões
         boolean canOpen = top >= SEA + 3; // não abre cavernas debaixo de água

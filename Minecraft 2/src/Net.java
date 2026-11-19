@@ -12,7 +12,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 final class Net {
     static final int PORT = 25600;
-    static final int VERSION = 18; // 18: tubarão maior, sangue e mordida mais espaçada; 17: tubarão come peixes e briga com narval; iglus mais raros; 16: atualização do gelo (urso-polar, pinguim, boi-almiscarado, narval, iglu); 15: escadas, lajes, porta e cerca de bétula; 14: tábuas de bétula; 13: fornalhas guardadas pelo anfitrião; 12: fornalha acesa; 11: tigres, gato e escorpiões; 10: ovos de criatura; 9: bichos selvagens e lobo domesticável (8: dia de 48 min e fotos; 7: mundo infinito)
+    static final int VERSION = 19; // 19: campo de gelo com trincheiras (gelo compacto, gelo azul, pingentes); 18: tubarão maior, sangue e mordida mais espaçada; 17: tubarão come peixes e briga com narval; iglus mais raros; 16: atualização do gelo (urso-polar, pinguim, boi-almiscarado, narval, iglu); 15: escadas, lajes, porta e cerca de bétula; 14: tábuas de bétula; 13: fornalhas guardadas pelo anfitrião; 12: fornalha acesa; 11: tigres, gato e escorpiões; 10: ovos de criatura; 9: bichos selvagens e lobo domesticável (8: dia de 48 min e fotos; 7: mundo infinito)
 
     // tipos de pacote
     static final byte HELLO = 1, WELCOME = 2, JOIN = 3, LEAVE = 4, STATE = 5, BLOCK = 6, TIME = 7,

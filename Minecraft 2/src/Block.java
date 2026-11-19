@@ -44,7 +44,12 @@ final class Block {
      */
     static final int BIRCH_STAIR_BASE = 172, BIRCH_SLAB_BASE = 180, BIRCH_VSLAB_BASE = 182, BIRCH_FENCE = 186,
             BIRCH_MIXED_BASE = 187, BIRCH_DOOR_BASE = 198, BIRCH_DOOR_TEX_LOWER = 214, BIRCH_DOOR_TEX_UPPER = 215;
-    static final int COUNT = 216;
+    /**
+     * Blocos do campo de gelo. Não viram item (os ids de item começam no 200): quebrados não dão nada,
+     * como o gelo comum.
+     */
+    static final int PACKED_ICE = 216, BLUE_ICE = 217, ICICLE = 218;
+    static final int COUNT = 219;
     /** Materiais das escadas e lajes (o 5 = bétula usa os ids novos acima). */
     static final int[] SHAPE_MATS = { PLANKS, COBBLE, STONE_BRICK, BRICK, SANDSTONE, BIRCH_PLANKS };
     static final int BIRCH_MAT = 5;
@@ -106,6 +111,9 @@ final class Block {
         def(GOLD_BLOCK, "Bloco de ouro", 4.0, CUBE, M_ROCK, 2, GOLD_BLOCK, 0);
         def(BEDROCK, "Rocha-mãe", -1, CUBE, M_ROCK, -1, AIR, 0);
         for (int l = 1; l <= 7; l++) def(WATER_FLOW + l - 1, "Água corrente", -1, LIQUID, M_NONE, -1, AIR, 0);
+        def(PACKED_ICE, "Gelo compacto", 1.0, CUBE, M_ROCK, -1, AIR, 0);
+        def(BLUE_ICE, "Gelo azul", 1.2, CUBE, M_ROCK, -1, AIR, 0);
+        def(ICICLE, "Pingente de gelo", 0.1, CROSS, M_NONE, -1, AIR, 0);
         for (int i = 0; i < COUNT; i++) TEXTURE[i] = i;
 
         // escadas e lajes: dureza, material e textura do bloco de origem
@@ -211,6 +219,8 @@ final class Block {
     /** Areia e cascalho caem quando ficam sem apoio. */
     static boolean falls(int b) { return b == SAND || b == GRAVEL; }
     static boolean isLeaves(int b) { return b == LEAVES || b == BIRCH_LEAVES; }
+    /** Gelo de qualquer tipo (som de vidro ao quebrar). */
+    static boolean isIce(int b) { return b == ICE || b == PACKED_ICE || b == BLUE_ICE || b == ICICLE; }
     static boolean isLog(int b) { return b == LOG || b == BIRCH_LOG; }
     /** Blocos que guardam para onde estão virados (cubos e a cama): a frente aponta para quem os colocou. */
     static boolean rotatable(int b) { return b > AIR && b < COUNT && (SHAPE[b] == CUBE || b == BED); }
@@ -398,7 +408,7 @@ final class Block {
 
     /** Plantas e tochas precisam de chão firme embaixo. */
     static boolean needsSupport(int b) {
-        return (SHAPE[b] == CROSS && !isWallTorch(b)) || b == CACTUS;
+        return (SHAPE[b] == CROSS && !isWallTorch(b) && b != ICICLE) || b == CACTUS;
     }
 
     private Block() {}

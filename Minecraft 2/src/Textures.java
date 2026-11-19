@@ -46,6 +46,9 @@ final class Textures {
         FILE[Block.FARMLAND] = "terra_arada";
         FILE[Block.FURNACE_LIT] = "fornalha_acesa";
         FILE[Block.BIRCH_PLANKS] = "tabuas_betula";
+        FILE[Block.PACKED_ICE] = "gelo_compacto";
+        FILE[Block.BLUE_ICE] = "gelo_azul";
+        FILE[Block.ICICLE] = "pingente_gelo";
         for (int s = 0; s < 3; s++) FILE[Block.WHEAT + s] = "trigo_" + (s + 1);
         FILE[Block.DOOR_TEX_LOWER] = "porta_baixo";
         FILE[Block.DOOR_TEX_UPPER] = "porta_cima";
@@ -666,6 +669,39 @@ final class Textures {
         set(t, Block.FLOWER_YELLOW, flowerYellow, flowerYellow, flowerYellow);
         set(t, Block.FLOWER_RED, flowerRed, flowerRed, flowerRed);
         set(t, Block.ICE, ice, ice, ice);
+        // gelo compacto: branco-azulado com sulcos verticais (como a parede de um iceberg); em cima, liso com rachaduras
+        int[] packedSide = make(S, (gx, gy, x, y) -> {
+            int col = (int) gx;
+            double groove = 0.5 + 0.5 * Math.cos((gx + World.hash(col / 3, 0, 160) * 1.5) * Math.PI / 2.0);
+            double f = 0.9 + 0.1 * groove + 0.05 * rnd(x, y, S, 161) - 0.04 * World.noise(gx * 0.3, gy * 0.9, 162);
+            int c = mixRgb(rgb(176, 210, 236), rgb(232, 242, 250), groove * 0.8 + 0.2 * World.noise(gx * 0.5, gy * 0.15, 163));
+            return mul(c, f);
+        });
+        int[] packedTop = make(S, (gx, gy, x, y) -> {
+            if (Math.abs(gx * 0.6 + gy - 11) < 0.35 || Math.abs(gx - gy * 0.3 - 4) < 0.3 && gy < 9) return rgb(196, 222, 242);
+            return mul(rgb(226, 238, 248), 0.95 + 0.07 * rnd(x, y, S, 164));
+        });
+        set(t, Block.PACKED_ICE, packedSide, packedTop, packedTop);
+        // gelo azul: azul-turquesa fundo com veios claros
+        int[] blueIce = make(S, (gx, gy, x, y) -> {
+            double v = World.noise(gx * 0.35, gy * 0.35, 165);
+            if (Math.abs(v - 0.5) < 0.04) return rgb(150, 210, 240);
+            return mul(mixRgb(rgb(58, 138, 200), rgb(88, 170, 222), v), 0.95 + 0.08 * rnd(x, y, S, 166));
+        });
+        set(t, Block.BLUE_ICE, blueIce, blueIce, blueIce);
+        // pingente de gelo: pontas penduradas, largas em cima e finas embaixo
+        int[] icicle = make(S, (gx, gy, x, y) -> {
+            double[][] sp = { { 3.5, 9 }, { 7.5, 15 }, { 11, 7 }, { 13.5, 11 } }; // {centro, comprimento}
+            for (double[] s : sp) {
+                double w = 1.6 * (1 - gy / s[1]);
+                if (gy < s[1] && Math.abs(gx - s[0]) < w + 0.3) {
+                    double f = gx < s[0] ? 1.05 : 0.88;
+                    return mul(rgb(206, 232, 250), f * (0.95 + 0.07 * rnd(x, y, S, 167)));
+                }
+            }
+            return 0;
+        });
+        set(t, Block.ICICLE, icicle, icicle, icicle);
         set(t, Block.LAVA, lava, lava, lava);
         set(t, Block.WOOL, wool, wool, wool);
         set(t, Block.STONE_BRICK, stoneBrick, stoneBrick, stoneBrick);
