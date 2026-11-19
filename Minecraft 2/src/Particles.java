@@ -37,6 +37,15 @@ final class Particles {
         }
     }
 
+    /** Sangue da mordida do tubarão: gotas vermelhas de vários tons que se espalham e afundam devagar na água. */
+    void blood(double px, double py, double pz) {
+        int[] tones = { 0x8A0E0E, 0xB01818, 0x6A0808, 0xC42A20 };
+        for (int k = 0; k < 22; k++)
+            add(px + (rnd.nextDouble() - 0.5) * 0.5, py + (rnd.nextDouble() - 0.5) * 0.5, pz + (rnd.nextDouble() - 0.5) * 0.5,
+                    (rnd.nextDouble() - 0.5) * 2.4, (rnd.nextDouble() - 0.3) * 1.6, (rnd.nextDouble() - 0.5) * 2.4,
+                    0.8 + rnd.nextDouble() * 0.9, 0.06 + rnd.nextDouble() * 0.07, 2.5, tones[rnd.nextInt(tones.length)]);
+    }
+
     /** Respingos de uma cor só (flecha acertando uma criatura). */
     void hitBits(double px, double py, double pz, int rgb, int n) {
         for (int k = 0; k < n; k++)

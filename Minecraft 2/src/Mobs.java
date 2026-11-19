@@ -9,6 +9,8 @@ import java.util.Random;
  */
 final class Mobs {
     final List<Mob> list = new ArrayList<>();
+    /** Onde saiu sangue neste quadro (mordidas do tubarão). */
+    final List<double[]> blood = new ArrayList<>();
     private final Random rnd = new Random();
     private double spawnTimer;
 
@@ -131,6 +133,7 @@ final class Mobs {
         explosions.clear();
         shots.clear();
         kills.clear();
+        blood.clear();
         if (players.isEmpty()) return;
         wake(w);
         double daylight = w.daylight();
@@ -153,6 +156,7 @@ final class Mobs {
                 if ((m.type == Mob.NARWHAL || m.type == Mob.SHARK) && (t.type == Mob.NARWHAL || t.type == Mob.SHARK)) t.target = m; // tubarão e narval revidam
                 t.damage(m.type == Mob.WOLF ? 4 : eat ? 10 : m.attackDamage());
                 if (eat) m.health = Math.min(Mob.maxHealth(m.type), m.health + 3); // o tubarão se recupera comendo
+                if (m.type == Mob.SHARK) blood.add(new double[] { t.x, t.y + 0.3, t.z });
                 double kx = t.x - m.x, kz = t.z - m.z, kl = Math.max(0.01, Math.sqrt(kx * kx + kz * kz));
                 t.vx += kx / kl * 6; t.vz += kz / kl * 6; t.vy = 4;
                 Sounds.playAt("criatura_dano", t.x, t.y + 0.8, t.z, listener, 0.8);
@@ -167,6 +171,7 @@ final class Mobs {
             if (m.wantsShoot) shots.add(shot(m, p));
             if (m.wantsAttack) {
                 hits.add(new Object[] { p, m.attackDamage(), m.x, m.z });
+                if (m.type == Mob.SHARK) blood.add(new double[] { p.x, p.y + 0.8, p.z });
                 Sounds.playAt(Mob.SOUNDS[m.type], m.x, m.y + 1, m.z, listener, 0.9);
             }
             m.idleSound -= dt;

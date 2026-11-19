@@ -598,6 +598,10 @@ public class BlockGame {
         world.tickFalling(dt);
         world.tickGrowth(dt, player.x, player.z, rnd);
         for (double[] e : mobs.explosions) explodeAt(e[0], e[1], e[2], e[3]);
+        for (double[] b : mobs.blood) { // mordida do tubarão: sangue aqui e para os amigos
+            particles.blood(b[0], b[1], b[2]);
+            if (server != null) server.broadcast(new Net.Out(Net.BLOOD).f(b[0]).f(b[1]).f(b[2]), null);
+        }
         for (double[] s : mobs.shots) { // flechas dos esqueletos
             benchShots++;
             spawnArrow(Arrows.OWNER_MOB, (int) s[0], s[1], s[2], s[3], s[4], s[5], s[6], Mob.ARROW_DAMAGE, false);
@@ -2454,6 +2458,9 @@ public class BlockGame {
                 receivePhoto(d, from);
                 break;
             }
+            case Net.BLOOD:
+                if (world != null) particles.blood(d.readFloat(), d.readFloat(), d.readFloat());
+                break;
             case Net.TOAST:
                 toast(d.readUTF());
                 break;

@@ -11,7 +11,7 @@ final class Mob extends Entity {
             "Urso-polar", "Pinguim", "Boi-almiscarado", "Narval" };
     private static final double[][] SIZE = { { 0.42, 0.95 }, { 0.42, 1.2 }, { 0.2, 0.75 }, { 0.3, 1.95 }, { 0.6, 0.8 }, { 0.2, 0.35 },
             { 0.45, 1.35 }, { 0.3, 1.7 }, { 0.3, 1.95 },
-            { 0.3, 0.85 }, { 0.25, 0.65 }, { 0.36, 1.55 }, { 0.2, 0.5 }, { 0.55, 1.35 }, { 0.15, 0.3 }, { 0.15, 0.3 }, { 0.2, 0.32 }, { 0.6, 0.9 },
+            { 0.3, 0.85 }, { 0.25, 0.65 }, { 0.36, 1.55 }, { 0.2, 0.5 }, { 0.55, 1.35 }, { 0.15, 0.3 }, { 0.15, 0.3 }, { 0.2, 0.32 }, { 0.9, 1.35 },
             { 0.42, 1.25 }, { 0.42, 1.25 }, { 0.18, 0.5 }, { 0.3, 0.35 }, { 1.1, 1.8 },
             { 0.6, 1.4 }, { 0.2, 0.84 }, { 0.5, 1.3 }, { 0.6, 0.9 } };
     private static final double[] MAX_HP = { 10, 8, 4, 20, 16, 3, 10, 20, 20, 12, 8, 12, 4, 30, 3, 3, 4, 25, 30, 30, 8, 8, 40, 30, 6, 20, 24 };
@@ -257,20 +257,20 @@ final class Mob extends Entity {
         wantsBite = false;
         boolean water = Block.isWater(w.get((int) Math.floor(x), (int) Math.floor(y + 0.15), (int) Math.floor(z)));
         inWater = water;
-        double look = type == SHARK ? 1.6 : type == NARWHAL ? 1.8 : 0.6; // quanto à frente confere se ainda é água
+        double look = type == SHARK ? 2.4 : type == NARWHAL ? 1.8 : 0.6; // quanto à frente confere se ainda é água
         if (water) {
             outOfWater = 0;
             double dx = p.x - x, dy = p.y + 0.6 - y, dz = p.z - z, d3 = Math.sqrt(dx * dx + dy * dy + dz * dz);
             boolean preyInWater = Block.isWater(w.get((int) Math.floor(p.x), (int) Math.floor(p.y + 0.5), (int) Math.floor(p.z)));
             if (type == SHARK && canTarget && preyInWater && d3 < 16) {
                 dirX = dx / d3; dirY = dy / d3; dirZ = dz / d3; // vem atrás de quem está nadando
-                if (d3 < 1.9 && attackCd <= 0) { wantsAttack = true; attackCd = 1.2; }
+                if (d3 < 2.7 && attackCd <= 0) { wantsAttack = true; attackCd = 2.6; } // morde, solta e volta (não fica mordendo sem parar)
             } else if ((type == SHARK || type == NARWHAL) && target != null && target.health > 0) {
                 // tubarão caçando um peixe ou brigando com um narval; narval atacando um tubarão com a presa
                 double ex = target.x - x, ey = target.y + 0.2 - y, ez = target.z - z, d = Math.max(0.01, Math.sqrt(ex * ex + ey * ey + ez * ez));
                 dirX = ex / d; dirY = ey / d; dirZ = ez / d;
-                double reach = type == NARWHAL ? 2.6 : target.smallFish() ? 1.3 : 2.0;
-                if (d < reach && attackCd <= 0) { wantsBite = true; attackCd = type == NARWHAL ? 1.3 : target.smallFish() ? 0.6 : 1.1; }
+                double reach = type == NARWHAL ? 2.6 : target.smallFish() ? 1.9 : 2.8;
+                if (d < reach && attackCd <= 0) { wantsBite = true; attackCd = type == NARWHAL ? 1.3 : target.smallFish() ? 1.6 : 2.2; }
             } else if (flee > 0 && type != SHARK) { // foge do jogador
                 double ex = x - p.x, ez = z - p.z, l = Math.max(0.01, Math.sqrt(ex * ex + ez * ez));
                 dirX = ex / l; dirZ = ez / l; dirY = 0;
@@ -449,6 +449,16 @@ final class Mob extends Entity {
             this.cx = cx; this.cy = cy; this.cz = cz; this.sx = sx; this.sy = sy; this.sz = sz;
             this.color = color; this.leg = leg; this.glow = glow; this.piv = piv;
         }
+    }
+
+    /** O mesmo modelo s vezes maior (os pivôs das pernas e da cauda acompanham). */
+    private static Box[] scaled(Box[] m, double s) {
+        Box[] out = new Box[m.length];
+        for (int i = 0; i < m.length; i++) {
+            Box b = m[i];
+            out[i] = new Box(b.cx * s, b.cy * s, b.cz * s, b.sx * s, b.sy * s, b.sz * s, b.color, b.leg, b.glow, b.piv * s);
+        }
+        return out;
     }
 
     /** Parte de perna que balança em volta de pivot (altura do quadril), mesmo sendo só um pedaço da perna. */
@@ -1230,7 +1240,7 @@ final class Mob extends Entity {
         sk.add(tail(0, 0.6, -1.08, 0.05, 0.24, 0.12, grD, -0.98));         // cauda em duas pontas
         sk.add(tail(0, 0.82, -1.16, 0.04, 0.24, 0.1, grD, -0.98));
         sk.add(tail(0, 0.3, -1.07, 0.05, 0.16, 0.1, grD, -0.98));
-        MODELS[SHARK] = sk.toArray(new Box[0]);
+        MODELS[SHARK] = scaled(sk.toArray(new Box[0]), 1.5); // tubarão grande
     }
 
     // ---- tigres, gato e escorpiões: o mesmo desenho com cores diferentes (índices 1 a 4 do modelo) ----
