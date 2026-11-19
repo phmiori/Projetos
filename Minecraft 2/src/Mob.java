@@ -3,16 +3,20 @@ final class Mob extends Entity {
     static final int PIG = 0, SHEEP = 1, CHICKEN = 2, ZOMBIE = 3, SPIDER = 4, FISH = 5, COW = 6, CREEPER = 7, SKELETON = 8;
     static final int WOLF = 9, FOX = 10, DEER = 11, RABBIT = 12, BEAR = 13, BIRD = 14, TROPICAL = 15, SALMON = 16, SHARK = 17;
     static final int TIGER = 18, WHITE_TIGER = 19, CAT = 20, SCORPION = 21, EMPEROR = 22;
-    static final int TYPES = 23;
+    static final int POLAR_BEAR = 23, PENGUIN = 24, MUSKOX = 25, NARWHAL = 26;
+    static final int TYPES = 27;
     static final String[] NAMES = { "Porco", "Ovelha", "Galinha", "Morto-vivo", "Aranha", "Peixe", "Vaca", "Creeper", "Esqueleto",
             "Lobo", "Raposa", "Cervo", "Coelho", "Urso", "Pássaro", "Peixe tropical", "Salmão", "Tubarão",
-            "Tigre-de-bengala", "Tigre-de-bengala branco", "Gato", "Escorpião amarelo", "Escorpião-imperador" };
+            "Tigre-de-bengala", "Tigre-de-bengala branco", "Gato", "Escorpião amarelo", "Escorpião-imperador",
+            "Urso-polar", "Pinguim", "Boi-almiscarado", "Narval" };
     private static final double[][] SIZE = { { 0.42, 0.95 }, { 0.42, 1.2 }, { 0.2, 0.75 }, { 0.3, 1.95 }, { 0.6, 0.8 }, { 0.2, 0.35 },
             { 0.45, 1.35 }, { 0.3, 1.7 }, { 0.3, 1.95 },
             { 0.3, 0.85 }, { 0.25, 0.65 }, { 0.36, 1.55 }, { 0.2, 0.5 }, { 0.55, 1.35 }, { 0.15, 0.3 }, { 0.15, 0.3 }, { 0.2, 0.32 }, { 0.6, 0.9 },
-            { 0.42, 1.25 }, { 0.42, 1.25 }, { 0.18, 0.5 }, { 0.3, 0.35 }, { 1.1, 1.8 } };
-    private static final double[] MAX_HP = { 10, 8, 4, 20, 16, 3, 10, 20, 20, 12, 8, 12, 4, 30, 3, 3, 4, 25, 30, 30, 8, 8, 40 };
-    private static final double[] SPEED = { 1.5, 1.3, 1.6, 2.7, 3.6, 1.5, 1.3, 2.4, 2.3, 2.6, 2.8, 3.0, 2.4, 2.2, 4.5, 1.6, 2.0, 3.2, 3.0, 3.0, 2.2, 2.6, 2.0 };
+            { 0.42, 1.25 }, { 0.42, 1.25 }, { 0.18, 0.5 }, { 0.3, 0.35 }, { 1.1, 1.8 },
+            { 0.6, 1.4 }, { 0.2, 0.84 }, { 0.5, 1.3 }, { 0.6, 0.9 } };
+    private static final double[] MAX_HP = { 10, 8, 4, 20, 16, 3, 10, 20, 20, 12, 8, 12, 4, 30, 3, 3, 4, 25, 30, 30, 8, 8, 40, 30, 6, 20, 20 };
+    private static final double[] SPEED = { 1.5, 1.3, 1.6, 2.7, 3.6, 1.5, 1.3, 2.4, 2.3, 2.6, 2.8, 3.0, 2.4, 2.2, 4.5, 1.6, 2.0, 3.2, 3.0, 3.0, 2.2, 2.6, 2.0,
+            2.3, 1.1, 1.6, 2.2 };
     /** Lobo domesticado: vida maior. */
     static final double TAMED_HP = 20;
     /** Creeper: quanto tempo o pavio queima antes de explodir, e a força da explosão. */
@@ -27,7 +31,8 @@ final class Mob extends Entity {
     double health, yaw, hurt, walk, aiTimer, dirX, dirZ, attackCd, flee, burn;
     double idleSound = 2 + Math.random() * 8; // segundos até o próximo som da criatura
     static final String[] SOUNDS = { "porco", "ovelha", "galinha", "morto_vivo", "aranha", null, "vaca", null, "esqueleto",
-            "lobo", "raposa", null, null, "urso", "passaro", null, null, null, "rugido", "rugido", "miau", "aranha", "aranha" };
+            "lobo", "raposa", null, null, "urso", "passaro", null, null, null, "rugido", "rugido", "miau", "aranha", "aranha",
+            "urso", "pinguim", "boi", null };
 
     // ---- lobo (domesticável), urso e pássaro ----
     boolean tamed, sitting;   // lobo: tem dono / está sentado esperando
@@ -43,11 +48,16 @@ final class Mob extends Entity {
     /** Variação de cor de pássaros e peixes tropicais (vem do id, então é igual no anfitrião e nos amigos). */
     int variant() { return Math.floorMod(id, 3); }
 
-    boolean swimmer() { return type == FISH || type == TROPICAL || type == SALMON || type == SHARK; }
+    boolean swimmer() { return type == FISH || type == TROPICAL || type == SALMON || type == SHARK || type == NARWHAL; }
+
+    boolean bear() { return type == BEAR || type == POLAR_BEAR; }
+
+    /** Revida quando apanha (fica bravo um tempo): lobo, ursos, tigres e o boi-almiscarado. */
+    boolean fighter() { return type == WOLF || bear() || tiger() || type == MUSKOX; }
 
     /** Ataca jogadores: monstros, tubarão e lobo/urso com raiva. */
     boolean attacksPlayer() {
-        return hostile() || type == SHARK || scorpion() || ((type == WOLF || type == BEAR || tiger()) && angry > 0 && !tamed);
+        return hostile() || type == SHARK || scorpion() || (fighter() && angry > 0 && !tamed);
     }
 
     boolean tiger() { return type == TIGER || type == WHITE_TIGER; }
@@ -59,7 +69,7 @@ final class Mob extends Entity {
     float netAnim() {
         if (type == CREEPER) return (float) fuse;
         if (type == SKELETON) return (float) aim;
-        if (type == WOLF || type == BEAR || tiger()) return (tamed ? 1 : 0) + (sitting ? 2 : 0) + (angry > 0 ? 4 : 0);
+        if (fighter()) return (tamed ? 1 : 0) + (sitting ? 2 : 0) + (angry > 0 ? 4 : 0);
         if (type == BIRD) return flying ? 1 : 0;
         return 0;
     }
@@ -67,7 +77,7 @@ final class Mob extends Entity {
     void applyNetAnim(float a) {
         if (type == CREEPER) fuse = a;
         else if (type == SKELETON) aim = a;
-        else if (type == WOLF || type == BEAR || tiger()) { int f = (int) a; tamed = (f & 1) != 0; sitting = (f & 2) != 0; angry = (f & 4) != 0 ? 1 : 0; }
+        else if (fighter()) { int f = (int) a; tamed = (f & 1) != 0; sitting = (f & 2) != 0; angry = (f & 4) != 0 ? 1 : 0; }
         else if (type == BIRD) flying = a > 0.5f;
     }
     boolean wantsAttack; // encostou no jogador e pode atacar neste quadro
@@ -91,7 +101,7 @@ final class Mob extends Entity {
     boolean hostile() { return type == ZOMBIE || type == SPIDER || type == CREEPER || type == SKELETON; }
 
     double attackDamage() {
-        return type == ZOMBIE || type == WOLF ? 3 : type == BEAR ? 5 : type == SHARK ? 4 : tiger() || type == EMPEROR ? 6 : 2;
+        return type == ZOMBIE || type == WOLF ? 3 : bear() ? 5 : type == SHARK || type == MUSKOX ? 4 : tiger() || type == EMPEROR ? 6 : 2;
     }
 
     void update(double dt, World w, Player p, boolean canTarget, java.util.Random r) {
@@ -178,7 +188,7 @@ final class Mob extends Entity {
             tx = px / Math.max(dist, 0.01);
             tz = pz / Math.max(dist, 0.01);
             if (!hostile()) speed *= 1.4; // lobo e urso com raiva correm
-            double reach = type == SPIDER ? 1.5 : type == BEAR || tiger() ? 1.9 : type == EMPEROR ? 3.4 : 1.3;
+            double reach = type == SPIDER ? 1.5 : bear() || tiger() ? 1.9 : type == MUSKOX ? 1.6 : type == EMPEROR ? 3.4 : 1.3;
             if (type != CREEPER && dist < reach && Math.abs(py) < 1.7) { // o creeper não bate: explode
                 tx = tz = 0;
                 if (attackCd <= 0) { wantsAttack = true; attackCd = 1.0; }
@@ -243,7 +253,7 @@ final class Mob extends Entity {
         wantsAttack = false;
         boolean water = Block.isWater(w.get((int) Math.floor(x), (int) Math.floor(y + 0.15), (int) Math.floor(z)));
         inWater = water;
-        double look = type == SHARK ? 1.6 : 0.6; // quanto à frente confere se ainda é água
+        double look = type == SHARK ? 1.6 : type == NARWHAL ? 1.8 : 0.6; // quanto à frente confere se ainda é água
         if (water) {
             outOfWater = 0;
             double dx = p.x - x, dy = p.y + 0.6 - y, dz = p.z - z, d3 = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -360,7 +370,7 @@ final class Mob extends Entity {
     void damage(double d) {
         health -= d;
         hurt = 0.35;
-        if (type == WOLF || type == BEAR || tiger()) {
+        if (fighter()) {
             if (tamed) sitting = false; // o lobo domesticado levanta para se defender
             else angry = 25;            // lobo selvagem e urso revidam
         } else if (!hostile() && type != SHARK && !scorpion()) flee = 4;
@@ -384,6 +394,10 @@ final class Mob extends Entity {
             case DEER: return pairs(Items.RAW_MEAT, 1 + r.nextInt(3), Items.LEATHER, r.nextInt(3));
             case RABBIT: return new int[] { Items.RAW_MEAT, 1 };
             case BEAR: return pairs(Items.RAW_MEAT, 2 + r.nextInt(3), Items.LEATHER, 1 + r.nextInt(2));
+            case POLAR_BEAR: return pairs(Items.RAW_MEAT, 1 + r.nextInt(2), Items.RAW_FISH, 1 + r.nextInt(2), Items.LEATHER, 1 + r.nextInt(2));
+            case PENGUIN: return pairs(Items.FEATHER, 1 + r.nextInt(2), Items.RAW_FISH, r.nextInt(2));
+            case MUSKOX: return pairs(Items.RAW_MEAT, 2 + r.nextInt(2), Items.LEATHER, 1 + r.nextInt(2), Block.WOOL, r.nextInt(2));
+            case NARWHAL: return pairs(Items.RAW_FISH, 2 + r.nextInt(3), Items.BONE, 1);
             case BIRD: return pairs(Items.FEATHER, 1 + r.nextInt(2));
             case TROPICAL: return new int[] { Items.RAW_FISH, 1 };
             case SALMON: return new int[] { Items.RAW_FISH, 1 + r.nextInt(2) };
@@ -1392,7 +1406,146 @@ final class Mob extends Entity {
         MODELS[CAT] = catModel();
         MODELS[SCORPION] = scorpionModel(1.0);
         MODELS[EMPEROR] = scorpionModel(5.0);
+        MODELS[POLAR_BEAR] = polarBearModel();
+        MODELS[PENGUIN] = penguinModel();
+        MODELS[MUSKOX] = muskoxModel();
+        MODELS[NARWHAL] = narwhalModel();
     }
+
+    /** Urso-polar: mais comprido que o urso pardo, cabeça baixa e pescoço longo, traseiro mais alto. */
+    private static Box[] polarBearModel() {
+        int fur = 0xF4F0E4, sh = 0xDCD6C4, li = 0xFFFFF8, blk = 0x141414;
+        java.util.List<Box> l = new java.util.ArrayList<>();
+        double[][] legs = { { -0.25, 0.52, 1, 0 }, { 0.25, 0.52, 2, 0 }, { -0.25, -0.56, 2, 1 }, { 0.25, -0.56, 1, 1 } };
+        for (double[] lg : legs) {
+            int ph = (int) lg[2];
+            double lx = lg[0], lz = lg[1];
+            boolean back = lg[3] == 1;
+            l.add(legp(lx, back ? 0.68 : 0.64, lz, back ? 0.32 : 0.27, back ? 0.42 : 0.36, back ? 0.38 : 0.3, fur, ph, 0.86));
+            l.add(legp(lx, 0.27, lz, 0.24, 0.44, 0.26, fur, ph, 0.86));
+            l.add(legp(lx, 0.05, lz + 0.04, 0.29, 0.1, 0.34, sh, ph, 0.86));          // pata larga
+            for (int t = -1; t <= 1; t++) l.add(legp(lx + t * 0.07, 0.03, lz + 0.21, 0.035, 0.04, 0.05, blk, ph, 0.86));
+        }
+        l.add(b(0, 0.93, -0.02, 0.8, 0.66, 1.42, fur));                           // tronco
+        l.add(b(0, 1.0, -0.62, 0.78, 0.62, 0.36, fur));                            // traseiro alto
+        l.add(b(0, 0.585, 0, 0.66, 0.03, 1.2, sh));                                // barriga
+        l.add(b(0, 1.265, -0.2, 0.52, 0.02, 1.0, li));                             // costas claras
+        l.add(b(-0.401, 0.95, -0.05, 0.01, 0.42, 1.1, sh)); l.add(b(0.401, 0.95, -0.05, 0.01, 0.42, 1.1, sh));
+        l.add(b(0, 1.04, -0.83, 0.16, 0.14, 0.06, fur));                           // rabinho
+        l.add(b(0, 1.0, 0.8, 0.48, 0.42, 0.36, fur));                              // pescoço comprido
+        l.add(b(0, 0.96, 1.05, 0.42, 0.36, 0.34, fur));                            // cabeça
+        l.add(b(0, 1.145, 1.0, 0.34, 0.02, 0.26, li));
+        l.add(b(0, 0.88, 1.29, 0.24, 0.2, 0.24, li));                              // focinho comprido
+        l.add(b(0, 0.94, 1.415, 0.13, 0.08, 0.02, blk));                           // nariz preto
+        l.add(b(0, 0.79, 1.33, 0.18, 0.02, 0.12, sh));
+        l.add(b(0, 0.8, 1.36, 0.14, 0.01, 0.04, blk));                             // boca
+        for (int s = -1; s <= 1; s += 2) {
+            l.add(eye(s * 0.13, 1.03, 1.222, 0.045, blk));
+            l.add(b(s * 0.16, 1.17, 0.96, 0.09, 0.08, 0.06, fur));                 // orelhas pequenas
+            l.add(b(s * 0.16, 1.17, 0.993, 0.05, 0.045, 0.005, sh));
+        }
+        return l.toArray(new Box[0]);
+    }
+
+    /** Pinguim-imperador: costas pretas, barriga branca, manchas amarelas no pescoço e bico com faixa laranja. */
+    private static Box[] penguinModel() {
+        int blk = 0x1C1E24, bk2 = 0x2C3038, wh = 0xF4F4F0, yel = 0xF0B030, pale = 0xF8E6A0, foot = 0xE08A30;
+        java.util.List<Box> l = new java.util.ArrayList<>();
+        for (int s = -1; s <= 1; s += 2) {
+            int ph = s < 0 ? 1 : 2;
+            l.add(legp(s * 0.08, 0.06, 0.0, 0.08, 0.08, 0.08, blk, ph, 0.12));
+            l.add(legp(s * 0.08, 0.015, 0.05, 0.11, 0.03, 0.15, foot, ph, 0.12));  // pés laranja
+        }
+        l.add(b(0, 0.38, 0, 0.36, 0.52, 0.32, blk));                               // corpo
+        l.add(b(0, 0.32, -0.01, 0.38, 0.3, 0.3, blk));                             // barriga mais larga embaixo
+        l.add(b(0, 0.34, 0.162, 0.28, 0.44, 0.01, wh));                            // peito branco
+        l.add(b(0, 0.31, 0.152, 0.32, 0.26, 0.012, wh));
+        l.add(b(0, 0.57, 0.163, 0.22, 0.07, 0.01, pale));                          // amarelinho do peito
+        l.add(b(0, 0.62, -0.17, 0.2, 0.3, 0.02, bk2));                             // nuca
+        l.add(b(0, 0.13, -0.19, 0.12, 0.06, 0.08, blk));                           // rabinho
+        for (int s = -1; s <= 1; s += 2) {                                         // nadadeiras
+            l.add(b(s * 0.2, 0.4, 0.0, 0.04, 0.32, 0.14, blk));
+            l.add(b(s * 0.2, 0.26, 0.0, 0.035, 0.08, 0.1, blk));
+            l.add(b(s * 0.222, 0.38, 0.0, 0.005, 0.26, 0.1, wh));                  // lado de dentro claro
+        }
+        l.add(b(0, 0.73, 0.02, 0.26, 0.22, 0.26, blk));                            // cabeça
+        for (int s = -1; s <= 1; s += 2) {
+            l.add(b(s * 0.131, 0.69, 0.02, 0.005, 0.09, 0.12, yel));               // manchas amarelas
+            l.add(b(s * 0.131, 0.64, 0.06, 0.005, 0.05, 0.08, pale));
+            l.add(eye(s * 0.07, 0.76, 0.152, 0.03, 0x101010));
+        }
+        l.add(b(0, 0.7, 0.2, 0.06, 0.045, 0.11, 0x2A2A2A));                        // bico
+        l.add(b(0, 0.682, 0.2, 0.05, 0.012, 0.09, 0xE07A20));                      // faixa laranja do bico
+        return l.toArray(new Box[0]);
+    }
+
+    /** Boi-almiscarado: pelo comprido que quase arrasta, chifres curvados para baixo e uma "sela" clara. */
+    private static Box[] muskoxModel() {
+        int fur = 0x3A2A1E, dark = 0x2A1E14, shag = 0x4A3626, cream = 0xC8B48C, sock = 0x9A8A6E, hoof = 0x1A1410,
+                horn = 0xD8CCB0, tip = 0x5A5048, face = 0x241A12;
+        java.util.List<Box> l = new java.util.ArrayList<>();
+        double[][] legs = { { -0.22, 0.42, 1 }, { 0.22, 0.42, 2 }, { -0.22, -0.42, 2 }, { 0.22, -0.42, 1 } };
+        for (double[] lg : legs) {
+            int ph = (int) lg[2];
+            l.add(legp(lg[0], 0.3, lg[1], 0.17, 0.4, 0.19, sock, ph, 0.5));        // pernas curtas e claras
+            l.add(legp(lg[0], 0.05, lg[1], 0.18, 0.1, 0.2, hoof, ph, 0.5));
+        }
+        l.add(b(0, 0.86, 0, 0.84, 0.64, 1.26, fur));                               // tronco
+        l.add(b(0, 1.2, 0.3, 0.66, 0.16, 0.5, fur));                               // corcova
+        l.add(b(0, 1.205, -0.12, 0.5, 0.03, 0.5, cream));                          // sela clara
+        // saia de pelo comprido dos lados, na frente e atrás (as pernas aparecem embaixo)
+        for (int s = -1; s <= 1; s += 2) {
+            l.add(b(s * 0.44, 0.56, 0, 0.05, 0.5, 1.22, dark));
+            for (double z : new double[] { -0.4, -0.1, 0.2, 0.48 }) l.add(b(s * 0.468, 0.48 + (z * 10 % 2) * 0.03, z, 0.01, 0.4, 0.08, shag));
+        }
+        l.add(b(0, 0.56, -0.64, 0.82, 0.5, 0.05, dark));
+        l.add(b(0, 0.58, 0.63, 0.82, 0.46, 0.05, dark));
+        l.add(b(0, 0.95, -0.66, 0.1, 0.12, 0.04, dark));                           // rabinho
+        // cabeça baixa com barba
+        l.add(b(0, 0.84, 0.82, 0.38, 0.38, 0.34, face));
+        l.add(b(0, 0.58, 0.84, 0.34, 0.24, 0.3, dark));                            // barba
+        l.add(b(0, 0.72, 1.03, 0.28, 0.22, 0.1, sock));                            // focinho claro
+        l.add(b(0, 0.76, 1.082, 0.14, 0.06, 0.01, hoof));                          // nariz
+        l.add(b(0, 1.05, 0.84, 0.46, 0.09, 0.2, horn));                            // base dos chifres na testa
+        for (int s = -1; s <= 1; s += 2) {
+            l.add(b(s * 0.28, 1.0, 0.82, 0.12, 0.09, 0.13, horn));                 // chifre descendo e virando para a frente
+            l.add(b(s * 0.34, 0.9, 0.86, 0.08, 0.14, 0.1, horn));
+            l.add(b(s * 0.33, 0.8, 0.92, 0.07, 0.08, 0.08, horn));
+            l.add(b(s * 0.31, 0.74, 0.97, 0.05, 0.06, 0.06, tip));
+            l.add(eye(s * 0.13, 0.88, 0.992, 0.04, 0x0C0A08));
+        }
+        return l.toArray(new Box[0]);
+    }
+
+    /** Narval: baleia cinza pintada, barriga clara e a presa comprida em espiral saindo da boca. */
+    private static Box[] narwhalModel() {
+        int gr = 0x8A96A0, grD = 0x5A646E, spot = 0x46505A, belly = 0xE6E8EA, ivory = 0xEDE6D2, ring = 0xC8BEA4;
+        java.util.List<Box> l = new java.util.ArrayList<>();
+        l.add(b(0, 0.45, 0.1, 0.7, 0.62, 1.3, gr));                                // corpo
+        l.add(b(0, 0.43, 0.95, 0.6, 0.54, 0.4, gr));                               // cabeça
+        l.add(b(0, 0.48, 1.2, 0.48, 0.44, 0.14, gr));                              // testa redonda ("melão")
+        l.add(b(0, 0.44, -0.72, 0.5, 0.46, 0.36, gr));
+        l.add(b(0, 0.43, -1.04, 0.3, 0.28, 0.3, grD));
+        l.add(b(0, 0.13, 0.1, 0.56, 0.02, 1.5, belly));                            // barriga
+        l.add(b(0, 0.18, 0.95, 0.46, 0.04, 0.36, belly));
+        double[][] spots = { { -0.18, 0.4 }, { 0.12, 0.1 }, { -0.05, -0.25 }, { 0.2, -0.5 }, { -0.2, -0.1 }, { 0.05, 0.6 } };
+        for (double[] sp : spots) l.add(b(sp[0], 0.762, sp[1], 0.14, 0.006, 0.12, spot));
+        for (int s = -1; s <= 1; s += 2) {
+            l.add(b(s * 0.352, 0.5, 0.2, 0.006, 0.12, 0.14, spot));
+            l.add(b(s * 0.301, 0.46, 0.98, 0.01, 0.05, 0.05, 0x101418));         // olho
+            l.add(b(s * 0.42, 0.24, 0.72, 0.22, 0.04, 0.18, grD));               // nadadeiras
+        }
+        l.add(b(0, 0.775, -0.2, 0.06, 0.03, 0.6, grD));                            // crista baixa nas costas
+        // presa em espiral: anéis alternados que afinam até a ponta
+        for (int i = 0; i < 9; i++) {
+            double sz = 0.07 - i * 0.005;
+            l.add(b(0.06, 0.42, 1.3 + i * 0.16, sz, sz, 0.16, i % 2 == 0 ? ivory : ring));
+        }
+        l.add(tail(0, 0.43, -1.3, 0.72, 0.05, 0.22, grD, -1.2));                  // cauda horizontal
+        l.add(tail(0, 0.43, -1.22, 0.3, 0.09, 0.14, gr, -1.2));
+        return l.toArray(new Box[0]);
+    }
+
 
     /** O desenho certo para o estado atual (esqueleto mirando, lobo sentado/domesticado, cervo macho...). */
     private Box[] currentModel() {
@@ -1416,7 +1569,7 @@ final class Mob extends Entity {
         int[] palette = palette();
         // asas: batendo no voo, dobradas para baixo quando pousado; caudas de peixe balançam para os lados
         double wingA = type == BIRD ? (flying ? Math.sin(walk * 7) * 0.9 + 0.15 : -1.35) : 0;
-        double tailA = Math.sin(walk * 5) * (type == SHARK ? 0.3 : 0.45);
+        double tailA = Math.sin(walk * 5) * (type == SHARK || type == NARWHAL ? 0.3 : 0.45);
         // lobo/urso parados também respiram um pouco: sem isso, as pernas só balançam andando
         for (Box bx : currentModel()) {
             double ox = 0, oz = 0;

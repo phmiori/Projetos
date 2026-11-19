@@ -908,7 +908,7 @@ public class BlockGame {
     }
 
     private void setAndPay(int x, int y, int z, int b, int item, int rot) {
-        if (b == Block.CHEST && toHost == null) chests.remove(chestKey(x, y, z));
+        if (b == Block.CHEST && toHost == null) chests.put(chestKey(x, y, z), new Inventory()); // baú novo começa vazio (mesmo no lugar do baú de um iglu)
         world.setRot(x, y, z, b, rot);
         Sounds.playAt("colocar", x + 0.5, y + 0.5, z + 0.5, player, 0.8);
         if (!creative) inv.set(slot, item, inv.count[slot] - 1);
@@ -1080,9 +1080,32 @@ public class BlockGame {
     private void openChest(int x, int y, int z) {
         if (toHost != null) { toHost.send(new Net.Out(Net.CHEST_OPEN).i(x).i(y).i(z)); return; }
         String key = chestKey(x, y, z);
+        showChest(key, chestFor(x, y, z));
+    }
+
+    /** O conteúdo do baú; um baú de iglu ainda não aberto vem com os itens do iglu. */
+    private Inventory chestFor(int x, int y, int z) {
+        String key = chestKey(x, y, z);
         Inventory c = chests.get(key);
-        if (c == null) { c = new Inventory(); chests.put(key, c); }
-        showChest(key, c);
+        if (c == null) {
+            c = new Inventory();
+            if (world.iglooChest(x, y, z)) fillIglooLoot(c, x, y, z);
+            chests.put(key, c);
+        }
+        return c;
+    }
+
+    /** O que se acha no baú do iglu (sempre o mesmo para cada iglu). */
+    private static void fillIglooLoot(Inventory c, int x, int y, int z) {
+        java.util.Random r = new java.util.Random(x * 341873128712L + z * 132897987541L + y);
+        int[][] loot = { { Items.COAL, 3 + r.nextInt(5) }, { Items.RAW_FISH, 2 + r.nextInt(4) }, { Items.COOKED_FISH, 1 + r.nextInt(3) },
+                { Items.BREAD, 1 + r.nextInt(2) }, { Items.LEATHER, 1 + r.nextInt(3) }, { Items.STRING, r.nextInt(3) },
+                { Items.IRON_INGOT, r.nextInt(3) }, { Items.APPLE, r.nextInt(3) }, { Block.WOOL, r.nextInt(2) } };
+        java.util.List<Integer> slots = new java.util.ArrayList<>();
+        for (int i = 0; i < Inventory.CHEST; i++) slots.add(i);
+        java.util.Collections.shuffle(slots, r);
+        int k = 0;
+        for (int[] it : loot) if (it[1] > 0) c.set(slots.get(k++), it[0], it[1]);
     }
 
     private void showChest(String key, Inventory c) {
@@ -2138,8 +2161,8 @@ public class BlockGame {
                 if (r == null) return;
                 int x = d.readInt(), y = d.readInt(), z = d.readInt();
                 if (world.get(x, y, z) != Block.CHEST) return;
-                Inventory c = chests.get(chestKey(x, y, z));
-                p.from.send(new Net.Out(Net.CHEST_DATA).i(x).i(y).i(z).s(c == null ? "" : c.serialize(Inventory.CHEST)));
+                Inventory c = chestFor(x, y, z);
+                p.from.send(new Net.Out(Net.CHEST_DATA).i(x).i(y).i(z).s(c.serialize(Inventory.CHEST)));
                 break;
             }
             case Net.FURNACE_OPEN: {

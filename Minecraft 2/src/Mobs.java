@@ -258,15 +258,18 @@ final class Mobs {
         else if (biome == World.FOREST || biome == World.BIRCH_FOREST)
             pool = new int[] { Mob.DEER, Mob.DEER, Mob.FOX, Mob.RABBIT, Mob.WOLF, Mob.PIG, Mob.COW, Mob.BEAR, Mob.TIGER };
         else if (biome == World.TUNDRA)
-            pool = new int[] { Mob.WOLF, Mob.FOX, Mob.RABBIT, Mob.RABBIT, Mob.BEAR, Mob.DEER, Mob.WHITE_TIGER };
+            pool = new int[] { Mob.WOLF, Mob.FOX, Mob.RABBIT, Mob.BEAR, Mob.DEER, Mob.WHITE_TIGER,
+                    Mob.POLAR_BEAR, Mob.PENGUIN, Mob.PENGUIN, Mob.MUSKOX, Mob.MUSKOX };
         else if (biome == World.MOUNTAINS)
             pool = new int[] { Mob.SHEEP, Mob.SHEEP, Mob.RABBIT, Mob.WOLF };
         else
             pool = new int[] { Mob.PIG, Mob.SHEEP, Mob.CHICKEN, Mob.COW, Mob.PIG, Mob.SHEEP, Mob.CHICKEN, Mob.COW, Mob.RABBIT, Mob.FOX, Mob.DEER, Mob.CAT };
         int type = pool[rnd.nextInt(pool.length)];
         if ((type == Mob.BEAR || type == Mob.TIGER || type == Mob.WHITE_TIGER) && rnd.nextDouble() < 0.5) type = Mob.DEER; // urso e tigre são raros
+        if (type == Mob.POLAR_BEAR && rnd.nextDouble() < 0.5) type = Mob.PENGUIN;
         if (type == Mob.EMPEROR && rnd.nextDouble() < 0.85) type = Mob.SCORPION; // o imperador é bem raro (~3% dos bichos do deserto)
-        int n = type == Mob.BEAR || type == Mob.TIGER || type == Mob.WHITE_TIGER || type == Mob.EMPEROR || type == Mob.CAT ? 1 : type == Mob.WOLF ? 2 + rnd.nextInt(2) : type == Mob.FOX ? 1 : 1 + rnd.nextInt(3);
+        int n = type == Mob.BEAR || type == Mob.POLAR_BEAR || type == Mob.TIGER || type == Mob.WHITE_TIGER || type == Mob.EMPEROR || type == Mob.CAT ? 1
+                : type == Mob.WOLF || type == Mob.MUSKOX ? 2 + rnd.nextInt(2) : type == Mob.PENGUIN ? 2 + rnd.nextInt(3) : type == Mob.FOX ? 1 : 1 + rnd.nextInt(3);
         for (int i = 0; i < n; i++) {
             double mx = x + 0.5 + rnd.nextDouble() * 2 - 1, mz = z + 0.5 + rnd.nextDouble() * 2 - 1;
             Mob m = new Mob(type, mx, top + 1.01, mz);
@@ -294,6 +297,14 @@ final class Mobs {
                     return;
                 }
                 int biome = w.biomeAt(x, z, w.heightAt(x, z) - 1);
+                if (biome == World.TUNDRA && depth >= 5 && r > 14 && rnd.nextDouble() < 0.18) { // mar gelado: narvais
+                    int nn = 1 + rnd.nextInt(2);
+                    for (int i = 0; i < nn; i++) {
+                        Mob nw = new Mob(Mob.NARWHAL, x + 0.5 + i * 1.5, y - depth / 2.0, z + 0.5);
+                        if (!nw.collides(nw.x, nw.y, nw.z, w)) list.add(nw);
+                    }
+                    return;
+                }
                 double roll = rnd.nextDouble();
                 int type = biome == World.DESERT || (biome == World.PLAINS && roll < 0.35) ? Mob.TROPICAL
                         : (biome == World.TUNDRA || biome == World.FOREST || biome == World.MOUNTAINS) && roll < 0.5 ? Mob.SALMON : Mob.FISH;

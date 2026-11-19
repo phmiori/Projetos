@@ -976,8 +976,109 @@ final class World {
                 biomes[lx * 16 + lz] = (byte) meta[1];
             }
         decorate(c, heights, biomes);
+        int[] igloo = iglooSite(cx, cz);
+        if (igloo != null) buildIgloo(c, igloo);
         return c;
     }
+
+    // =====================================================================
+    // estruturas: iglu (a primeira). Só depende da semente, como o resto da geração.
+    // =====================================================================
+
+    /**
+     * Há um iglu no pedaço (cx, cz)? Retorna {x, y do chão, z} do centro, ou null. Uns 7% dos pedaços sorteiam;
+     * o lugar precisa ser tundra, longe da água e quase plano. O iglu inteiro cabe dentro do pedaço.
+     */
+    int[] iglooSite(int cx, int cz) {
+        if (hash(cx, cz, seed + 90) >= 0.07) return null;
+        int x = cx * 16 + 5 + (int) (hash(cx, cz, seed + 91) * 6), z = cz * 16 + 5 + (int) (hash(cx, cz, seed + 92) * 4);
+        int lo = Integer.MAX_VALUE, hi = Integer.MIN_VALUE;
+        for (int dx = -4; dx <= 4; dx++)
+            for (int dz = -4; dz <= 6; dz++) {
+                int h = heightAt(x + dx, z + dz);
+                if (h - 1 <= SEA + 1 || h + 6 >= SY) return null;
+                if (biomeAt(x + dx, z + dz, h - 1) != TUNDRA) return null;
+                lo = Math.min(lo, h);
+                hi = Math.max(hi, h);
+            }
+        if (hi - lo > 2) return null;
+        return new int[] { x, hi, z };
+    }
+
+    /** A coluna (x, z) fica no terreno de um iglu (com folga para a copa das árvores e a frente da porta)? */
+    private boolean nearIgloo(int x, int z) {
+        for (int cx = (x - 7) >> 4; cx <= (x + 7) >> 4; cx++)
+            for (int cz = (z - 10) >> 4; cz <= (z + 7) >> 4; cz++) {
+                int[] s = iglooSite(cx, cz);
+                if (s != null && Math.abs(x - s[0]) <= 7 && z >= s[2] - 7 && z <= s[2] + 10) return true;
+            }
+        return false;
+    }
+
+    /** O baú do iglu fica nesta posição? (o jogo enche o baú na primeira vez que alguém o abre) */
+    boolean iglooChest(int x, int y, int z) {
+        int[] s = iglooSite(x >> 4, z >> 4);
+        return s != null && x == s[0] && y == s[1] && z == s[2] - 3;
+    }
+
+    /** Distância "achatada" do centro da cúpula: abaixo de 3,3 é o lado de dentro; até 4,4 é a parede de neve. */
+    private static double domeDist(int dx, int dy, int dz) {
+        return Math.sqrt(dx * dx + dy * 1.2 * dy * 1.2 + dz * dz);
+    }
+
+    private void buildIgloo(Chunk c, int[] s) {
+        int ox = s[0] - c.cx * 16, fy = s[1], oz = s[2] - c.cz * 16;
+        // limpa o lugar (árvores, plantas) e firma o chão embaixo da cúpula e do túnel
+        for (int dx = -4; dx <= 4; dx++)
+            for (int dz = -4; dz <= 6; dz++) {
+                boolean tunnel = dz >= 3 && Math.abs(dx) <= 1;
+                if (!tunnel && domeDist(dx, 0, dz) >= 4.6) continue;
+                int lx = ox + dx, lz = oz + dz;
+                for (int y = fy; y < Math.min(SY, fy + 9); y++) c.blocks[Chunk.idx(lx, y, lz)] = (byte) Block.AIR;
+                for (int y = fy - 1; y >= Math.max(1, fy - 5); y--) {
+                    int i = Chunk.idx(lx, y, lz), b = c.blocks[i] & 0xFF;
+                    if (b == Block.AIR || Block.isWater(b) || Block.isLeaves(b) || Block.shape(b) == Block.CROSS) c.blocks[i] = (byte) Block.SNOW;
+                    else break;
+                }
+            }
+        // a cúpula de neve
+        for (int dx = -4; dx <= 4; dx++)
+            for (int dz = -4; dz <= 4; dz++)
+                for (int dy = 0; dy <= 4; dy++) {
+                    double d = domeDist(dx, dy, dz);
+                    int i = Chunk.idx(ox + dx, fy + dy, oz + dz);
+                    if (d < 3.3) c.blocks[i] = (byte) Block.AIR;
+                    else if (d < 4.4) c.blocks[i] = (byte) Block.SNOW;
+                    if (dy == 0 && d < 3.3) c.blocks[Chunk.idx(ox + dx, fy - 1, oz + dz)] = (byte) Block.WOOL; // piso de lã
+                }
+        // túnel de entrada (para +Z) e a porta na cúpula
+        for (int dz = 3; dz <= 6; dz++) {
+            for (int dy = 0; dy <= 1; dy++) {
+                c.blocks[Chunk.idx(ox, fy + dy, oz + dz)] = (byte) Block.AIR;
+                if (dz >= 5) {
+                    c.blocks[Chunk.idx(ox - 1, fy + dy, oz + dz)] = (byte) Block.SNOW;
+                    c.blocks[Chunk.idx(ox + 1, fy + dy, oz + dz)] = (byte) Block.SNOW;
+                }
+            }
+            if (dz >= 5) for (int dx = -1; dx <= 1; dx++) c.blocks[Chunk.idx(ox + dx, fy + 2, oz + dz)] = (byte) Block.SNOW;
+        }
+        // janelas de gelo dos lados
+        c.blocks[Chunk.idx(ox - 4, fy + 1, oz)] = (byte) Block.ICE;
+        c.blocks[Chunk.idx(ox + 4, fy + 1, oz)] = (byte) Block.ICE;
+        // dentro: baú no fundo (de frente para a porta), fornalha, bancada, cama e uma tocha
+        putRot(c, ox, fy, oz - 3, Block.CHEST, 0);
+        putRot(c, ox + 2, fy, oz - 2, Block.FURNACE, 1);
+        putRot(c, ox - 2, fy, oz - 2, Block.TABLE, 3);
+        putRot(c, ox - 2, fy, oz, Block.BED, 0);
+        putRot(c, ox + 2, fy, oz + 1, Block.TORCH, 0);
+    }
+
+    private static void putRot(Chunk c, int lx, int y, int lz, int b, int rot) {
+        int i = Chunk.idx(lx, y, lz);
+        c.blocks[i] = (byte) b;
+        storeRot(c, i, rot);
+    }
+
 
     /** Sorteio próprio de cada coluna: árvores de um pedaço vizinho chegam iguais nos dois lados da borda. */
     private Random columnRandom(int x, int z) {
@@ -1026,6 +1127,7 @@ final class World {
                 int b = col[base + top] & 0xFF;
                 if (b == Block.GRASS || (b == Block.SNOW && biome == TUNDRA)) {
                     if (roll < treeChance(biome)) {
+                        if (nearIgloo(x, z)) continue; // nada de árvore em cima ou na porta do iglu
                         boolean birch = biome == BIRCH_FOREST || (biome == FOREST && r.nextDouble() < 0.2);
                         placeTree(c, x, top + 1, z, r, birch);
                     } else if (inside && b == Block.GRASS) {
