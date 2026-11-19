@@ -45,4 +45,5 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
 - `exportar-blocos.bat`: depois de criar ou mudar blocos no Java, atualiza `dados/blocos.txt`.
 - `comparar-geracao.bat`: gera pedaços com o Java e com o Rust e confere se saíram iguais (rode depois de
   mexer na geração do mundo em qualquer um dos dois).
-- Linha de comando: `mundo-de-blocos.exe [--mundo worlds\nome] [--semente N] [--posicao x y z yaw pitch] [--sem-vsync]`.
+- Linha de comando: `mundo-de-blocos.exe [--mundo worlds\nome] [--semente N] [--posicao x y z yaw pitch] [--voando] [--hora 0..1] [--sem-vsync]`
+  (`--hora`: 0 = nascer do sol, 0,25 = meio-dia, 0,5 = pôr do sol, 0,75 = meia-noite).
