@@ -41,6 +41,18 @@ pub struct Ui {
     has_font: bool,
     /// x, y, z, u, v, camada (-1 = atlas, -2 em diante = fotos do chat), r, g, b, a
     verts: Vec<f32>,
+    /// neblina do mundo para o próximo flush (criaturas, itens e flechas); vale só para um flush
+    pub fog: Option<Fog>,
+}
+
+/// A mesma neblina dos blocos (horizonte e embaixo d'água), para o que é desenhado no mundo por este lote.
+#[derive(Clone, Copy)]
+pub struct Fog {
+    pub cam: [f32; 3],
+    pub view_dist: f32,
+    pub underwater: bool,
+    pub daylight: f32,
+    pub sun: [f32; 3],
 }
 
 const VS: &str = r#"#version 330 core
@@ -49,23 +61,26 @@ layout(location=1) in vec2 aUV;
 layout(location=2) in float aLayer;
 layout(location=3) in vec4 aColor;
 uniform mat4 uMat;
-out vec2 vUV; out float vLayer; out vec4 vColor;
-void main(){ vUV = aUV; vLayer = aLayer; vColor = aColor; gl_Position = uMat * vec4(aPos, 1.0); }
+out vec2 vUV; out float vLayer; out vec4 vColor; out vec3 vWorld;
+void main(){ vUV = aUV; vLayer = aLayer; vColor = aColor; vWorld = aPos; gl_Position = uMat * vec4(aPos, 1.0); }
 "#;
-const FS: &str = r#"#version 330 core
-in vec2 vUV; in float vLayer; in vec4 vColor;
+const FS: &str = r#"
+in vec2 vUV; in float vLayer; in vec4 vColor; in vec3 vWorld;
+uniform int uFogOn;
 uniform sampler2D uAtlas; uniform sampler2DArray uBlocks; uniform sampler2DArray uPhotos;
 out vec4 frag;
 void main(){
   vec4 t = vLayer < -1.5 ? texture(uPhotos, vec3(vUV, -2.0 - vLayer)) : vLayer < 0.0 ? texture(uAtlas, vUV) : texture(uBlocks, vec3(vUV, vLayer));
   frag = t * vColor;
   if (frag.a < 0.01) discard;
+  if (uFogOn == 1) { vec3 d = vWorld - uCam; float dist = max(length(d), 0.001); frag.rgb = fog(frag.rgb, dist, d/dist); }
 }
 "#;
 
 impl Ui {
     pub unsafe fn new(gl: &glow::Context) -> Ui {
-        let prog = crate::compile(gl, VS, FS);
+        let fs = format!("#version 330 core\n{}\n{}", crate::shaders::SKY_FUNCS, FS);
+        let prog = crate::compile(gl, VS, &fs);
         let vao = gl.create_vertex_array().unwrap();
         let vbo = gl.create_buffer().unwrap();
         gl.bind_vertex_array(Some(vao));
@@ -144,7 +159,7 @@ impl Ui {
         gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
         gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
         gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
-        Ui { prog, vao, vbo, atlas, photos, glyphs, has_font, verts: Vec::with_capacity(1 << 16) }
+        Ui { prog, vao, vbo, atlas, photos, glyphs, has_font, verts: Vec::with_capacity(1 << 16), fog: None }
     }
 
     /// Põe uma foto (RGBA, no máximo PHOTO x PHOTO) na camada `slot`.
@@ -330,6 +345,18 @@ impl Ui {
         }
         gl.use_program(Some(self.prog));
         gl.uniform_matrix_4_f32_slice(gl.get_uniform_location(self.prog, "uMat").as_ref(), false, mat);
+        let u = |n: &str| gl.get_uniform_location(self.prog, n);
+        match self.fog.take() {
+            Some(f) => {
+                gl.uniform_1_i32(u("uFogOn").as_ref(), 1);
+                gl.uniform_3_f32(u("uCam").as_ref(), f.cam[0], f.cam[1], f.cam[2]);
+                gl.uniform_1_f32(u("uViewDist").as_ref(), f.view_dist);
+                gl.uniform_1_i32(u("uUnderwater").as_ref(), f.underwater as i32);
+                gl.uniform_1_f32(u("uDaylight").as_ref(), f.daylight);
+                gl.uniform_3_f32(u("uSun").as_ref(), f.sun[0], f.sun[1], f.sun[2]);
+            }
+            None => gl.uniform_1_i32(u("uFogOn").as_ref(), 0),
+        }
         gl.active_texture(glow::TEXTURE1);
         gl.bind_texture(glow::TEXTURE_2D, Some(self.atlas));
         gl.active_texture(glow::TEXTURE0);

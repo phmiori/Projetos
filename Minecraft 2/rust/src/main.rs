@@ -997,6 +997,8 @@ impl Game {
             self.draw_mobs(&mut g.ui, sky.daylight);
             gl.enable(glow::BLEND);
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+            // a mesma neblina dos blocos: de longe e embaixo d'água as criaturas somem junto com o mundo
+            g.ui.fog = Some(ui::Fog { cam: eye, view_dist, underwater, daylight: sky.daylight, sun: sky.sun });
             g.ui.flush(gl, &vp, g.tex);
             gl.disable(glow::BLEND);
         }
