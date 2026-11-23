@@ -14,6 +14,7 @@
 //! Uso: mundo-de-blocos [--mundo pasta] [--semente N] [--posicao x y z yaw pitch] [--hora 0..1] [--comparar arquivo]
 
 mod block;
+mod chat;
 mod containers;
 mod edit;
 mod fluid;
@@ -306,6 +307,8 @@ struct Game {
     /// criaturas de pedaços descarregados: voltam quando o pedaço carregar (texto do Java)
     sleeping: HashMap<(i32, i32), Vec<String>>,
     mob_spawn_timer: f64,
+    /// em volta de quem as criaturas aparecem desta vez
+    spawn_near: [f64; 2],
     mob_id: i32,
     arrows: Vec<mobs::Arrow>,
     pending_damage: f64,
@@ -329,6 +332,7 @@ struct Game {
     arrow_id: i32,
     drop_id: i32,
     join: join::Join,
+    chat: chat::Chat,
     primed: Vec<(i32, i32, i32, f64, bool)>,
     grow_timer: f64,
     l_held: bool,
@@ -452,6 +456,7 @@ impl Game {
             mobs: Vec::new(),
             sleeping: HashMap::new(),
             mob_spawn_timer: 0.0,
+            spawn_near: [0.0; 2],
             mob_id: 1,
             arrows: Vec::new(),
             pending_damage: 0.0,
@@ -469,6 +474,7 @@ impl Game {
             arrow_id: 0,
             drop_id: 0,
             join: join::Join::default(),
+            chat: chat::Chat::default(),
             primed: Vec::new(),
             grow_timer: 0.0,
             slot: 0,
@@ -612,6 +618,18 @@ impl Game {
             }
         }
         wanted.sort_unstable();
+        // anfitrião: o chão em volta de cada amigo também fica carregado (para as criaturas de lá, como no Java)
+        let friends: Vec<(i32, i32)> = match &self.net {
+            Some(n) if n.is_host() => n.remotes.values().filter(|r| r.has_state).map(|r| ((r.pos[0].floor() as i32) >> 4, (r.pos[2].floor() as i32) >> 4)).collect(),
+            _ => Vec::new(),
+        };
+        for &(fx, fz) in &friends {
+            for dx in -3..=3 {
+                for dz in -3..=3 {
+                    wanted.push((dx * dx + dz * dz, fx + dx, fz + dz));
+                }
+            }
+        }
         for &(_, cx, cz) in &wanted {
             if self.loading.len() >= 48 {
                 break;
@@ -660,7 +678,8 @@ impl Game {
             self.save_chunks(Some((pcx, pcz, r + 4)));
         }
         let modified = &self.modified;
-        self.chunks.retain(|k, _| !far(k, r + 4) || modified.contains(k));
+        let near_friend = |k: &(i32, i32)| friends.iter().any(|f| (k.0 - f.0).abs() <= 5 && (k.1 - f.1).abs() <= 5);
+        self.chunks.retain(|k, _| !far(k, r + 4) || modified.contains(k) || near_friend(k));
         self.dirty.retain(|k| !far(k, r + 2));
     }
 
@@ -1052,6 +1071,7 @@ impl Game {
         if in_world {
             self.draw_name_tags(&mut g.ui, &vp, fw, fh);
             self.draw_hud(&mut g.ui, fw, fh);
+            self.draw_chat(&mut g.ui, fw, fh);
             self.draw_bow_charge(&mut g.ui, fw, fh);
         }
         match self.screen {
@@ -1420,6 +1440,8 @@ fn main() {
         }
         game.join_key(KeyCode::Enter, None);
     }
+    // --dizer quadro texto: manda uma mensagem no chat nesse quadro
+    let say = arg("--dizer").and_then(|f| f.parse::<u32>().ok()).zip(arg2("--dizer"));
     let zoo = args.iter().any(|a| a == "--zoologico");
     let hold_left = arg("--segurar-esq").and_then(|s| s.parse::<u32>().ok());
     let release_left = arg("--soltar-esq").and_then(|s| s.parse::<u32>().ok());
@@ -1473,7 +1495,9 @@ fn main() {
                 }
                 WindowEvent::KeyboardInput { event, .. } => {
                     if let PhysicalKey::Code(code) = event.physical_key {
-                        if event.state == ElementState::Pressed {
+                        if event.state == ElementState::Pressed && game.screen == Screen::Play && game.chat.open {
+                            game.chat_key(code, event.text.as_deref()); // digitando no chat: o resto do jogo não vê a tecla
+                        } else if event.state == ElementState::Pressed {
                             if !event.repeat {
                                 let size = window.inner_size();
                                 let (fw, fh) = (size.width as f32, size.height as f32);
@@ -1517,6 +1541,7 @@ fn main() {
                                         game.screen = Screen::Inventory;
                                         game.release_mouse = true;
                                     }
+                                    KeyCode::KeyT | KeyCode::Enter | KeyCode::NumpadEnter => game.open_chat(),
                                     KeyCode::KeyQ => {
                                         let all = game.key(KeyCode::ControlLeft) || game.key(KeyCode::ControlRight);
                                         game.throw_held(all);
@@ -1604,7 +1629,7 @@ fn main() {
                             let _ = window.set_cursor_grab(CursorGrabMode::Confined).or_else(|_| window.set_cursor_grab(CursorGrabMode::Locked));
                             window.set_cursor_visible(false);
                         }
-                    } else {
+                    } else if !game.chat.open {
                         match button {
                             MouseButton::Left => {
                                 game.l_held = down;
@@ -1678,6 +1703,13 @@ fn main() {
                             let mut m = mob::Mob::new(t, x, y as f64 + 1.0, z, id, &mut game.rng);
                             m.yaw = game.player.yaw + std::f64::consts::PI;
                             game.mobs.push(m);
+                        }
+                    }
+                    if let Some((f, t)) = &say {
+                        if *f == frame_no {
+                            game.open_chat();
+                            game.chat_key(KeyCode::KeyA, Some(t));
+                            game.chat_key(KeyCode::Enter, None);
                         }
                     }
                     if hold_left == Some(frame_no) {

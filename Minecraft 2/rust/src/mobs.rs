@@ -145,12 +145,22 @@ impl Game {
             }
         }
         let daylight = self.daylight();
-        let survival = !self.creative && self.health > 0.0;
         let p = [self.player.x, self.player.y, self.player.z];
+        // todos os jogadores do mundo: este e, no anfitrião, os amigos (cada criatura olha o mais perto, como no Java)
+        let mut players: Vec<(Option<usize>, [f64; 3], bool, String)> = vec![(None, p, self.health > 0.0, self.player_name.clone())];
+        if let Some(n) = &self.net {
+            if n.is_host() {
+                for r in n.remotes.values().filter(|r| r.has_state) {
+                    if let Some(c) = r.conn {
+                        players.push((Some(c), r.pos, true, r.name.clone()));
+                    }
+                }
+            }
+        }
         let mut mobs = std::mem::take(&mut self.mobs);
         let mut explosions = Vec::new();
-        let mut shots = Vec::new();
-        let mut player_hits: Vec<(f64, f64, f64)> = Vec::new();
+        let mut shots: Vec<([f64; 3], [f64; 3])> = Vec::new();
+        let mut player_hits: Vec<(Option<usize>, f64, f64, f64)> = Vec::new();
         let mut i = 0;
         while i < mobs.len() {
             if !self.loaded_at(mobs[i].body.x, mobs[i].body.z) {
@@ -166,9 +176,18 @@ impl Game {
                 mobs.swap_remove(i);
                 continue;
             }
+            let (who, tp, alive) = {
+                let (mx, mz) = (mobs[i].body.x, mobs[i].body.z);
+                let d = |q: &[f64; 3]| (q[0] - mx).powi(2) + (q[2] - mz).powi(2);
+                let n = players.iter().min_by(|a, b| d(&a.1).total_cmp(&d(&b.1))).unwrap();
+                (n.0, n.1, n.2)
+            };
+            let survival = !self.creative && alive;
+            // o lobo segue o dono, se ele estiver no mundo (aqui ou um amigo)
+            let owner = if mobs[i].tamed { players.iter().find(|q| q.3 == mobs[i].owner_name).map(|q| q.1) } else { None };
             // alvos: lobo domesticado (monstros perto do dono), tubarão (peixes, narval), narval (tubarão)
             if mobs[i].tamed && !mobs[i].sitting {
-                choose_wolf_target(&mut mobs, i, p);
+                choose_wolf_target(&mut mobs, i, owner.unwrap_or(p));
             }
             if mobs[i].t == mob::SHARK || mobs[i].t == mob::NARWHAL {
                 choose_sea_target(&mut mobs, i);
@@ -177,14 +196,13 @@ impl Game {
             if target.is_none() {
                 mobs[i].target = None;
             }
-            let owner = if mobs[i].tamed && mobs[i].owner_name == self.player_name { Some(p) } else { None };
             let los = mobs[i].t == mob::SKELETON && {
                 let m = &mobs[i];
-                self.line_of_sight([m.body.x, m.body.y + 1.5, m.body.z], [p[0], p[1] + 1.1, p[2]])
+                self.line_of_sight([m.body.x, m.body.y + 1.5, m.body.z], [tp[0], tp[1] + 1.1, tp[2]])
             };
             {
                 let w = Loaded(&self.chunks);
-                let sight = Sight { w: &w, p, can_target: survival, owner, target, line_of_sight: los };
+                let sight = Sight { w: &w, p: tp, can_target: survival, owner, target, line_of_sight: los };
                 let mut rng = std::mem::replace(&mut self.rng, crate::survival::Rng::new());
                 let fuse0 = mobs[i].fuse;
                 mobs[i].update(dt, &sight, &mut rng);
@@ -247,15 +265,15 @@ impl Game {
                 continue;
             }
             if m.wants_shoot {
-                shots.push([m.body.x, m.body.y, m.body.z]);
+                shots.push(([m.body.x, m.body.y, m.body.z], tp));
             }
             if m.wants_attack {
-                player_hits.push((m.attack_damage(), m.body.x, m.body.z));
+                player_hits.push((who, m.attack_damage(), m.body.x, m.body.z));
                 if let Some(v) = mob::voice(m.t) {
                     self.sfx(v, [m.body.x, m.body.y + 1.0, m.body.z], 0.9);
                 }
             }
-            let (dx, dz) = (m.body.x - p[0], m.body.z - p[2]);
+            let (dx, dz) = (m.body.x - tp[0], m.body.z - tp[2]);
             let dist = (dx * dx + dz * dz).sqrt();
             // monstros queimam/somem sob o sol
             let mut gone = false;
@@ -272,7 +290,14 @@ impl Game {
         }
         self.mobs = mobs;
         // golpes no jogador (com o empurrão, como no Java)
-        for (dmg, fx, fz) in player_hits {
+        for (who, dmg, fx, fz) in player_hits {
+            if let Some(c) = who {
+                // golpe num amigo: avisa só ele (o empurrão e a vida são calculados lá)
+                if let Some(n) = &self.net {
+                    n.send_to(c, crate::net::Out::new(crate::net::DAMAGE).f(dmg).f(fx).f(fz));
+                }
+                continue;
+            }
             if self.creative || self.health <= 0.0 {
                 continue;
             }
@@ -286,8 +311,8 @@ impl Game {
         for e in explosions {
             self.explode_at(e, mob::CREEPER_POWER);
         }
-        for s in shots {
-            self.shoot_arrow(s);
+        for (s, at) in shots {
+            self.shoot_arrow(s, at);
         }
         self.update_arrows(dt);
 
@@ -312,16 +337,20 @@ impl Game {
                 passive += 1;
             }
         }
-        if passive < 14 && self.rng.next() < 0.45 {
+        // aparecem em volta de um jogador qualquer (no anfitrião, os amigos contam), com limites por jogador
+        let n = players.len() as i32;
+        let pick = players[self.int(n) as usize].1;
+        self.spawn_near = [pick[0], pick[2]];
+        if passive < 14 * n && self.rng.next() < 0.45 {
             self.spawn_passive();
         }
-        if fish < 12 && self.rng.next() < 0.5 {
-            self.spawn_fish(sharks < 1);
+        if fish < 12 * n && self.rng.next() < 0.5 {
+            self.spawn_fish(sharks < n);
         }
-        if birds < 8 && daylight > 0.3 && self.rng.next() < 0.3 {
+        if birds < 8 * n && daylight > 0.3 && self.rng.next() < 0.3 {
             self.spawn_birds();
         }
-        if hostile < 10 {
+        if hostile < 10 * n {
             self.spawn_hostile(daylight);
         }
     }
@@ -333,7 +362,7 @@ impl Game {
     fn around(&mut self, min: f64, span: f64) -> (i32, i32, f64) {
         let a = self.rng.next() * std::f64::consts::TAU;
         let r = min + self.rng.next() * span;
-        ((self.player.x + a.sin() * r) as i32, (self.player.z + a.cos() * r) as i32, r)
+        ((self.spawn_near[0] + a.sin() * r) as i32, (self.spawn_near[1] + a.cos() * r) as i32, r)
     }
 
     /// Y do chão de terra firme (grama, neve ou areia) se for o topo da coluna, senão -1.
@@ -603,11 +632,10 @@ impl Game {
         self.blast_player(c, power);
     }
 
-    /// Flecha do esqueleto (em m) para o jogador: arco calculado para a distância, com um pouco de erro.
-    fn shoot_arrow(&mut self, m: [f64; 3]) {
+    /// Flecha do esqueleto (em m) para o jogador mais perto (em `at`): arco calculado para a distância, com um pouco de erro.
+    fn shoot_arrow(&mut self, m: [f64; 3], at: [f64; 3]) {
         let s = [m[0], m[1] + 1.45, m[2]];
-        self.sfx("arco_disparo", s, 0.8);
-        let (dx, dy, dz) = (self.player.x - s[0], self.player.y + 1.0 - s[1], self.player.z - s[2]);
+        let (dx, dy, dz) = (at[0] - s[0], at[1] + 1.0 - s[1], at[2] - s[2]);
         let flat = (dx * dx + dz * dz).sqrt().max(0.5);
         let t = flat / ARROW_SPEED;
         let e = 0.07;
@@ -632,6 +660,12 @@ impl Game {
         let mut killed: Vec<i32> = Vec::new();
         let mut hits: Vec<[f64; 3]> = Vec::new();
         let mut picked = 0;
+        // amigos que uma flecha pode acertar (só no anfitrião, e nunca o próprio atirador)
+        let friends: Vec<(usize, i32, [f64; 3])> = match &self.net {
+            Some(n) if n.is_host() && !self.creative => n.remotes.values().filter(|r| r.has_state).filter_map(|r| r.conn.map(|c| (c, r.id, r.pos))).collect(),
+            _ => Vec::new(),
+        };
+        let mut friend_hits: Vec<(usize, f64, f64, f64)> = Vec::new();
         let mut idx = 0usize;
         arrows.retain_mut(|a| {
             let my = idx;
@@ -717,10 +751,18 @@ impl Game {
                 // o jogador (só flechas que não são dele)
                 let pl = &self.player;
                 let inside = (a.p[0] - pl.x).abs() < pl.hw + 0.1 && a.p[1] > pl.y && a.p[1] < pl.y + pl.h && (a.p[2] - pl.z).abs() < pl.hw + 0.1;
-                if a.shooter != -1 && a.owner == 0 && !client && inside && !self.creative && self.health > 0.0 {
+                if a.owner != 0 && !client && inside && !self.creative && self.health > 0.0 {
                     self.pending_damage += a.damage;
                     gone.push((a.id, 1, a.p));
                     crate::sound::play_at("flecha_criatura", a.p, ear, yaw, 0.9);
+                    return false;
+                }
+                // um amigo (o dano vai para ele, com o empurrão vindo de trás da flecha)
+                if let Some(f) = friends.iter().find(|f| f.1 != a.owner && (a.p[0] - f.2[0]).abs() < 0.4 && (a.p[2] - f.2[2]).abs() < 0.4 && a.p[1] > f.2[1] && a.p[1] < f.2[1] + 1.8) {
+                    friend_hits.push((f.0, a.damage, a.p[0] - a.d[0] * 2.0, a.p[2] - a.d[2] * 2.0));
+                    gone.push((a.id, 1, a.p));
+                    crate::sound::play_at("flecha_criatura", a.p, ear, yaw, 0.9);
+                    hits.push(a.p);
                     return false;
                 }
             }
@@ -728,6 +770,9 @@ impl Game {
         });
         // anfitrião: avisa os amigos das flechas que prenderam e das que sumiram
         if let Some(n) = &self.net {
+            for (c, dmg, x, z) in &friend_hits {
+                n.send_to(*c, crate::net::Out::new(crate::net::DAMAGE).f(*dmg).f(*x).f(*z));
+            }
             if n.is_host() {
                 for (id, kind, p) in &gone {
                     n.send(crate::net::Out::new(crate::net::ARROW_GONE).i(*id).i(*kind).f(p[0]).f(p[1]).f(p[2]), None);

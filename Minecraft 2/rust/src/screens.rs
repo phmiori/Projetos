@@ -605,6 +605,7 @@ impl Game {
             ("Rodinha  ·  1 a 9", "trocar o item da mão"),
             ("E", "inventário e criação"),
             ("Q  ·  Ctrl+Q", "jogar fora um item  ·  a pilha toda"),
+            ("T  ·  Enter", "chat (na LAN)"),
             ("F2", "tirar foto (pasta fotos)"),
             ("F3", "ligar/desligar a sombra dos cantos"),
             ("F4 (segurando)", "passar as horas depressa"),

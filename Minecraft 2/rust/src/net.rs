@@ -495,7 +495,7 @@ impl Net {
         }
     }
 
-    fn send_to(&self, conn: usize, o: Out) {
+    pub fn send_to(&self, conn: usize, o: Out) {
         if let Role::Host { conns, .. } = &self.role {
             if let Some(c) = conns.lock().unwrap().get(&conn) {
                 c.send(&o);
@@ -966,7 +966,7 @@ impl Game {
             }
             CHAT => {
                 let (from, text) = (d.s(), d.s());
-                self.notice(format!("<{from}> {text}"));
+                self.add_chat(format!("<{from}> {text}"), crate::chat::WHITE);
             }
             BLOOD => {
                 let p = [d.f(), d.f(), d.f()];
@@ -1190,7 +1190,7 @@ impl Game {
                 let n = self.net.as_ref().unwrap();
                 let name = n.remotes.get(&rid).map(|r| r.name.clone()).unwrap_or_default();
                 n.send(Out::new(CHAT).s(&name).s(&text), Some(conn));
-                self.notice(format!("<{name}> {text}"));
+                self.add_chat(format!("<{name}> {text}"), crate::chat::WHITE);
             }
             CHAT_IMAGE => {
                 // fotos do chat do Java: esta versão não mostra, mas repassa aos outros

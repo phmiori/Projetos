@@ -95,8 +95,12 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
   - Sincroniza os blocos, os outros jogadores (o boneco com as cores do personagem, o item na mão e o nome em cima),
     criaturas, itens no chão (o anfitrião decide quem pega), flechas, explosões, baús e fornalhas (guardados pelo
     anfitrião), a hora, golpes nas criaturas, lobos e ovos de criatura.
-  - Ainda não tem: o chat para digitar (as mensagens do Java aparecem como aviso) e as fotos do chat. Quando o Rust é
-    o anfitrião, as criaturas ainda não atacam nem seguem os amigos, e as flechas não acertam os amigos.
+  - **Chat**: **T** ou **Enter** abre a caixa, **Enter** envia, **Esc** cancela. As mensagens ficam no canto de baixo
+    e somem depois de 10 s (as suas em amarelo).
+  - Com o Rust de anfitrião, as criaturas enxergam os amigos como no Java: cada uma persegue, ataca ou atira no
+    jogador mais perto, aparecem também em volta dos amigos e o chão em volta deles fica carregado. As flechas
+    (de esqueletos e de jogadores) acertam os amigos.
+  - Ainda não tem: as fotos do chat (as do Java não aparecem no Rust).
 - **Pausa** (**Esc**, ou quando a janela perde o foco) com "Voltar ao jogo", "Controles" (todas as teclas), "Configurações" e "Salvar e sair" (volta ao menu).
 - Grava os pedaços mudados, a posição, a hora, o inventário, a vida, a fome, os baús, as fornalhas e as criaturas a cada
   30 s e ao fechar (só o que conhece no `meta.properties`; amigos da LAN e o resto ficam como o Java deixou).
@@ -110,13 +114,13 @@ soltos no chão não são gravados (no Java também não).
 
 ## Próximos passos (na ordem sugerida)
 
-1. Chat na LAN, e as criaturas do anfitrião Rust enxergando os amigos.
+1. Fotos no chat (arrastar a imagem para a janela), como no Java.
 
 ## Ferramentas
 
 - `exportar-blocos.bat`: depois de criar ou mudar blocos, itens ou receitas no Java, atualiza os arquivos de `dados/`.
 - `comparar-geracao.bat`: gera pedaços com o Java e com o Rust e confere se saíram iguais (rode depois de
   mexer na geração do mundo em qualquer um dos dois).
-- Linha de comando: sem nada abre o menu; `mundo-de-blocos.exe [--mundo worlds\nome] [--semente N] [--posicao x y z yaw pitch] [--voando] [--hora 0..1] [--so-ler] [--abrir-lan] [--entrar IP [nome]] [--zoologico] [--sem-vsync]`
+- Linha de comando: sem nada abre o menu; `mundo-de-blocos.exe [--mundo worlds\nome] [--semente N] [--posicao x y z yaw pitch] [--voando] [--hora 0..1] [--so-ler] [--abrir-lan] [--entrar IP [nome]] [--dizer quadro texto] [--zoologico] [--sem-vsync]`
   (`--so-ler`: abre sem gravar nada)
   (`--hora`: 0 = nascer do sol, 0,25 = meio-dia, 0,5 = pôr do sol, 0,75 = meia-noite).
