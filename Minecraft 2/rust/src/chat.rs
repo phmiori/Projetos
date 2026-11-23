@@ -43,6 +43,40 @@ pub struct Chat {
     photo_seq: u64,
     sending: Option<Receiver<Result<Vec<u8>, String>>>,
     last_photo: Option<Instant>,
+    /// Ctrl segurado (para o Ctrl+O)
+    pub ctrl: bool,
+    /// a janela do Windows de escolher arquivo está aberta (o jogo não pausa por perder o foco)
+    pub picking: Option<Receiver<Result<String, String>>>,
+}
+
+/// Janela do Windows para escolher uma foto (a mesma do Java, pelo PowerShell). Devolve o caminho ou "" se cancelou.
+fn pick_file() -> Result<String, String> {
+    if !cfg!(windows) {
+        return Err("escolher arquivo só funciona no Windows: arraste a foto para a janela do jogo".into());
+    }
+    let script = "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; \
+        Add-Type -AssemblyName System.Windows.Forms; \
+        $o = New-Object System.Windows.Forms.Form; $o.TopMost = $true; \
+        $f = New-Object System.Windows.Forms.OpenFileDialog; \
+        $f.Title = 'Escolha uma foto para o chat'; \
+        $f.Filter = 'Imagens|*.png;*.jpg;*.jpeg;*.gif;*.bmp|Todos os arquivos|*.*'; \
+        if ($f.ShowDialog($o) -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($f.FileName) }";
+    // caminho completo: o PATH de quem abriu o jogo pode não incluir a pasta do PowerShell
+    let exe = std::env::var("SystemRoot")
+        .or_else(|_| std::env::var("windir"))
+        .map(|r| PathBuf::from(r).join("System32\\WindowsPowerShell\\v1.0\\powershell.exe"))
+        .ok()
+        .filter(|p| p.is_file())
+        .unwrap_or_else(|| PathBuf::from("powershell"));
+    let mut cmd = std::process::Command::new(exe);
+    cmd.args(["-NoProfile", "-STA", "-NonInteractive", "-Command", script]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000); // sem a janela preta do console
+    }
+    let out = cmd.output().map_err(|e| e.to_string())?;
+    Ok(String::from_utf8_lossy(&out.stdout).replace('\u{feff}', "").trim().to_string())
 }
 
 /// Foto que chegou pela rede: confere o tamanho antes de abrir (ninguém trava o jogo com uma imagem gigante).
@@ -192,8 +226,36 @@ impl Game {
         self.chat.sending = Some(rx);
     }
 
+    /// Ctrl+O no chat: abre a janela de escolher arquivo (o jogo continua rodando por trás).
+    pub fn pick_photo(&mut self) {
+        if self.chat.picking.is_some() {
+            return;
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = tx.send(pick_file());
+        });
+        self.chat.picking = Some(rx);
+    }
+
     /// A foto que estava sendo preparada ficou pronta? Aparece aqui (a mesma imagem que os amigos vão ver) e vai pela rede.
     pub fn poll_photo(&mut self) {
+        if let Some(rx) = &self.chat.picking {
+            match rx.try_recv() {
+                Ok(Ok(p)) => {
+                    self.chat.picking = None;
+                    if !p.is_empty() {
+                        self.send_photo(PathBuf::from(p));
+                    }
+                }
+                Ok(Err(e)) => {
+                    self.chat.picking = None;
+                    self.add_chat(format!("Não consegui abrir a janela de escolher arquivo: {e}"), RED);
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(_) => self.chat.picking = None,
+            }
+        }
         let Some(rx) = &self.chat.sending else { return };
         let r = match rx.try_recv() {
             Ok(r) => r,
@@ -218,6 +280,10 @@ impl Game {
 
     /// Tecla com a caixa aberta (inclusive as repetidas, para o Backspace segurado).
     pub fn chat_key(&mut self, code: KeyCode, text: Option<&str>) {
+        if code == KeyCode::KeyO && self.chat.ctrl {
+            self.pick_photo();
+            return;
+        }
         match code {
             KeyCode::Escape => {
                 self.chat.open = false;
@@ -270,7 +336,7 @@ impl Game {
             let caret = (self.start.elapsed().as_millis() / 500) % 2 == 0;
             ui.text(px, x + 6.0 * k, y + 17.0 * k, &format!("{s}{}", if caret { "_" } else { "" }), WHITE);
             if self.chat.input.is_empty() {
-                ui.text(px, x + 6.0 * k, y + 17.0 * k, "   Enter envia   Esc cancela   (arraste uma foto para a janela)", [1.0, 1.0, 1.0, 0.43]);
+                ui.text(px, x + 6.0 * k, y + 17.0 * k, "   Enter envia   Ctrl+O escolhe uma foto (ou arraste o arquivo para a janela)   Esc cancela", [1.0, 1.0, 1.0, 0.43]);
             }
         }
         let top = 175.0 * k; // não invade a caixa de informações lá em cima

@@ -47,7 +47,7 @@ impl Game {
     }
 
     /// Solta a flecha: quanto mais puxado (0..1), mais rápida e mais forte.
-    fn fire_bow(&mut self, power: f64) {
+    pub fn fire_bow(&mut self, power: f64) {
         let f = self.forward();
         let (lx, ly, lz) = (f[0] as f64, f[1] as f64, f[2] as f64);
         let (speed, dmg) = (9.0 + 31.0 * power, 2.0 + 7.0 * power);

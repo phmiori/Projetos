@@ -21,6 +21,10 @@ pub struct Menu {
     /// campo com o cursor: 1 nome do mundo, 2 semente, 3 nome do personagem
     pub focus: u8,
     pub error: Option<String>,
+    /// "Excluir mundo" foi clicado uma vez: o próximo clique apaga (como no Java)
+    pub confirm_delete: bool,
+    /// aviso embaixo do título (ex.: mundo apagado)
+    pub message: Option<(String, std::time::Instant)>,
 }
 
 /// O que o menu pediu para o jogo fazer.
@@ -37,6 +41,7 @@ enum Hit {
     New,
     Lan,
     Options,
+    Delete,
     Quit,
     Field(u8),
     Mode,
@@ -196,8 +201,8 @@ impl Game {
             }
             let (bw, bh, gap) = (172.0 * k, 46.0 * k, 12.0 * k);
             let by = top + ROWS as f32 * row + 24.0 * k;
-            let bx = (w - (bw * 5.0 + gap * 4.0)) / 2.0;
-            for (i, hit) in [Hit::Play, Hit::New, Hit::Lan, Hit::Options, Hit::Quit].into_iter().enumerate() {
+            let bx = (w - (bw * 6.0 + gap * 5.0)) / 2.0;
+            for (i, hit) in [Hit::Play, Hit::New, Hit::Lan, Hit::Options, Hit::Delete, Hit::Quit].into_iter().enumerate() {
                 v.push((hit, [bx + i as f32 * (bw + gap), by, bw, bh]));
             }
         } else {
@@ -225,6 +230,16 @@ impl Game {
             ui.centered(44.0 * k, w / 2.0 + 3.0 * k, 92.0 * k + 3.0 * k, "Mundo de Blocos", rgba(0, 0, 0, 160));
             ui.centered(44.0 * k, w / 2.0, 92.0 * k, "Mundo de Blocos", rgba(245, 232, 205, 255));
             ui.centered(14.0 * k, w / 2.0, 120.0 * k, "versão Rust (prévia) · os mundos são os mesmos do Java", rgba(220, 225, 235, 230));
+            if self.menu.confirm_delete {
+                if let Some(wi) = self.menu.worlds.get(self.menu.selected) {
+                    let t = format!("Apagar \"{}\" para sempre? Clique de novo em Excluir para confirmar.", wi.name);
+                    ui.centered(15.0 * k, w / 2.0, 148.0 * k, &t, rgba(255, 150, 130, 255));
+                }
+            } else if let Some((t, at)) = &self.menu.message {
+                if at.elapsed().as_secs() < 5 {
+                    ui.centered(15.0 * k, w / 2.0, 148.0 * k, t, rgba(200, 235, 170, 255));
+                }
+            }
             let rows: Vec<[f32; 4]> = layout.iter().filter_map(|(h, r)| if let Hit::Row(_) = h { Some(*r) } else { None }).collect();
             let (pw, row) = (640.0 * k, 58.0 * k);
             let top = h * 0.5 - (ROWS as f32 * row) / 2.0 - 10.0 * k;
@@ -257,6 +272,16 @@ impl Game {
                     Hit::New => button(ui, k, *r, "Criar novo mundo", hot(*r), false, true),
                     Hit::Lan => button(ui, k, *r, "Jogar em LAN", hot(*r), false, true),
                     Hit::Options => button(ui, k, *r, "Configurações", hot(*r), false, true),
+                    Hit::Delete => {
+                        let label = if self.menu.confirm_delete { "Clique: apagar!" } else { "Excluir mundo" };
+                        if self.menu.confirm_delete {
+                            ui.rect(r[0], r[1], r[2], r[3], rgba(150, 45, 40, 245));
+                            ui.frame(r[0], r[1], r[2], r[3], 2.0 * k, rgba(0, 0, 0, 180));
+                            ui.centered(16.0 * k, r[0] + r[2] / 2.0, r[1] + r[3] / 2.0 + 6.0 * k, label, rgba(255, 255, 255, 255));
+                        } else {
+                            button(ui, k, *r, label, hot(*r) && can_play, false, can_play);
+                        }
+                    }
                     Hit::Quit => button(ui, k, *r, "Sair", hot(*r), false, true),
                     _ => {}
                 }
@@ -313,7 +338,11 @@ impl Game {
     pub fn menu_mouse(&mut self, w: f32, h: f32) -> Action {
         let Some((hit, _)) = self.menu_layout(w, h).into_iter().find(|(_, r)| inside(self.mouse, *r)) else { return Action::None };
         crate::sound::play("clique", 0.4);
+        if hit != Hit::Delete {
+            self.menu.confirm_delete = false;
+        }
         match hit {
+            Hit::Delete => self.delete_selected(),
             Hit::Row(i) => {
                 if i == self.menu.selected {
                     return self.play_selected(); // clicar de novo no mesmo mundo: joga
@@ -331,6 +360,24 @@ impl Game {
             Hit::Cancel => self.screen = Screen::Menu,
         }
         Action::None
+    }
+
+    /// Excluir mundo: o primeiro clique pede confirmação, o segundo apaga a pasta do mundo (Saves.delete do Java).
+    pub fn delete_selected(&mut self) {
+        let Some(wi) = self.menu.worlds.get(self.menu.selected) else { return };
+        if !self.menu.confirm_delete {
+            self.menu.confirm_delete = true;
+            return;
+        }
+        self.menu.confirm_delete = false;
+        let (dir, name) = (wi.dir.clone(), wi.name.clone());
+        // só apaga o que está mesmo dentro da pasta worlds
+        let inside_worlds = dir.canonicalize().ok().zip(std::path::Path::new("worlds").canonicalize().ok()).map_or(false, |(d, w)| d.starts_with(&w) && d != w);
+        let msg = if inside_worlds && std::fs::remove_dir_all(&dir).is_ok() { format!("Mundo \"{name}\" apagado") } else { format!("Não consegui apagar \"{name}\"") };
+        self.menu.message = Some((msg, std::time::Instant::now()));
+        self.menu.worlds = list_worlds();
+        self.menu.selected = self.menu.selected.min(self.menu.worlds.len().saturating_sub(1));
+        self.menu.scroll = self.menu.scroll.min(self.menu.selected);
     }
 
     fn play_selected(&self) -> Action {

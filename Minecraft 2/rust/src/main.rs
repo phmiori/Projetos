@@ -13,6 +13,7 @@
 //!
 //! Uso: mundo-de-blocos [--mundo pasta] [--semente N] [--posicao x y z yaw pitch] [--hora 0..1] [--comparar arquivo]
 
+mod amigo_teste;
 mod block;
 mod chat;
 mod containers;
@@ -1445,6 +1446,10 @@ fn main() {
     }
     // --dizer quadro texto: manda uma mensagem no chat nesse quadro; --foto-chat quadro arquivo: manda uma foto
     let say = arg("--dizer").and_then(|f| f.parse::<u32>().ok()).zip(arg2("--dizer"));
+    // --excluir-teste quadro: clica em "Excluir mundo" nesse quadro e de novo 60 quadros depois (testes)
+    // --amigo-teste: depois de entrar (--entrar), faz o papel do amigo do teste automático do Java
+    let mut friend_test = args.iter().any(|a| a == "--amigo-teste").then(amigo_teste::FriendTest::default);
+    let delete_test = arg("--excluir-teste").and_then(|f| f.parse::<u32>().ok());
     let say_photo = arg("--foto-chat").and_then(|f| f.parse::<u32>().ok()).zip(arg2("--foto-chat"));
     let zoo = args.iter().any(|a| a == "--zoologico");
     let hold_left = arg("--segurar-esq").and_then(|s| s.parse::<u32>().ok());
@@ -1492,6 +1497,8 @@ fn main() {
                         game.send_photo(path);
                     }
                 }
+                WindowEvent::ModifiersChanged(m) => game.chat.ctrl = m.state().control_key(),
+                WindowEvent::Focused(false) if game.chat.picking.is_some() => {} // a janela de escolher foto está na frente
                 WindowEvent::Focused(false) => {
                     if auto_shot.is_none() {
                         game.keys.clear();
@@ -1684,6 +1691,9 @@ fn main() {
                     let dt = (now - game.last).as_secs_f64().min(0.25);
                     game.last = now;
                     game.net_update(dt);
+                    if let Some(ft) = friend_test.as_mut() {
+                        ft.update(&mut game, dt);
+                    }
                     game.poll_photo();
                     // chegou a resposta do anfitrião da LAN: entra no mundo dele
                     if let Some((n, w, name, persona)) = game.poll_join() {
@@ -1722,6 +1732,9 @@ fn main() {
                             game.chat_key(KeyCode::KeyA, Some(t));
                             game.chat_key(KeyCode::Enter, None);
                         }
+                    }
+                    if delete_test.map_or(false, |f| frame_no == f || frame_no == f + 60) {
+                        game.delete_selected();
                     }
                     if let Some((f, p)) = &say_photo {
                         if *f == frame_no {

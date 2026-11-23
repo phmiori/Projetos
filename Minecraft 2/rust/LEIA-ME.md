@@ -24,7 +24,7 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
 
 - **Menu inicial** como o do Java: a lista dos mundos da pasta `worlds/` (o último jogado primeiro, com o modo, a
   semente e quando foi jogado), **Jogar**, **Criar novo mundo** (nome, semente opcional, criativo ou sobrevivência,
-  nome do personagem) e **Sair**, com o último mundo girando ao fundo. Os mundos criados aqui abrem no Java (mesma
+  nome do personagem), **Excluir mundo** (clique duas vezes: o primeiro pede confirmação) e **Sair**, com o último mundo girando ao fundo. Os mundos criados aqui abrem no Java (mesma
   pasta, mesmo `meta.properties`, mesma conta de semente com letras e o mesmo ponto de nascimento). "Salvar e sair"
   na pausa volta para o menu.
 - **Sons**: os mesmos `.wav` da pasta `sounds/` (se você trocou algum no Java, ouve o seu aqui também), com as regras
@@ -96,8 +96,8 @@ até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launc
     criaturas, itens no chão (o anfitrião decide quem pega), flechas, explosões, baús e fornalhas (guardados pelo
     anfitrião), a hora, golpes nas criaturas, lobos e ovos de criatura.
   - **Chat**: **T** ou **Enter** abre a caixa, **Enter** envia, **Esc** cancela. As mensagens ficam no canto de baixo
-    e somem depois de 10 s (as suas em amarelo). **Fotos**: arraste um arquivo de imagem (png, jpg, gif ou bmp) para
-    a janela; ela é reduzida e comprimida como no Java e aparece no chat de todos (Java e Rust).
+    e somem depois de 10 s (as suas em amarelo). **Fotos**: **Ctrl+O** com o chat aberto escolhe uma imagem (png, jpg, gif
+    ou bmp), ou arraste o arquivo para a janela; ela é reduzida e comprimida como no Java e aparece no chat de todos (Java e Rust).
   - Com o Rust de anfitrião, as criaturas enxergam os amigos como no Java: cada uma persegue, ataca ou atira no
     jogador mais perto, aparecem também em volta dos amigos e o chão em volta deles fica carregado. As flechas
     (de esqueletos e de jogadores) acertam os amigos.
@@ -121,6 +121,6 @@ soltos no chão não são gravados (no Java também não).
 - `exportar-blocos.bat`: depois de criar ou mudar blocos, itens ou receitas no Java, atualiza os arquivos de `dados/`.
 - `comparar-geracao.bat`: gera pedaços com o Java e com o Rust e confere se saíram iguais (rode depois de
   mexer na geração do mundo em qualquer um dos dois).
-- Linha de comando: sem nada abre o menu; `mundo-de-blocos.exe [--mundo worlds\nome] [--semente N] [--posicao x y z yaw pitch] [--voando] [--hora 0..1] [--so-ler] [--abrir-lan] [--entrar IP [nome]] [--dizer quadro texto] [--foto-chat quadro arquivo] [--zoologico] [--sem-vsync]`
+- Linha de comando: sem nada abre o menu; `mundo-de-blocos.exe [--mundo worlds\nome] [--semente N] [--posicao x y z yaw pitch] [--voando] [--hora 0..1] [--so-ler] [--abrir-lan] [--entrar IP [nome]] [--dizer quadro texto] [--foto-chat quadro arquivo] [--amigo-teste] [--excluir-teste quadro] [--zoologico] [--sem-vsync]`
   (`--so-ler`: abre sem gravar nada)
   (`--hora`: 0 = nascer do sol, 0,25 = meio-dia, 0,5 = pôr do sol, 0,75 = meia-noite).
