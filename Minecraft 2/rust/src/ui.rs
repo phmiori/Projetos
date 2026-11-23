@@ -10,6 +10,9 @@ use std::collections::HashMap;
 const ATLAS: u32 = 1024;
 const ITEMS_Y: u32 = 960; // onde ficam os desenhos dos itens no atlas
 const SIZES: [u32; 5] = [11, 13, 16, 20, 30];
+/// fotos do chat: cada uma numa camada de PHOTO x PHOTO (o maior lado tem no máximo 640, como no Java)
+pub const PHOTO: u32 = 640;
+pub const PHOTO_SLOTS: usize = 8;
 
 #[derive(Clone, Copy)]
 struct Glyph {
@@ -33,9 +36,10 @@ pub struct Ui {
     vao: glow::VertexArray,
     vbo: glow::Buffer,
     atlas: glow::Texture,
+    photos: glow::Texture,
     glyphs: HashMap<(u32, char), Glyph>,
     has_font: bool,
-    /// x, y, z, u, v, camada (-1 = atlas), r, g, b, a
+    /// x, y, z, u, v, camada (-1 = atlas, -2 em diante = fotos do chat), r, g, b, a
     verts: Vec<f32>,
 }
 
@@ -50,10 +54,10 @@ void main(){ vUV = aUV; vLayer = aLayer; vColor = aColor; gl_Position = uMat * v
 "#;
 const FS: &str = r#"#version 330 core
 in vec2 vUV; in float vLayer; in vec4 vColor;
-uniform sampler2D uAtlas; uniform sampler2DArray uBlocks;
+uniform sampler2D uAtlas; uniform sampler2DArray uBlocks; uniform sampler2DArray uPhotos;
 out vec4 frag;
 void main(){
-  vec4 t = vLayer < 0.0 ? texture(uAtlas, vUV) : texture(uBlocks, vec3(vUV, vLayer));
+  vec4 t = vLayer < -1.5 ? texture(uPhotos, vec3(vUV, -2.0 - vLayer)) : vLayer < 0.0 ? texture(uAtlas, vUV) : texture(uBlocks, vec3(vUV, vLayer));
   frag = t * vColor;
   if (frag.a < 0.01) discard;
 }
@@ -133,7 +137,27 @@ impl Ui {
         gl.tex_image_2d(glow::TEXTURE_2D, 0, glow::RGBA8 as i32, ATLAS as i32, ATLAS as i32, 0, glow::RGBA, glow::UNSIGNED_BYTE, Some(&px));
         gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::NEAREST as i32);
         gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::NEAREST as i32);
-        Ui { prog, vao, vbo, atlas, glyphs, has_font, verts: Vec::with_capacity(1 << 16) }
+        let photos = gl.create_texture().unwrap();
+        gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(photos));
+        gl.tex_image_3d(glow::TEXTURE_2D_ARRAY, 0, glow::RGBA8 as i32, PHOTO as i32, PHOTO as i32, PHOTO_SLOTS as i32, 0, glow::RGBA, glow::UNSIGNED_BYTE, None);
+        gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
+        Ui { prog, vao, vbo, atlas, photos, glyphs, has_font, verts: Vec::with_capacity(1 << 16) }
+    }
+
+    /// Põe uma foto (RGBA, no máximo PHOTO x PHOTO) na camada `slot`.
+    pub unsafe fn upload_photo(&mut self, gl: &glow::Context, slot: usize, w: u32, h: u32, rgba: &[u8]) {
+        gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(self.photos));
+        gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
+        gl.tex_sub_image_3d(glow::TEXTURE_2D_ARRAY, 0, 0, 0, slot as i32, w.min(PHOTO) as i32, h.min(PHOTO) as i32, 1, glow::RGBA, glow::UNSIGNED_BYTE, glow::PixelUnpackData::Slice(rgba));
+    }
+
+    /// Desenha a foto da camada `slot` (de tamanho w x h) no retângulo dado.
+    pub fn photo(&mut self, slot: usize, w: u32, h: u32, x: f32, y: f32, dw: f32, dh: f32, alpha: f32) {
+        let (u, v) = (w as f32 / PHOTO as f32, h as f32 / PHOTO as f32);
+        self.quad2(x, y, x + dw, y + dh, [0.0, 0.0, u, v], -2.0 - slot as f32, [1.0, 1.0, 1.0, alpha.max(0.02)]);
     }
 
     // ------------------------------------------------------------------ primitivas
@@ -312,6 +336,10 @@ impl Ui {
         gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(blocks));
         gl.uniform_1_i32(gl.get_uniform_location(self.prog, "uBlocks").as_ref(), 0);
         gl.uniform_1_i32(gl.get_uniform_location(self.prog, "uAtlas").as_ref(), 1);
+        gl.active_texture(glow::TEXTURE2);
+        gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(self.photos));
+        gl.uniform_1_i32(gl.get_uniform_location(self.prog, "uPhotos").as_ref(), 2);
+        gl.active_texture(glow::TEXTURE0);
         gl.bind_vertex_array(Some(self.vao));
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.vbo));
         gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, crate::as_bytes(&self.verts), glow::STREAM_DRAW);

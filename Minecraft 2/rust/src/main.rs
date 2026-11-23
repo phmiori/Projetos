@@ -1068,6 +1068,9 @@ impl Game {
         gl.enable(glow::BLEND);
         gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
         let (fw, fh) = (w as f32, h as f32);
+        for (slot, pw, ph, px) in self.chat.pending.drain(..) {
+            g.ui.upload_photo(gl, slot, pw, ph, &px);
+        }
         if in_world {
             self.draw_name_tags(&mut g.ui, &vp, fw, fh);
             self.draw_hud(&mut g.ui, fw, fh);
@@ -1440,8 +1443,9 @@ fn main() {
         }
         game.join_key(KeyCode::Enter, None);
     }
-    // --dizer quadro texto: manda uma mensagem no chat nesse quadro
+    // --dizer quadro texto: manda uma mensagem no chat nesse quadro; --foto-chat quadro arquivo: manda uma foto
     let say = arg("--dizer").and_then(|f| f.parse::<u32>().ok()).zip(arg2("--dizer"));
+    let say_photo = arg("--foto-chat").and_then(|f| f.parse::<u32>().ok()).zip(arg2("--foto-chat"));
     let zoo = args.iter().any(|a| a == "--zoologico");
     let hold_left = arg("--segurar-esq").and_then(|s| s.parse::<u32>().ok());
     let release_left = arg("--soltar-esq").and_then(|s| s.parse::<u32>().ok());
@@ -1480,6 +1484,12 @@ fn main() {
                 WindowEvent::Resized(s) => {
                     if s.width > 0 && s.height > 0 {
                         gl_surface.resize(&gl_ctx, NonZeroU32::new(s.width).unwrap(), NonZeroU32::new(s.height).unwrap());
+                    }
+                }
+                WindowEvent::DroppedFile(path) => {
+                    // arrastar uma foto para a janela manda a foto no chat (como no Java)
+                    if !matches!(game.screen, Screen::Menu | Screen::Create | Screen::Join) {
+                        game.send_photo(path);
                     }
                 }
                 WindowEvent::Focused(false) => {
@@ -1674,6 +1684,7 @@ fn main() {
                     let dt = (now - game.last).as_secs_f64().min(0.25);
                     game.last = now;
                     game.net_update(dt);
+                    game.poll_photo();
                     // chegou a resposta do anfitrião da LAN: entra no mundo dele
                     if let Some((n, w, name, persona)) = game.poll_join() {
                         let settings = game.settings.clone();
@@ -1710,6 +1721,11 @@ fn main() {
                             game.open_chat();
                             game.chat_key(KeyCode::KeyA, Some(t));
                             game.chat_key(KeyCode::Enter, None);
+                        }
+                    }
+                    if let Some((f, p)) = &say_photo {
+                        if *f == frame_no {
+                            game.send_photo(PathBuf::from(p));
                         }
                     }
                     if hold_left == Some(frame_no) {

@@ -10,7 +10,7 @@ glutin = "0.31"
 glutin-winit = "0.4"
 raw-window-handle = "0.5"
 glow = "0.13"
-image = { version = "0.24", default-features = false, features = ["png"] }
+image = { version = "0.24", default-features = false, features = ["png", "jpeg", "gif", "bmp"] }
 flate2 = "1"
 fontdue = "0.8"
 cpal = "0.15"

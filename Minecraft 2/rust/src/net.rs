@@ -968,6 +968,11 @@ impl Game {
                 let (from, text) = (d.s(), d.s());
                 self.add_chat(format!("<{from}> {text}"), crate::chat::WHITE);
             }
+            CHAT_IMAGE => {
+                let from = d.s();
+                let photo = d.raw();
+                self.receive_photo(&from, &photo);
+            }
             BLOOD => {
                 let p = [d.f(), d.f(), d.f()];
                 self.blood(p);
@@ -1193,12 +1198,13 @@ impl Game {
                 self.add_chat(format!("<{name}> {text}"), crate::chat::WHITE);
             }
             CHAT_IMAGE => {
-                // fotos do chat do Java: esta versão não mostra, mas repassa aos outros
+                // foto de um amigo: aparece aqui e, se for válida, vai para os outros
                 d.s();
                 let photo = d.raw();
-                let n = self.net.as_ref().unwrap();
-                let name = n.remotes.get(&rid).map(|r| r.name.clone()).unwrap_or_default();
-                n.send(Out::new(CHAT_IMAGE).s(&name).raw(&photo), Some(conn));
+                let name = self.net.as_ref().unwrap().remotes.get(&rid).map(|r| r.name.clone()).unwrap_or_default();
+                if self.receive_photo(&name, &photo) {
+                    self.net.as_ref().unwrap().send(Out::new(CHAT_IMAGE).s(&name).raw(&photo), Some(conn));
+                }
             }
             MOB_SPAWN => {
                 let t = d.i();
