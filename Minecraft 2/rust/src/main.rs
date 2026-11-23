@@ -964,11 +964,40 @@ impl Game {
             gl.draw_elements(glow::TRIANGLES, m.quads * 6, glow::UNSIGNED_INT, 0);
         }
 
+        // criaturas, itens soltos, flechas e jogadores: antes da água, para a água transparente ficar por cima
+        // dos que estão mergulhados (com o tom azul dela), como os blocos do fundo
+        if !self.drops.is_empty() || !self.mobs.is_empty() || !self.arrows.is_empty() || !self.primed.is_empty() || !self.particles.is_empty() || self.net.is_some() {
+            self.draw_drops(&mut g.ui, sky.daylight);
+            self.draw_players(&mut g.ui, sky.daylight);
+            self.draw_particles(&mut g.ui, sky.daylight);
+            self.draw_primed(&mut g.ui);
+            self.draw_mobs(&mut g.ui, sky.daylight);
+            gl.disable(glow::CULL_FACE);
+            gl.enable(glow::BLEND);
+            gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
+            // a mesma neblina dos blocos: de longe e embaixo d'água as criaturas somem junto com o mundo
+            g.ui.fog = Some(ui::Fog { cam: eye, view_dist, underwater, daylight: sky.daylight, sun: sky.sun });
+            g.ui.flush(gl, &vp, g.tex);
+            gl.disable(glow::BLEND);
+        }
+
         // água: transparente, de trás para a frente
         gl.disable(glow::CULL_FACE);
         gl.enable(glow::BLEND);
         gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
         gl.depth_mask(false);
+        // (de novo: o desenho das criaturas acima precisou de `g` livre)
+        let common = |p: glow::Program| {
+            gl.use_program(Some(p));
+            gl.uniform_3_f32(g.u(p, "uSun").as_ref(), sky.sun[0], sky.sun[1], sky.sun[2]);
+            gl.uniform_3_f32(g.u(p, "uLightDir").as_ref(), sky.light[0], sky.light[1], sky.light[2]);
+            gl.uniform_1_f32(g.u(p, "uLightStr").as_ref(), sky.light_str);
+            gl.uniform_1_f32(g.u(p, "uDaylight").as_ref(), sky.daylight);
+            gl.uniform_3_f32(g.u(p, "uCam").as_ref(), eye[0], eye[1], eye[2]);
+            gl.uniform_1_f32(g.u(p, "uTime").as_ref(), time);
+            gl.uniform_1_f32(g.u(p, "uViewDist").as_ref(), view_dist);
+            gl.uniform_1_i32(g.u(p, "uUnderwater").as_ref(), underwater as i32);
+        };
         common(g.water);
         gl.uniform_matrix_4_f32_slice(g.u(g.water, "uViewProj").as_ref(), false, &vp);
         gl.uniform_1_i32(g.u(g.water, "uTex").as_ref(), 0);
@@ -987,21 +1016,6 @@ impl Game {
             gl.draw_elements(glow::TRIANGLES, m.wquads * 6, glow::UNSIGNED_INT, 0);
         }
         gl.depth_mask(true);
-
-        // itens soltos no chão (girando, com a luz de onde estão)
-        if !self.drops.is_empty() || !self.mobs.is_empty() || !self.arrows.is_empty() || !self.primed.is_empty() || !self.particles.is_empty() || self.net.is_some() {
-            self.draw_drops(&mut g.ui, sky.daylight);
-            self.draw_players(&mut g.ui, sky.daylight);
-            self.draw_particles(&mut g.ui, sky.daylight);
-            self.draw_primed(&mut g.ui);
-            self.draw_mobs(&mut g.ui, sky.daylight);
-            gl.enable(glow::BLEND);
-            gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
-            // a mesma neblina dos blocos: de longe e embaixo d'água as criaturas somem junto com o mundo
-            g.ui.fog = Some(ui::Fog { cam: eye, view_dist, underwater, daylight: sky.daylight, sun: sky.sun });
-            g.ui.flush(gl, &vp, g.tex);
-            gl.disable(glow::BLEND);
-        }
 
         // contorno do bloco mirado
         if let Some(h) = self.aim {
