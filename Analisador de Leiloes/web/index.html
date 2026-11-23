@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Radar de Leilões Judiciais</title>
+<style>
+:root {
+  --bg: #f4f6fa; --surface: #ffffff; --surface-2: #f8f9fc; --border: #e3e7ef; --text: #172033; --muted: #66708a;
+  --brand: #1f4fd8; --brand-ink: #ffffff; --head: #0f1b3d;
+  --ok: #0f8a4f; --ok-bg: #e3f6ec; --warn: #a76300; --warn-bg: #fff3d6; --bad: #c4322b; --bad-bg: #fde6e4;
+  --gray-bg: #eceff4; --shadow: 0 1px 2px rgba(16,24,40,.06), 0 4px 14px rgba(16,24,40,.06);
+  --radius: 12px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1220; --surface: #151c2e; --surface-2: #1a2238; --border: #263049; --text: #e6eaf3; --muted: #93a0bd;
+    --brand: #5b8cff; --brand-ink: #0b1020; --head: #0a0f1c;
+    --ok: #4ed38f; --ok-bg: #12301f; --warn: #f0b44c; --warn-bg: #33270e; --bad: #ff7b72; --bad-bg: #3a1716;
+    --gray-bg: #232c42; --shadow: 0 1px 2px rgba(0,0,0,.4);
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; }
+button, input, select { font: inherit; color: inherit; }
+a { color: var(--brand); }
+
+header { background: var(--head); color: #fff; padding: 14px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; position: sticky; top: 0; z-index: 20; }
+.logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; letter-spacing: .2px; }
+.logo svg { width: 28px; height: 28px; }
+.logo small { display: block; font-weight: 400; font-size: 12px; color: #9fb0d8; }
+.spacer { flex: 1; }
+.btn { border: 1px solid var(--border); background: var(--surface); color: var(--text); padding: 8px 14px; border-radius: 9px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.btn:hover { filter: brightness(.97); }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); font-weight: 600; }
+.btn.ghost-dark { background: transparent; border-color: #34436b; color: #dfe6f7; }
+.btn:disabled { opacity: .55; cursor: default; }
+header select { background: #1a2850; color: #dfe6f7; border: 1px solid #34436b; border-radius: 9px; padding: 7px 8px; }
+
+main { max-width: 1440px; margin: 0 auto; padding: 20px 24px 60px; }
+.banner { background: var(--warn-bg); color: var(--warn); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.banner.erro { background: var(--bad-bg); color: var(--bad); }
+
+.progress-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; margin-bottom: 16px; box-shadow: var(--shadow); }
+.bar { height: 8px; background: var(--gray-bg); border-radius: 99px; overflow: hidden; margin: 10px 0 6px; }
+.bar > div { height: 100%; background: var(--brand); width: 0; transition: width .4s; }
+.bar.indet > div { width: 35%; animation: slide 1.2s infinite ease-in-out; }
+@keyframes slide { 0% { margin-left: -35%; } 100% { margin-left: 100%; } }
+pre.log { max-height: 180px; overflow: auto; background: var(--surface-2); border-radius: 8px; padding: 10px; font-size: 12px; margin: 8px 0 0; white-space: pre-wrap; }
+
+.kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; cursor: pointer; box-shadow: var(--shadow); }
+.kpi .v { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.kpi .l { color: var(--muted); font-size: 12.5px; }
+.kpi.ok .v { color: var(--ok); } .kpi.warn .v { color: var(--warn); } .kpi.bad .v { color: var(--bad); }
+.kpi.sel { outline: 2px solid var(--brand); outline-offset: -1px; }
+
+.filters { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin-bottom: 14px; box-shadow: var(--shadow); }
+.f { display: flex; flex-direction: column; gap: 4px; }
+.f label { font-size: 11.5px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+.f input, .f select { border: 1px solid var(--border); background: var(--surface-2); border-radius: 8px; padding: 7px 9px; min-width: 0; }
+.f.grow { flex: 1 1 220px; }
+.check { display: flex; align-items: center; gap: 6px; padding: 7px 4px; color: var(--muted); cursor: pointer; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface-2); padding: 7px 12px; cursor: pointer; }
+.seg button.on { background: var(--brand); color: var(--brand-ink); }
+
+.meta { color: var(--muted); margin: 4px 2px 12px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; cursor: pointer; display: flex; flex-direction: column; box-shadow: var(--shadow); transition: transform .12s; }
+.card:hover { transform: translateY(-2px); }
+.thumb { position: relative; aspect-ratio: 16/9; background: var(--gray-bg); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb .noimg { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 12px; }
+.thumb .tl { position: absolute; top: 8px; left: 8px; }
+.thumb .tr { position: absolute; top: 8px; right: 8px; }
+.badge { display: inline-block; padding: 3px 8px; border-radius: 99px; font-size: 11.5px; font-weight: 700; letter-spacing: .2px; }
+.b-ok { background: var(--ok-bg); color: var(--ok); } .b-warn { background: var(--warn-bg); color: var(--warn); }
+.b-bad { background: var(--bad-bg); color: var(--bad); } .b-gray { background: var(--gray-bg); color: var(--muted); }
+.b-dark { background: rgba(10,15,30,.78); color: #fff; }
+.body { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+.title { font-weight: 700; font-size: 15px; line-height: 1.25; }
+.sub { color: var(--muted); font-size: 12.5px; }
+.nums { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-variant-numeric: tabular-nums; }
+.nums .k { color: var(--muted); font-size: 11.5px; }
+.nums .n { font-weight: 600; }
+.lucro.pos { color: var(--ok); } .lucro.neg { color: var(--bad); }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; margin-top: auto; }
+.chip { font-size: 11.5px; padding: 2px 7px; border-radius: 6px; background: var(--gray-bg); color: var(--muted); }
+.chip.warn { background: var(--warn-bg); color: var(--warn); } .chip.bad { background: var(--bad-bg); color: var(--bad); } .chip.ok { background: var(--ok-bg); color: var(--ok); }
+
+table.t { width: 100%; border-collapse: collapse; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; font-variant-numeric: tabular-nums; }
+.t th, .t td { padding: 9px 10px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+.t th { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .4px; background: var(--surface-2); cursor: pointer; user-select: none; }
+.t td.r, .t th.r { text-align: right; }
+.t tbody tr { cursor: pointer; } .t tbody tr:hover { background: var(--surface-2); }
+.t td.v { white-space: normal; min-width: 220px; }
+.tablewrap { overflow-x: auto; border-radius: var(--radius); box-shadow: var(--shadow); }
+
+.more { display: flex; justify-content: center; margin-top: 18px; }
+.empty { text-align: center; padding: 60px 20px; color: var(--muted); background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); }
+.empty h2 { color: var(--text); margin: 0 0 8px; font-size: 18px; }
+
+/* painel lateral */
+.overlay { position: fixed; inset: 0; background: rgba(5,10,25,.45); z-index: 40; display: none; }
+.overlay.on { display: block; }
+.drawer { position: fixed; top: 0; right: 0; height: 100%; width: min(620px, 100%); background: var(--surface); z-index: 50; transform: translateX(100%); transition: transform .2s; overflow-y: auto; box-shadow: -8px 0 30px rgba(0,0,0,.2); }
+.drawer.on { transform: none; }
+.drawer .hero { aspect-ratio: 16/8; background: var(--gray-bg); position: relative; }
+.drawer .hero img { width: 100%; height: 100%; object-fit: cover; }
+.drawer .close { position: absolute; top: 10px; right: 10px; border: 0; background: rgba(10,15,30,.75); color: #fff; width: 34px; height: 34px; border-radius: 50%; cursor: pointer; font-size: 18px; }
+.dcontent { padding: 18px 22px 40px; display: flex; flex-direction: column; gap: 18px; }
+.dcontent h2 { margin: 0; font-size: 20px; }
+.dcontent h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }
+.calc { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.calc td { padding: 6px 0; border-bottom: 1px dashed var(--border); }
+.calc td.r { text-align: right; font-weight: 600; }
+.calc tr.tot td { border-bottom: 0; border-top: 2px solid var(--border); font-weight: 700; padding-top: 9px; }
+.kv { display: grid; grid-template-columns: 170px 1fr; gap: 6px 12px; }
+.kv .k { color: var(--muted); }
+.textbox { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; white-space: pre-wrap; font-size: 13px; max-height: 320px; overflow: auto; }
+.list { margin: 0; padding-left: 18px; } .list li { margin: 3px 0; }
+.note { font-size: 12.5px; color: var(--muted); }
+
+/* modal configurações */
+.modal { position: fixed; inset: 0; display: none; place-items: center; z-index: 60; padding: 16px; }
+.modal.on { display: grid; }
+.modal .box { background: var(--surface); border-radius: 14px; width: min(640px, 100%); max-height: 92vh; overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+.modal .mh { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; }
+.modal .mh h2 { margin: 0; font-size: 17px; flex: 1; }
+.modal .mb { padding: 16px 20px; display: flex; flex-direction: column; gap: 18px; }
+.modal fieldset { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px 14px; margin: 0; }
+.modal legend { font-weight: 700; padding: 0 6px; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
+.modal .f input { width: 100%; }
+.msg { font-size: 13px; padding: 8px 10px; border-radius: 8px; display: none; }
+.msg.ok { display: block; background: var(--ok-bg); color: var(--ok); } .msg.bad { display: block; background: var(--bad-bg); color: var(--bad); }
+.modal .mf { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 10px; }
+
+@media (max-width: 900px) {
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  header { padding: 12px 16px; } main { padding: 16px; }
+  .form-grid, .kv { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="2" y="2" width="28" height="28" rx="8" fill="#1f4fd8"/><path d="M9 21l6-6m-1.5-4.5l6 6m-8-3.5l5-5 3.5 3.5-5 5z" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 24h7" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+    <div>Radar de Leilões Judiciais<small id="atualizado">BuscaAii · veículos</small></div>
+  </div>
+  <div class="spacer"></div>
+  <select id="editais" title="Quantos editais/páginas de leiloeiro ler (os melhores primeiro)">
+    <option value="0">Sem ler editais</option>
+    <option value="20">Ler 20 editais</option>
+    <option value="40" selected>Ler 40 editais</option>
+    <option value="80">Ler 80 editais</option>
+    <option value="150">Ler 150 editais</option>
+  </select>
+  <button class="btn primary" id="btnRodar">⟳ Atualizar análise</button>
+  <a class="btn ghost-dark" id="btnExcel" href="/api/excel">⭳ Excel</a>
+  <button class="btn ghost-dark" id="btnConfig">⚙ Configurações</button>
+</header>
+
+<main>
+  <div id="banners"></div>
+
+  <div class="progress-card" id="progresso" hidden>
+    <div style="display:flex;gap:10px;align-items:center">
+      <strong id="pEtapa">Iniciando...</strong><span class="spacer"></span><span class="note" id="pCont"></span>
+      <button class="btn" id="btnLog" style="padding:4px 10px">Ver detalhes</button>
+    </div>
+    <div class="bar" id="pBar"><div></div></div>
+    <pre class="log" id="pLog" hidden></pre>
+  </div>
+
+  <section class="kpis" id="kpis"></section>
+
+  <section class="filters">
+    <div class="f grow"><label for="fBusca">Buscar</label><input id="fBusca" placeholder="Modelo, cidade, leiloeiro..."></div>
+    <div class="f"><label for="fUF">Estado</label><select id="fUF"><option value="">Todos</option></select></div>
+    <div class="f"><label for="fLance">Lance até (R$)</label><input id="fLance" type="number" min="0" step="1000" placeholder="sem limite" style="width:130px"></div>
+    <div class="f"><label for="fPrazo">Encerra em</label>
+      <select id="fPrazo"><option value="">Qualquer data</option><option value="2">até 2 dias</option><option value="7">até 7 dias</option><option value="15">até 15 dias</option><option value="30">até 30 dias</option></select></div>
+    <div class="f"><label for="fOrdem">Ordenar por</label>
+      <select id="fOrdem">
+        <option value="margem">Maior margem</option><option value="lucro">Maior lucro (R$)</option>
+        <option value="desconto">Maior desconto s/ FIPE</option><option value="encerra">Encerra primeiro</option>
+        <option value="lance">Menor lance</option>
+      </select></div>
+    <label class="check"><input type="checkbox" id="fFunciona"> Só os que funcionam</label>
+    <label class="check"><input type="checkbox" id="fSemAlienacao"> Sem alienação fiduciária</label>
+    <div class="seg" role="group" aria-label="Visualização"><button id="vCards" class="on">Cards</button><button id="vTabela">Tabela</button></div>
+  </section>
+
+  <div class="meta"><span id="contagem"></span><span id="paramsResumo"></span></div>
+  <section id="lista"></section>
+  <div class="more" id="more" hidden><button class="btn" id="btnMais">Mostrar mais</button></div>
+</main>
+
+<div class="overlay" id="overlay"></div>
+<aside class="drawer" id="drawer" aria-label="Detalhes do lote"></aside>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mTitulo">
+  <div class="box">
+    <div class="mh"><h2 id="mTitulo">Configurações</h2><button class="btn" id="mFechar">✕</button></div>
+    <div class="mb">
+      <fieldset>
+        <legend>Login do BuscaAii</legend>
+        <p class="note" style="margin-top:0">Salvo só no arquivo <code>.env</code> deste computador. Usado para baixar os lotes.</p>
+        <div class="form-grid">
+          <div class="f"><label for="cEmail">E-mail</label><input id="cEmail" type="email" autocomplete="username"></div>
+          <div class="f"><label for="cSenha">Senha</label><input id="cSenha" type="password" autocomplete="current-password"></div>
+          <div class="f" style="grid-column:1/-1"><label for="cFipe">Token FIPE (opcional, aumenta o limite diário)</label><input id="cFipe" placeholder="deixe vazio se não tiver"></div>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:12px">
+          <button class="btn primary" id="cSalvarLogin">Salvar e testar login</button>
+          <div class="msg" id="cLoginMsg"></div>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>Parâmetros do cálculo</legend>
+        <div class="form-grid">
+          <div class="f"><label for="pMargem">Margem mínima "vale a pena" (%)</label><input id="pMargem" type="number" step="1"></div>
+          <div class="f"><label for="pComissao">Comissão do leiloeiro (%)</label><input id="pComissao" type="number" step="0.5"></div>
+          <div class="f"><label for="pDoc">Documentação / transferência (R$)</label><input id="pDoc" type="number" step="100"></div>
+          <div class="f"><label for="pRemocao">Remoção / guincho (R$)</label><input id="pRemocao" type="number" step="100"></div>
+          <div class="f"><label for="pDesagio">Venda abaixo da FIPE (%)</label><input id="pDesagio" type="number" step="1"></div>
+          <div class="f"><label for="pNaoFunc">Reparo extra se não funciona (% FIPE)</label><input id="pNaoFunc" type="number" step="1"></div>
+          <div class="f" style="grid-column:1/-1"><label for="pSuspeito">Lance abaixo de X% da FIPE = suspeito (vira "Talvez")</label><input id="pSuspeito" type="number" step="1"></div>
+          <div class="f"><label for="pRBom">Reparo estado bom (% FIPE)</label><input id="pRBom" type="number" step="1"></div>
+          <div class="f"><label for="pRReg">Reparo estado regular (% FIPE)</label><input id="pRReg" type="number" step="1"></div>
+          <div class="f"><label for="pRDesc">Reparo estado desconhecido (% FIPE)</label><input id="pRDesc" type="number" step="1"></div>
+          <div class="f"><label for="pRRuim">Reparo estado ruim (% FIPE)</label><input id="pRRuim" type="number" step="1"></div>
+        </div>
+        <label class="check" style="margin-top:10px;color:var(--text)"><input type="checkbox" id="pSinistro">
+          Descartar lotes com sinistro, colisão, monta ou enchente citados no edital</label>
+        <label class="check" style="color:var(--text)"><input type="checkbox" id="pSemFoto">
+          Descartar lotes sem foto ou só com foto ilustrativa/genérica</label>
+        <p class="note" style="margin:2px 0 0 24px">Desmarcado: eles continuam na lista, com alerta e reparo de "estado ruim". O preço FIPE deles só é buscado na próxima atualização.</p>
+        <p class="note">Ao salvar, os resultados são recalculados na hora, sem baixar tudo de novo.</p>
+      </fieldset>
+      <fieldset>
+        <legend>Tipos de veículo (vale na próxima atualização)</legend>
+        <div style="display:flex;flex-wrap:wrap;gap:4px 16px" id="cTipos"></div>
+      </fieldset>
+    </div>
+    <div class="mf"><button class="btn" id="mCancelar">Cancelar</button><button class="btn primary" id="mSalvar">Salvar parâmetros</button></div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const brl = v => v == null || isNaN(v) ? "—" : v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const pct = v => v == null || isNaN(v) ? "—" : (v * 100).toLocaleString("pt-BR", { maximumFractionDigits: 0 }) + "%";
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const TIPOS = { CAR: "Carros", PICKUP_TRUCK: "Picapes", VAN: "Vans", MOTORCYCLE: "Motos", TRUCK: "Caminhões" };
+const VEREDITOS = [
+  ["VALE A PENA", "Vale a pena", "ok"], ["TALVEZ", "Talvez", "warn"], ["SEM FIPE", "Sem FIPE", "gray"],
+  ["DESCARTAR", "Descartados", "bad"], ["", "Total", ""],
+];
+const BADGE = { "VALE A PENA": "b-ok", "TALVEZ": "b-warn", "SEM FIPE": "b-gray", "DESCARTAR": "b-bad" };
+
+let dados = [], config = {}, estado = {}, view = "cards", limite = 60;
+let vereditosSel = new Set(["VALE A PENA", "TALVEZ"]);
+let ordemTabela = null;
+
+function uf(l) { const e = (l.estado || "").trim().toUpperCase().slice(0, 2); return /^[A-Z]{2}$/.test(e) ? e : ""; }
+function dias(d) { if (!d) return null; const hoje = new Date(); hoje.setHours(0,0,0,0); return Math.round((new Date(d + "T00:00:00") - hoje) / 864e5); }
+function txtDias(n) { return n == null ? "" : n <= 0 ? "Encerra hoje" : n === 1 ? "Amanhã" : `${n} dias`; }
+function dataBR(d) { return d ? d.slice(0, 10).split("-").reverse().join("/") : "—"; }
+
+async function api(url, opts) {
+  const r = await fetch(url, opts);
+  if (!r.ok && r.status !== 409) throw new Error(await r.text());
+  return r.json();
+}
+
+async function carregarResultados() {
+  const r = await api("/api/resultados");
+  dados = r.resultados || [];
+  config = r.config || {};
+  const ufs = [...new Set(dados.map(x => uf(x.lote)).filter(Boolean))].sort();
+  const sel = $("#fUF"), atual = sel.value;
+  sel.innerHTML = '<option value="">Todos</option>' + ufs.map(u => `<option>${u}</option>`).join("");
+  sel.value = ufs.includes(atual) ? atual : "";
+  $("#atualizado").textContent = r.gerado_em ? `Última análise: ${new Date(r.gerado_em).toLocaleString("pt-BR")}` : "BuscaAii · veículos";
+  $("#paramsResumo").textContent = config.margem_minima != null
+    ? `Vale a pena = margem ≥ ${pct(config.margem_minima)} · comissão ${pct(config.comissao_leiloeiro)} · venda FIPE −${pct(config.desagio_revenda)}` : "";
+  render();
+}
+
+function filtrar() {
+  const busca = $("#fBusca").value.trim().toLowerCase();
+  const fUF = $("#fUF").value, lanceMax = +$("#fLance").value || 0, prazo = +$("#fPrazo").value || 0;
+  const funciona = $("#fFunciona").checked, semAlien = $("#fSemAlienacao").checked;
+  return dados.filter(r => {
+    const l = r.lote;
+    if (busca && !`${l.modelo_veiculo} ${l.cidade} ${l.estado} ${l.leiloeiro}`.toLowerCase().includes(busca)) return false;
+    if (fUF && uf(l) !== fUF) return false;
+    if (lanceMax && !(r.calc.lance > 0 && r.calc.lance <= lanceMax)) return false;
+    if (prazo) { const d = dias(l.data_encerramento); if (d == null || d > prazo) return false; }
+    if (funciona && r.analise.funciona !== "sim") return false;
+    if (semAlien && r.analise.alertas.some(a => a.startsWith("Alienação"))) return false;
+    return true;
+  });
+}
+
+function ordenar(lista) {
+  const k = $("#fOrdem").value;
+  const val = {
+    margem: r => -(r.calc.margem ?? -99), lucro: r => -(r.calc.lucro ?? -1e12), desconto: r => -(r.calc.desconto_fipe ?? -99),
+    encerra: r => r.lote.data_encerramento || "9999", lance: r => r.calc.lance || 1e12,
+  }[k];
+  return lista.slice().sort((a, b) => { const x = val(a), y = val(b); return x < y ? -1 : x > y ? 1 : 0; });
+}
+
+function render() {
+  const base = filtrar();
+  const cont = Object.fromEntries(VEREDITOS.map(([k]) => [k, k ? base.filter(r => r.veredito === k).length : base.length]));
+  $("#kpis").innerHTML = VEREDITOS.map(([k, nome, cls]) => {
+    const sel = k ? vereditosSel.has(k) : vereditosSel.size === 4;
+    return `<div class="kpi ${cls} ${sel ? "sel" : ""}" data-v="${k}" title="Clique para mostrar/ocultar"><div class="v">${cont[k].toLocaleString("pt-BR")}</div><div class="l">${nome}</div></div>`;
+  }).join("");
+  document.querySelectorAll(".kpi").forEach(el => el.onclick = () => {
+    const v = el.dataset.v;
+    if (!v) vereditosSel = vereditosSel.size === 4 ? new Set(["VALE A PENA", "TALVEZ"]) : new Set(VEREDITOS.slice(0, 4).map(x => x[0]));
+    else vereditosSel.has(v) ? vereditosSel.delete(v) : vereditosSel.add(v);
+    limite = 60; render();
+  });
+
+  const lista = ordenar(base.filter(r => vereditosSel.has(r.veredito)));
+  $("#contagem").textContent = dados.length ? `${lista.length.toLocaleString("pt-BR")} lotes exibidos de ${dados.length.toLocaleString("pt-BR")} analisados` : "";
+
+  const alvo = $("#lista");
+  if (!dados.length) {
+    alvo.innerHTML = `<div class="empty"><h2>Nenhuma análise ainda</h2>
+      <p>${estado.login_configurado ? 'Clique em <b>Atualizar análise</b> para baixar os leilões judiciais e calcular quais valem a pena.' : 'Primeiro coloque seu login do BuscaAii em <b>Configurações</b>; depois clique em <b>Atualizar análise</b>.'}</p>
+      <button class="btn primary" onclick="${estado.login_configurado ? "rodar()" : "abrirConfig()"}">${estado.login_configurado ? "Atualizar análise" : "Abrir configurações"}</button></div>`;
+    $("#more").hidden = true; return;
+  }
+  if (!lista.length) { alvo.innerHTML = `<div class="empty"><h2>Nada com esses filtros</h2><p>Tente afrouxar os filtros ou clicar nos totais acima para incluir outros vereditos.</p></div>`; $("#more").hidden = true; return; }
+
+  const vis = lista.slice(0, limite);
+  alvo.innerHTML = view === "cards" ? `<div class="grid">${vis.map(card).join("")}</div>` : tabela(vis);
+  alvo.querySelectorAll("[data-id]").forEach(el => el.onclick = () => abrir(el.dataset.id));
+  $("#more").hidden = lista.length <= limite;
+  $("#btnMais").textContent = `Mostrar mais (${(lista.length - limite).toLocaleString("pt-BR")} restantes)`;
+}
+
+function chipsDe(r) {
+  const a = r.analise, out = [];
+  const cond = { bom: "ok", regular: "", ruim: "bad", desconhecido: "" }[a.condicao];
+  out.push(`<span class="chip ${cond}">Estado: ${esc(a.condicao)}</span>`);
+  if (a.funciona === "sim") out.push(`<span class="chip ok">Funciona</span>`);
+  if (a.funciona === "NÃO") out.push(`<span class="chip bad">Não funciona</span>`);
+  a.bloqueios.forEach(b => out.push(`<span class="chip bad">${esc(b)}</span>`));
+  if (a.alertas.length) out.push(`<span class="chip warn" title="${esc(a.alertas.join(" · "))}">⚠ ${a.alertas.length} alerta${a.alertas.length > 1 ? "s" : ""}</span>`);
+  if (r.edital_status && r.edital_status.startsWith("edital PDF")) out.push(`<span class="chip ok">Edital lido</span>`);
+  return out.join("");
+}
+
+function imgTag(src) {
+  return src ? `<img loading="lazy" src="${esc(src)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
+}
+
+function card(r) {
+  const l = r.lote, c = r.calc, d = dias(l.data_encerramento);
+  const local = [l.cidade, uf(l)].filter(Boolean).join(" / ") || "Local não informado";
+  const foto = r.foto && r.foto !== "real" ? "" : imgTag(l.imagem);  // não mostra a imagem genérica
+  return `<article class="card" data-id="${esc(l.id)}">
+    <div class="thumb"><div class="noimg">${r.foto === "ilustrativa" ? "só foto ilustrativa" : "sem foto"}</div>${foto}
+      <span class="badge ${BADGE[r.veredito]} tl">${r.veredito}</span>
+      ${d != null ? `<span class="badge b-dark tr">${txtDias(d)}</span>` : ""}</div>
+    <div class="body">
+      <div><div class="title">${esc(l.modelo_veiculo)} ${r.ano ? `<span class="sub">${r.ano}</span>` : ""}</div>
+      <div class="sub">${esc(local)} · ${esc(l.leiloeiro || "")}</div></div>
+      <div class="nums">
+        <div><div class="k">Lance (${esc(c.praca)})</div><div class="n">${brl(c.lance)}</div></div>
+        <div><div class="k">FIPE</div><div class="n">${brl(r.fipe)}</div></div>
+        <div><div class="k">Lucro estimado</div><div class="n lucro ${c.lucro >= 0 ? "pos" : "neg"}">${brl(c.lucro)}</div></div>
+        <div><div class="k">Margem · desconto FIPE</div><div class="n">${pct(c.margem)} · ${pct(c.desconto_fipe)}</div></div>
+      </div>
+      <div class="chips">${chipsDe(r)}</div>
+    </div></article>`;
+}
+
+function tabela(vis) {
+  return `<div class="tablewrap"><table class="t"><thead><tr>
+    <th>Veredito</th><th>Veículo</th><th>Ano</th><th>Local</th><th>Encerra</th>
+    <th class="r">Lance</th><th class="r">FIPE</th><th class="r">Desc. FIPE</th><th class="r">Lucro</th><th class="r">Margem</th><th>Estado</th><th>Alertas</th>
+  </tr></thead><tbody>${vis.map(r => {
+    const l = r.lote, c = r.calc;
+    return `<tr data-id="${esc(l.id)}"><td><span class="badge ${BADGE[r.veredito]}">${r.veredito}</span></td>
+      <td class="v"><b>${esc(l.modelo_veiculo)}</b><div class="sub">${esc(l.leiloeiro || "")}</div></td><td>${r.ano || "—"}</td>
+      <td>${esc([l.cidade, uf(l)].filter(Boolean).join("/"))}</td><td>${dataBR(l.data_encerramento)}</td>
+      <td class="r">${brl(c.lance)}</td><td class="r">${brl(r.fipe)}</td><td class="r">${pct(c.desconto_fipe)}</td>
+      <td class="r lucro ${c.lucro >= 0 ? "pos" : "neg"}">${brl(c.lucro)}</td><td class="r"><b>${pct(c.margem)}</b></td>
+      <td>${esc(r.analise.condicao)}${r.analise.funciona === "NÃO" ? " · não funciona" : r.analise.funciona === "sim" ? " · funciona" : ""}</td>
+      <td>${r.analise.bloqueios.length ? `<span class="chip bad">${esc(r.analise.bloqueios[0])}</span>` : r.analise.alertas.length ? `<span class="chip warn">⚠ ${r.analise.alertas.length}</span>` : ""}</td></tr>`;
+  }).join("")}</tbody></table></div>`;
+}
+
+function abrir(id) {
+  const r = dados.find(x => x.lote.id === id); if (!r) return;
+  const l = r.lote, c = r.calc, a = r.analise, d = dias(l.data_encerramento);
+  const linhasCalc = r.fipe ? `
+    <tr><td>Lance considerado (${esc(c.praca)})</td><td class="r">${brl(c.lance)}</td></tr>
+    <tr><td>+ Comissão do leiloeiro (${pct(config.comissao_leiloeiro)})</td><td class="r">${brl(c.comissao)}</td></tr>
+    <tr><td>+ Débitos / taxas do edital ${a.subrogacao ? '<span class="note">(débitos sub-rogados, só taxas)</span>' : ""}</td><td class="r">${brl(c.debitos_considerados)}</td></tr>
+    <tr><td>+ Documentação e transferência</td><td class="r">${brl(config.custo_documentacao)}</td></tr>
+    <tr><td>+ Remoção / guincho</td><td class="r">${brl(config.custo_remocao)}</td></tr>
+    <tr><td>+ Reparo estimado (estado ${esc(a.condicao)}${a.funciona === "NÃO" ? ", não funciona" : ""})</td><td class="r">${brl(c.reparo)}</td></tr>
+    <tr class="tot"><td>= Investimento total</td><td class="r">${brl(c.investimento)}</td></tr>
+    <tr><td>Revenda estimada (FIPE ${brl(r.fipe)} − ${pct(config.desagio_revenda)})</td><td class="r">${brl(c.revenda)}</td></tr>
+    <tr class="tot"><td>Lucro estimado · margem</td><td class="r lucro ${c.lucro >= 0 ? "pos" : "neg"}">${brl(c.lucro)} · ${pct(c.margem)}</td></tr>`
+    : `<tr><td>Lance considerado (${esc(c.praca)})</td><td class="r">${brl(c.lance)}</td></tr>
+       <tr><td colspan="2" class="note">Sem preço FIPE: ${esc(r.fipe_status || "não consultado")}. Não dá para calcular o lucro.</td></tr>`;
+
+  $("#drawer").innerHTML = `
+    <div class="hero">${r.foto && r.foto !== "real" ? "" : imgTag(l.imagem)}<button class="close" onclick="fechar()" aria-label="Fechar">✕</button></div>
+    <div class="dcontent">
+      <div>
+        <span class="badge ${BADGE[r.veredito]}">${r.veredito}</span>
+        ${d != null ? `<span class="badge b-gray">${txtDias(d)} · ${dataBR(l.data_encerramento)}</span>` : ""}
+        <h2 style="margin-top:8px">${esc(l.modelo_veiculo)} ${r.ano || ""}</h2>
+        <div class="sub">${esc([l.cidade, uf(l)].filter(Boolean).join(" / "))} · ${esc(l.leiloeiro || "")}</div>
+      </div>
+      ${l.fonte ? `<a class="btn primary" style="align-self:flex-start" href="${esc(l.fonte)}" target="_blank" rel="noopener">Abrir lote no site do leiloeiro ↗</a>` : ""}
+      ${a.bloqueios.length ? `<div><h3>Motivo do descarte</h3><ul class="list" style="color:var(--bad)">${a.bloqueios.map(b => `<li>${esc(b)}</li>`).join("")}</ul></div>` : ""}
+      ${a.sinistro ? `<div><h3>Trecho que fala de sinistro</h3><div class="textbox">…${esc(a.sinistro)}…</div></div>` : ""}
+      ${a.alertas.length ? `<div><h3>Alertas para conferir no edital</h3><ul class="list" style="color:var(--warn)">${a.alertas.map(b => `<li>${esc(b)}</li>`).join("")}</ul></div>` : ""}
+      <div><h3>Conta</h3><table class="calc">${linhasCalc}</table></div>
+      <div><h3>Dados do lote</h3><div class="kv">
+        <div class="k">Lance 1ª praça</div><div>${brl(c.lance_1a || null)}</div>
+        <div class="k">Lance 2ª praça</div><div>${brl(c.lance_2a || null)}</div>
+        <div class="k">Avaliação judicial</div><div>${brl(a.avaliacao)}</div>
+        <div class="k">Modelo FIPE usado</div><div>${esc(r.fipe_modelo || r.fipe_status || "—")}</div>
+        <div class="k">Estado de conservação</div><div>${esc(a.condicao)}</div>
+        <div class="k">Funciona?</div><div>${esc(a.funciona === "?" ? "não informado" : a.funciona)}</div>
+        <div class="k">Foto</div><div>${{ real: "foto real do lote", "sem foto": "sem foto", ilustrativa: "só foto ilustrativa/genérica" }[r.foto || "real"]}</div>
+        <div class="k">Débitos citados</div><div>${brl(a.debitos || null)}${a.subrogacao ? " · edital fala em sub-rogação/livre de ônus" : ""}</div>
+        <div class="k">Edital</div><div>${esc(r.edital_status || "não lido (fora dos melhores ou desativado)")}</div>
+      </div></div>
+      ${l.observacao ? `<div><h3>Descrição do edital (BuscaAii)</h3><div class="textbox">${esc(l.observacao.replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim())}</div></div>` : ""}
+      ${r.edital_trecho ? `<div><h3>Trecho do edital / página do leiloeiro</h3><div class="textbox">${esc(r.edital_trecho)}</div></div>` : ""}
+      <p class="note">Estimativa automática por palavras-chave. Leia o edital completo e confira a situação do veículo no DETRAN antes de dar lance.</p>
+    </div>`;
+  $("#drawer").classList.add("on"); $("#overlay").classList.add("on");
+  $("#drawer").scrollTop = 0;
+}
+function fechar() { $("#drawer").classList.remove("on"); $("#overlay").classList.remove("on"); }
+
+/* execução e progresso */
+let pollTimer = null, estavaRodando = false;
+async function atualizarEstado() {
+  estado = await api("/api/estado");
+  const p = estado.progresso || {};
+  $("#progresso").hidden = !estado.rodando;
+  $("#btnRodar").disabled = estado.rodando;
+  $("#btnRodar").textContent = estado.rodando ? "Analisando..." : "⟳ Atualizar análise";
+  if (estado.rodando) {
+    $("#pEtapa").textContent = p.etapa || "Trabalhando...";
+    const temTotal = p.total > 0;
+    $("#pBar").classList.toggle("indet", !temTotal);
+    $("#pBar").firstElementChild.style.width = temTotal ? `${(100 * p.atual / p.total).toFixed(1)}%` : "";
+    $("#pCont").textContent = temTotal ? `${p.atual} de ${p.total}` : "";
+    $("#pLog").textContent = (estado.log || []).join("\n");
+  }
+  let banners = "";
+  if (!estado.login_configurado) banners += `<div class="banner"><span>Seu login do BuscaAii ainda não foi configurado.</span><button class="btn" onclick="abrirConfig()">Configurar agora</button></div>`;
+  if (estado.erro && !estado.rodando) banners += `<div class="banner erro"><span><b>A última atualização falhou:</b> ${esc(estado.erro)}</span></div>`;
+  $("#banners").innerHTML = banners;
+
+  if (estavaRodando && !estado.rodando) await carregarResultados();
+  estavaRodando = estado.rodando;
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(atualizarEstado, estado.rodando ? 1500 : 15000);
+}
+
+async function rodar() {
+  if (!estado.login_configurado) return abrirConfig();
+  const r = await api("/api/rodar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ editais: +$("#editais").value }) });
+  if (!r.ok) alert(r.erro);
+  estavaRodando = true;
+  atualizarEstado();
+}
+
+/* configurações */
+async function abrirConfig() {
+  const cfg = await api("/api/config");
+  $("#cEmail").value = estado.email || "";
+  $("#cSenha").value = ""; $("#cSenha").placeholder = estado.login_configurado ? "•••••• (mantida; digite para trocar)" : "";
+  $("#cFipe").value = ""; $("#cFipe").placeholder = estado.fipe_token ? "token salvo (digite para trocar)" : "deixe vazio se não tiver";
+  $("#cLoginMsg").className = "msg";
+  const P = v => Math.round(v * 1000) / 10;
+  $("#pMargem").value = P(cfg.margem_minima); $("#pComissao").value = P(cfg.comissao_leiloeiro);
+  $("#pDoc").value = cfg.custo_documentacao; $("#pRemocao").value = cfg.custo_remocao;
+  $("#pDesagio").value = P(cfg.desagio_revenda); $("#pNaoFunc").value = P(cfg.reparo_extra_nao_funciona);
+  const rp = cfg.reparo_por_condicao;
+  $("#pSuspeito").value = P(cfg.lance_suspeito_pct_fipe ?? 0.35);
+  $("#pSemFoto").checked = cfg.descartar_sem_foto !== false;
+  $("#pSinistro").checked = cfg.descartar_sinistro !== false;
+  $("#pRBom").value = P(rp.bom); $("#pRReg").value = P(rp.regular); $("#pRDesc").value = P(rp.desconhecido); $("#pRRuim").value = P(rp.ruim);
+  $("#cTipos").innerHTML = Object.entries(TIPOS).map(([k, n]) =>
+    `<label class="check"><input type="checkbox" value="${k}" ${cfg.tipos_produto.includes(k) ? "checked" : ""}> ${n}</label>`).join("");
+  $("#modal").classList.add("on");
+}
+function fecharConfig() { $("#modal").classList.remove("on"); }
+
+async function salvarLogin() {
+  const corpo = { email: $("#cEmail").value };
+  if ($("#cSenha").value) corpo.senha = $("#cSenha").value;
+  if ($("#cFipe").value) corpo.fipe_token = $("#cFipe").value;
+  const m = $("#cLoginMsg"); m.className = "msg ok"; m.textContent = "Testando login...";
+  const r = await api("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+  m.className = "msg " + (r.ok ? "ok" : "bad"); m.textContent = r.mensagem;
+  $("#cSenha").value = "";
+  atualizarEstado();
+}
+
+async function salvarParametros() {
+  const F = id => (+$(id).value) / 100;
+  const corpo = {
+    margem_minima: F("#pMargem"), comissao_leiloeiro: F("#pComissao"),
+    custo_documentacao: +$("#pDoc").value, custo_remocao: +$("#pRemocao").value,
+    desagio_revenda: F("#pDesagio"), reparo_extra_nao_funciona: F("#pNaoFunc"),
+    reparo_por_condicao: { bom: F("#pRBom"), regular: F("#pRReg"), desconhecido: F("#pRDesc"), ruim: F("#pRRuim") },
+    tipos_produto: [...document.querySelectorAll("#cTipos input:checked")].map(i => i.value),
+    descartar_sem_foto: $("#pSemFoto").checked,
+    lance_suspeito_pct_fipe: F("#pSuspeito"),
+    descartar_sinistro: $("#pSinistro").checked,
+  };
+  $("#mSalvar").disabled = true;
+  try {
+    await api("/api/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+    fecharConfig(); await carregarResultados();
+  } finally { $("#mSalvar").disabled = false; }
+}
+
+/* eventos */
+["#fBusca", "#fLance"].forEach(s => $(s).addEventListener("input", () => { limite = 60; render(); }));
+["#fUF", "#fPrazo", "#fOrdem", "#fFunciona", "#fSemAlienacao"].forEach(s => $(s).addEventListener("change", () => { limite = 60; render(); }));
+$("#vCards").onclick = () => { view = "cards"; $("#vCards").classList.add("on"); $("#vTabela").classList.remove("on"); render(); };
+$("#vTabela").onclick = () => { view = "tabela"; $("#vTabela").classList.add("on"); $("#vCards").classList.remove("on"); render(); };
+$("#btnMais").onclick = () => { limite += 60; render(); };
+$("#btnRodar").onclick = rodar;
+$("#btnConfig").onclick = abrirConfig;
+$("#btnLog").onclick = () => { const el = $("#pLog"); el.hidden = !el.hidden; $("#btnLog").textContent = el.hidden ? "Ver detalhes" : "Ocultar detalhes"; };
+$("#overlay").onclick = fechar;
+$("#mFechar").onclick = $("#mCancelar").onclick = fecharConfig;
+$("#cSalvarLogin").onclick = salvarLogin;
+$("#mSalvar").onclick = salvarParametros;
+document.addEventListener("keydown", e => { if (e.key === "Escape") { fechar(); fecharConfig(); } });
+
+atualizarEstado().then(carregarResultados);
+</script>
+</body>
+</html>

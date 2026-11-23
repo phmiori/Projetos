@@ -17,6 +17,7 @@ const { gerarTransacoesRecorrentesPendentes } = require('./lib/financas-shared')
 const { pushConfigurado, enviarPushNotificacoesPendentes } = require('./lib/push-shared');
 const { geminiConfigurado } = require('./lib/assistente-shared');
 const { garantirColunasAlertaFII, garantirColunasAlertaCripto, garantirColunaRole, seedUsuarios } = require('./lib/bootstrap');
+const { garantirTabelaRadar, buscaaiiConfigurado, iniciarAnalise } = require('./lib/radar-shared');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,7 +30,9 @@ app.use(helmet({
             'script-src': ["'self'", 'https://cdn.jsdelivr.net'],
             // Todos os módulos renderizam botões com onclick="..." via innerHTML (padrão já
             // existente em todo o app). O default do Helmet ('none') bloqueia esses handlers.
-            'script-src-attr': ["'unsafe-inline'"]
+            'script-src-attr': ["'unsafe-inline'"],
+            // Radar de Oportunidades (Carros de Leilão) mostra as fotos hospedadas nos sites dos leiloeiros
+            'img-src': ["'self'", 'data:', 'https:']
         }
     }
 }));
@@ -92,6 +95,7 @@ app.use('/api/saude', requireAuth, require('./routes/saude'));
 app.use('/api/garagem', requireAuth, require('./routes/garagem'));
 app.use('/api/backup', requireAuth, require('./routes/backup'));
 app.use('/api/assistente', requireAuth, require('./routes/assistente'));
+app.use('/api/radar', requireAuth, require('./routes/radar'));
 
 // Redirecionamento da raiz para a página inicial
 app.get('/', (req, res) => {
@@ -133,6 +137,15 @@ cron.schedule('*/5 * * * *', () => {
     enviarPushNotificacoesPendentes().catch((err) => console.error('Erro no cron de notificações push:', err));
 });
 
+/**
+ * Radar de Oportunidades (Carros de Leilão): atualiza a análise do BuscaAii 1x por dia de
+ * madrugada. Cada rodada também completa as consultas FIPE que ficaram pendentes pelo limite
+ * diário da API. Sem efeito se BUSCAAII_EMAIL/BUSCAAII_SENHA não estiverem no .env.
+ */
+cron.schedule('0 6 * * *', () => {
+    if (buscaaiiConfigurado()) iniciarAnalise({ editais: 40 });
+});
+
 // Iniciar servidor
 app.listen(PORT, async () => {
     console.log(`====================================================`);
@@ -146,6 +159,7 @@ app.listen(PORT, async () => {
     await garantirColunasAlertaFII();
     await garantirColunasAlertaCripto();
     await garantirColunaRole();
+    await garantirTabelaRadar();
     await seedUsuarios();
     gerarTransacoesRecorrentesPendentes().catch((err) => console.error('Erro ao gerar transações recorrentes pendentes na inicialização:', err));
 });

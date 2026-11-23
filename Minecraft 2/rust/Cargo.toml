@@ -1,0 +1,29 @@
+[package]
+name = "mundo-de-blocos"
+version = "0.1.0"
+edition = "2021"
+description = "Mundo de Blocos reescrito em Rust (em transição: o jogo completo ainda é o Java)"
+
+[dependencies]
+winit = "0.29"
+glutin = "0.31"
+glutin-winit = "0.4"
+raw-window-handle = "0.5"
+glow = "0.13"
+image = { version = "0.24", default-features = false, features = ["png", "jpeg", "gif", "bmp"] }
+flate2 = "1"
+fontdue = "0.8"
+cpal = "0.15"
+
+[profile.release]
+opt-level = 3
+debug = false
+lto = "thin"
+codegen-units = 4
+
+# no modo de teste (cargo run) já otimiza as dependências e o gerador, senão fica lento demais
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

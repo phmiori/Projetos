@@ -698,3 +698,12 @@ model GastoVeiculo {
   updatedAt   DateTime @updatedAt
 }
 
+
+// Radar de Oportunidades (Carros de Leilão): chave-valor com a última análise do BuscaAii
+// ("resultado"), os parâmetros do cálculo ("config") e o cache da API FIPE ("fipe:<caminho>").
+// A tabela também é criada sozinha ao subir o servidor (garantirTabelaRadar em lib/radar-shared.js).
+model RadarLeilao {
+  chave        String   @id
+  valor        Json?
+  atualizadoEm DateTime @default(now())
+}

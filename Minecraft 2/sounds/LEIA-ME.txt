@@ -1,0 +1,47 @@
+Sons do Mundo de Blocos
+=======================
+
+Troque qualquer arquivo .wav desta pasta pelo seu som (mesmo nome).
+Formato: WAV PCM, mono ou estéreo, 8 ou 16 bits, qualquer taxa (44100 Hz é o ideal).
+Sons curtos funcionam melhor (menos de 1 segundo; vozes de criaturas até ~2 s).
+Depois de trocar, use Configurações > Recarregar sons. Apague um arquivo para voltar ao padrão.
+
+quebrar_terra.wav  quebrar/colocar terra, grama, areia, neve
+quebrar_areia.wav  quebrar areia, cascalho e neve
+quebrar_pedra.wav  quebrar pedra, minérios, tijolos
+quebrar_madeira.wav quebrar troncos, tábuas, bancada
+quebrar_planta.wav quebrar folhas, grama alta, flores, cacto, lã
+quebrar_vidro.wav  quebrar vidro e gelo
+colocar.wav        colocar um bloco
+drop.wav           quebrar um bloco e soltar o item no chão
+coletar.wav        pegar um item do chão
+passo_grama.wav    andar sobre grama e terra
+passo_areia.wav    andar sobre areia, cascalho e neve
+passo_pedra.wav    andar sobre pedra
+passo_madeira.wav  andar sobre madeira
+dano.wav           você leva dano
+comer.wav          comer
+respingo.wav       cair na água
+porco.wav          porco
+ovelha.wav         ovelha
+galinha.wav        galinha
+morto_vivo.wav     morto-vivo
+aranha.wav         aranha
+vaca.wav           vaca
+pavio.wav          creeper prestes a explodir e dinamite acesa
+explosao.wav       explosão
+criatura_dano.wav  acertar uma criatura
+esqueleto.wav      esqueleto
+passaro.wav        pássaro cantando
+lobo.wav           lobo (latido curto)
+urso.wav           urso rosnando
+raposa.wav         raposa
+domar.wav          lobo domesticado (alegre)
+rugido.wav         tigre rugindo
+miau.wav           gato miando
+arco_tensao.wav    puxar a corda do arco
+arco_disparo.wav   soltar a flecha
+flecha_madeira.wav flecha prendendo em madeira, terra ou planta
+flecha_pedra.wav   flecha batendo em pedra, vidro ou metal
+flecha_criatura.wav flecha acertando uma criatura ou jogador
+clique.wav         clicar num botão do menu
