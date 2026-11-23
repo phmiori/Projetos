@@ -1,11 +1,15 @@
-# Mundo de Blocos em Rust (transição)
+# Mundo de Blocos em Rust (o jogo principal)
 
-O jogo completo continua sendo o Java (`src/`). Esta pasta é a versão nova, em Rust, que vai crescendo aos poucos
-até poder substituir o Java. As duas ficam lado a lado e abrem pelo mesmo launcher:
+Esta pasta é o jogo, reescrito em Rust a partir do Java (`src/`). O Java continua no projeto como "versão antiga":
+os mundos, as texturas, os sons e as configurações são os mesmos, e as duas versões jogam juntas pela LAN.
 
-- **JOGAR**: o jogo Java de sempre.
-- **Versão Rust (prévia)**: esta versão. O launcher compila sozinho quando o código muda (precisa do Rust
-  instalado: https://rustup.rs). A primeira compilação demora alguns minutos; as outras, segundos.
+- **JOGAR** no launcher (`Mundo de Blocos.exe`) abre esta versão.
+  - Quem tem o Rust instalado (https://rustup.rs) e a pasta do código: o launcher compila sozinho quando o código
+    muda (a primeira vez demora alguns minutos) e copia o executável novo para `rust/bin`.
+  - Quem não tem o Rust: o launcher usa o executável pronto `rust/bin/mundo-de-blocos.exe`, que vem pelo GitHub.
+    Não precisa instalar nada.
+- **Versão Java (antiga)**, o botão menor do launcher: o jogo Java de sempre (precisa do JDK 21, ou do pacote do
+  `empacotar.bat`, que já leva o Java e também esta versão).
 
 ## O que é reaproveitado do Java
 

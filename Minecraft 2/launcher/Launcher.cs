@@ -47,7 +47,7 @@ namespace MundoDeBlocos
         readonly string baseDir = Path.GetDirectoryName(typeof(LauncherForm).Assembly.Location); // a pasta do .exe
         readonly Image background;
         readonly List<Btn> buttons = new List<Btn>();
-        readonly Btn playBtn, rustBtn;
+        readonly Btn playBtn, javaBtn;
         Rectangle closeRect, minRect, checkRect;
         Btn hover;
         bool hoverClose, hoverMin, hoverCheck, showMessages, busy;
@@ -71,26 +71,26 @@ namespace MundoDeBlocos
             using (Stream s = typeof(LauncherForm).Assembly.GetManifestResourceStream("fundo.jpg"))
                 background = s != null ? Image.FromStream(s) : null;
 
-            playBtn = new Btn(new Rectangle(48, 262, 300, 66), "JOGAR", true, Play);
+            // o jogo principal agora é a versão Rust; a Java continua aqui embaixo para quem quiser
+            playBtn = new Btn(new Rectangle(48, 262, 300, 66), "JOGAR", true, PlayRust);
             buttons.Add(playBtn);
             buttons.Add(new Btn(new Rectangle(48, 342, 145, 40), "Pasta do jogo", false, delegate { OpenFolder(baseDir); }));
             buttons.Add(new Btn(new Rectangle(203, 342, 145, 40), "Texturas", false, delegate { OpenFolder(Path.Combine(baseDir, "textures")); }));
-            // a versão nova, em Rust (em transição: por enquanto só dá para voar pelo mundo)
-            rustBtn = new Btn(new Rectangle(48, 428, 300, 38), "Versão Rust (prévia)", false, PlayRust);
-            if (Directory.Exists(Path.Combine(baseDir, "rust"))) buttons.Add(rustBtn);
+            javaBtn = new Btn(new Rectangle(48, 428, 300, 38), "Versão Java (antiga)", false, Play);
+            if (IsDist() || Directory.Exists(Path.Combine(baseDir, "src"))) buttons.Add(javaBtn);
             closeRect = new Rectangle(ClientSize.Width - 46, 0, 46, 34);
             minRect = new Rectangle(ClientSize.Width - 92, 0, 46, 34);
             checkRect = new Rectangle(48, 400, 300, 22);
 
-            string mode = IsDist() ? "" : (FindJdk() == null ? "Não encontrei o Java (JDK 21). Instale o JDK para jogar." : "");
-            if (mode.Length > 0) SetStatus(mode, true);
+            if (RustExeToRun() == null && FindCargo() == null)
+                SetStatus(@"Não encontrei o jogo (rust\bin\mundo-de-blocos.exe). Baixe de novo do GitHub.", true);
             else SetStatus("Pronto para jogar", false);
 
             MouseMove += OnMove;
             MouseDown += OnDown;
             MouseLeave += delegate { hover = null; hoverClose = hoverMin = hoverCheck = false; Invalidate(); };
             KeyPreview = true;
-            KeyDown += delegate (object o, KeyEventArgs e) { if (e.KeyCode == Keys.Enter && !busy) Play(); if (e.KeyCode == Keys.Escape) Close(); };
+            KeyDown += delegate (object o, KeyEventArgs e) { if (e.KeyCode == Keys.Enter && !busy) PlayRust(); if (e.KeyCode == Keys.Escape) Close(); };
         }
 
         // ------------------------------------------------------------ desenho
@@ -133,7 +133,7 @@ namespace MundoDeBlocos
 
             // situação
             Shadowed(g, status, subFont, statusColor, 50, H - 64);
-            Shadowed(g, IsDist() ? "" : "Pasta do código: o jogo é compilado antes de abrir quando o código muda", smallFont,
+            Shadowed(g, FindCargo() == null ? "" : "Pasta do código: o jogo é compilado antes de abrir quando o código muda", smallFont,
                 Color.FromArgb(150, 165, 155), 50, H - 38);
 
             // minimizar e fechar
@@ -273,7 +273,7 @@ namespace MundoDeBlocos
             if (busy) return;
             busy = true;
             playBtn.Enabled = false;
-            rustBtn.Enabled = false;
+            javaBtn.Enabled = false;
             Invalidate();
             bool messages = showMessages;
             Thread t = new Thread(delegate () { PlayWork(messages); });
@@ -285,7 +285,7 @@ namespace MundoDeBlocos
 
         void Done(string msg, bool error)
         {
-            Ui(delegate { busy = false; playBtn.Enabled = true; rustBtn.Enabled = true; SetStatus(msg, error); });
+            Ui(delegate { busy = false; playBtn.Enabled = true; javaBtn.Enabled = true; SetStatus(msg, error); });
         }
 
         void PlayWork(bool messages)
@@ -445,6 +445,17 @@ namespace MundoDeBlocos
         // ------------------------------------------------------------ versão Rust
         string RustDir() { return Path.Combine(baseDir, "rust"); }
         string RustExe() { return Path.Combine(RustDir(), @"target\release\mundo-de-blocos.exe"); }
+        /** O executável pronto que vem pelo GitHub (para quem não tem o Rust instalado). */
+        string RustBinExe() { return Path.Combine(RustDir(), @"bin\mundo-de-blocos.exe"); }
+
+        /** Qual abrir: o compilado aqui ou o pronto do GitHub, o mais novo dos dois. Null se não houver nenhum. */
+        string RustExeToRun()
+        {
+            string a = RustExe(), b = RustBinExe();
+            bool ha = File.Exists(a), hb = File.Exists(b);
+            if (ha && hb) return File.GetLastWriteTimeUtc(a) >= File.GetLastWriteTimeUtc(b) ? a : b;
+            return ha ? a : hb ? b : null;
+        }
 
         /** Pasta do cargo (o compilador do Rust), ou null se o Rust não está instalado. */
         static string FindCargo()
@@ -466,7 +477,7 @@ namespace MundoDeBlocos
             DateTime built = File.GetLastWriteTimeUtc(exe);
             List<string> files = new List<string>(Directory.GetFiles(Path.Combine(RustDir(), "src"), "*.rs", SearchOption.AllDirectories));
             files.Add(Path.Combine(RustDir(), "Cargo.toml"));
-            files.Add(Path.Combine(RustDir(), @"dados\blocos.txt"));
+            if (Directory.Exists(Path.Combine(RustDir(), "dados"))) files.AddRange(Directory.GetFiles(Path.Combine(RustDir(), "dados")));
             foreach (string f in files)
                 if (File.Exists(f) && File.GetLastWriteTimeUtc(f) > built) return true;
             return false;
@@ -477,7 +488,7 @@ namespace MundoDeBlocos
             if (busy) return;
             busy = true;
             playBtn.Enabled = false;
-            rustBtn.Enabled = false;
+            javaBtn.Enabled = false;
             Invalidate();
             bool messages = showMessages;
             Thread t = new Thread(delegate () { RustWork(messages); });
@@ -489,33 +500,35 @@ namespace MundoDeBlocos
         {
             try
             {
+                // quem tem o Rust instalado e a pasta do código compila quando o código muda;
+                // os outros usam o executável pronto que vem pelo GitHub (rust\bin)
                 string cargo = FindCargo();
-                if (RustNeedsBuild())
+                if (cargo != null && Directory.Exists(Path.Combine(RustDir(), "src")) && RustNeedsBuild())
                 {
-                    if (cargo == null && !File.Exists(RustExe()))
+                    Ui(delegate { SetStatus("Compilando o jogo (a primeira vez demora alguns minutos)...", false); });
+                    string output;
+                    int code = Run(Path.Combine(cargo, "cargo.exe"), "build --release", cargo, RustDir(), Encoding.UTF8, out output);
+                    if (code != 0)
                     {
-                        Done("Para a versão Rust, instale o Rust (https://rustup.rs) e tente de novo.", true);
+                        Done("O jogo não compilou.", true);
+                        Ui(delegate { ShowLog("Erro ao compilar o jogo", output); });
                         return;
                     }
-                    if (cargo != null)
-                    {
-                        Ui(delegate { SetStatus("Compilando a versão Rust (a primeira vez demora alguns minutos)...", false); });
-                        string output;
-                        int code = Run(Path.Combine(cargo, "cargo.exe"), "build --release", cargo, RustDir(), Encoding.UTF8, out output);
-                        if (code != 0)
-                        {
-                            Done("A versão Rust não compilou.", true);
-                            Ui(delegate { ShowLog("Erro ao compilar a versão Rust", output); });
-                            return;
-                        }
-                    }
+                    // o executável novo também fica em rust\bin (é o que vai pelo GitHub para quem não tem o Rust)
+                    try { Directory.CreateDirectory(Path.GetDirectoryName(RustBinExe())); File.Copy(RustExe(), RustBinExe(), true); } catch { }
                 }
-                Ui(delegate { SetStatus("Abrindo a versão Rust...", false); });
-                StartProcess(RustExe(), RustExe(), "", Path.GetDirectoryName(RustExe()), messages, "ultimo-jogo-rust.log");
+                string exe = RustExeToRun();
+                if (exe == null)
+                {
+                    Done(@"Não encontrei o jogo (rust\bin\mundo-de-blocos.exe). Baixe de novo do GitHub.", true);
+                    return;
+                }
+                Ui(delegate { SetStatus("Abrindo o jogo...", false); });
+                StartProcess(exe, exe, "", Path.GetDirectoryName(exe), messages, "ultimo-jogo-rust.log");
             }
             catch (Exception ex)
             {
-                Done("Não consegui abrir a versão Rust: " + ex.Message, true);
+                Done("Não consegui abrir o jogo: " + ex.Message, true);
             }
         }
 

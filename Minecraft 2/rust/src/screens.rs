@@ -58,7 +58,7 @@ impl Game {
             Some(n) => format!("  ·  LAN: {} jogadores", n.remotes.len() + 1),
             None => String::new(),
         };
-        let l1 = format!("{}  ·  {}  ·  versão Rust{lan}", self.world_name, if self.creative { "Criativo" } else { "Sobrevivência" });
+        let l1 = format!("{}  ·  {}{lan}", self.world_name, if self.creative { "Criativo" } else { "Sobrevivência" });
         let l2 = format!(
             "Dia {}, {}  ·  {}  ·  X {:.0}  Y {:.0}  Z {:.0}{}  ·  {} FPS",
             self.day,

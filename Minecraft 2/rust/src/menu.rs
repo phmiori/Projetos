@@ -229,7 +229,7 @@ impl Game {
         if self.screen == Screen::Menu {
             ui.centered(44.0 * k, w / 2.0 + 3.0 * k, 92.0 * k + 3.0 * k, "Mundo de Blocos", rgba(0, 0, 0, 160));
             ui.centered(44.0 * k, w / 2.0, 92.0 * k, "Mundo de Blocos", rgba(245, 232, 205, 255));
-            ui.centered(14.0 * k, w / 2.0, 120.0 * k, "versão Rust (prévia) · os mundos são os mesmos do Java", rgba(220, 225, 235, 230));
+            ui.centered(14.0 * k, w / 2.0, 120.0 * k, "um mundo infinito para explorar, construir e jogar com amigos", rgba(220, 225, 235, 230));
             if self.menu.confirm_delete {
                 if let Some(wi) = self.menu.worlds.get(self.menu.selected) {
                     let t = format!("Apagar \"{}\" para sempre? Clique de novo em Excluir para confirmar.", wi.name);

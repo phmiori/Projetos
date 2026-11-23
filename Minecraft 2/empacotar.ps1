@@ -17,7 +17,7 @@ Write-Host "JDK: $jdk"
 $dist = "dist\MundoDeBlocos"
 # Apaga só o que este script gera. Sons, texturas, mundos e configurações que você tiver
 # colocado em dist\MundoDeBlocos continuam lá.
-foreach ($old in @("$dist\jogo.jar", "$dist\lib", "$dist\runtime", "$dist\Jogar.bat", "$dist\Jogar (com mensagens).bat",
+foreach ($old in @("$dist\jogo.jar", "$dist\lib", "$dist\runtime", "$dist\rust", "$dist\Jogar.bat", "$dist\Jogar (com mensagens).bat",
                    "$dist\Mundo de Blocos.exe", "dist\MundoDeBlocos.zip")) {
     Remove-Item $old -Recurse -Force -ErrorAction SilentlyContinue
 }
@@ -39,6 +39,12 @@ foreach ($item in @("bin","lib","conf","legal","release")) {
 }
 if (-not (Test-Path "$dist\runtime\bin\javaw.exe")) { throw "Falha ao copiar o Java" }
 
+Write-Host "Copiando o jogo (versão Rust), texturas e sons..."
+if (-not (Test-Path "rust\bin\mundo-de-blocos.exe")) { throw "Falta rust\bin\mundo-de-blocos.exe (abra o jogo pelo launcher uma vez para compilar)" }
+New-Item -ItemType Directory "$dist\rust\bin" -Force | Out-Null
+Copy-Item "rust\bin\mundo-de-blocos.exe" "$dist\rust\bin\" -Force
+foreach ($d in @("textures", "sounds")) { New-Item -ItemType Directory "$dist\$d" -Force | Out-Null; Copy-Item "$d\*" "$dist\$d\" -Recurse -Force }
+
 Write-Host "Criando o launcher (Mundo de Blocos.exe)..."
 & "launcher\compilar-launcher.bat" (Resolve-Path $dist).Path
 if (-not (Test-Path "$dist\Mundo de Blocos.exe")) { throw "Falha ao criar o launcher" }
@@ -51,7 +57,8 @@ Para jogar: descompacte esta pasta e dê dois cliques em "Mundo de Blocos.exe".
 Se o Windows mostrar "O Windows protegeu o computador", clique em "Mais informações" e depois em
 "Executar assim mesmo" (o aviso aparece porque o launcher não tem assinatura digital).
 Se o jogo não abrir, marque "Abrir com janela de mensagens" no launcher para ver o erro.
-Não precisa instalar nada (o Java já vem dentro, na pasta runtime).
+Não precisa instalar nada. JOGAR abre o jogo (versão Rust); "Versão Java (antiga)" usa o Java que vem
+dentro, na pasta runtime.
 Precisa de Windows 64 bits e placa de vídeo com OpenGL 3.3 (quase todas de 2012 para cá).
 
 JOGAR JUNTO PELO RADMIN VPN
@@ -72,7 +79,8 @@ JOGAR JUNTO PELO RADMIN VPN
 - O anfitrião precisa estar com o mundo aberto para o amigo entrar.
 - Os dois precisam estar com a MESMA versão do jogo.
 - Porta usada: 25600 (TCP). Se não conectar: confira o IP, se os dois estão na rede do Radmin,
-  e se o firewall do anfitrião permitiu o Java.
+  e se o firewall do anfitrião permitiu o jogo (mundo-de-blocos.exe ou o Java).
+- As duas versões (Rust e Java) jogam juntas pela LAN.
 
 TEXTURAS E SONS
 ---------------

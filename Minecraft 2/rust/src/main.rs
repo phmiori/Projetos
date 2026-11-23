@@ -1120,7 +1120,7 @@ impl Game {
         let h = self.gen.height_at(x, z);
         let biome = world::BIOME_NAMES[self.gen.biome_at(x, z, h - 1) as usize];
         format!(
-            "Mundo de Blocos (Rust, prévia) — {} · Dia {}, {} · {} · X {:.0} Y {:.0} Z {:.0}{} · {} FPS",
+            "Mundo de Blocos — {} · Dia {}, {} · {} · X {:.0} Y {:.0} Z {:.0}{} · {} FPS",
             self.world_name,
             self.day,
             self.clock(),
@@ -1293,7 +1293,7 @@ fn main() {
     };
 
     let event_loop = EventLoop::new().expect("loop de eventos");
-    let wb = WindowBuilder::new().with_title("Mundo de Blocos (Rust, prévia)").with_inner_size(LogicalSize::new(1280.0, 720.0));
+    let wb = WindowBuilder::new().with_title("Mundo de Blocos").with_inner_size(LogicalSize::new(1280.0, 720.0));
     let template = ConfigTemplateBuilder::new().with_depth_size(24);
     let (window, gl_config) = DisplayBuilder::new()
         .with_window_builder(Some(wb))
