@@ -29,3 +29,7 @@ dist/
 build/
 .next/
 out/
+
+# Pasta para ignorar e arquivos para Ignorar
+Ignorar a pasta node_monules e tudo que está dentro dela
+Ignorar COMOrodarOsistema.txt
