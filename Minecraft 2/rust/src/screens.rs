@@ -288,7 +288,40 @@ impl Game {
         }
     }
 
+    /// Botão "Limpar inventário" (só no criativo, em cima da mochila), como no Java.
+    pub fn clear_rect(&self, w: f32, h: f32) -> Option<[f32; 4]> {
+        if !self.creative || self.open.is_some() {
+            return None;
+        }
+        let k = Self::ui_scale(h as u32);
+        let (p, slots, _) = self.inv_layout(w, h);
+        let y = slots.iter().find(|(r, _, _)| *r == SlotRef::Inv(HOTBAR)).map(|&(_, _, y)| y)?;
+        let bw = 170.0 * k;
+        Some([p[0] + p[2] - 18.0 * k - bw + 4.0 * k, y - 28.0 * k, bw, 22.0 * k])
+    }
+
+    fn clear_confirming(&self) -> bool {
+        self.clear_confirm.map_or(false, |t| t.elapsed().as_secs_f32() < 3.0)
+    }
+
     pub fn inv_click(&mut self, w: f32, h: f32, mx: f32, my: f32, right: bool, shift: bool) {
+        // limpar tudo: o primeiro clique pede confirmação (some em 3 s), o segundo apaga a mochila e a barra
+        if let Some(c) = self.clear_rect(w, h) {
+            if !right && mx >= c[0] && mx < c[0] + c[2] && my >= c[1] && my < c[1] + c[3] {
+                crate::sound::play("clique", 0.4);
+                if self.clear_confirming() {
+                    for i in 0..SIZE {
+                        self.inv.s[i] = Stack::default();
+                    }
+                    self.cursor = Stack::default();
+                    self.clear_confirm = None;
+                    self.notice("Inventário limpo".into());
+                } else {
+                    self.clear_confirm = Some(std::time::Instant::now());
+                }
+                return;
+            }
+        }
         let Some(r) = self.slot_at(w, h, mx, my) else {
             // fora dos espaços: fora do painel, joga fora o que está no cursor
             let (p, _, _) = self.inv_layout(w, h);
@@ -535,6 +568,14 @@ impl Game {
         }
         if !self.creative && self.open.is_none() {
             ui.shadow(11.0 * k, p[0] + 18.0 * k + 2.5 * 48.0 * k, p[1] + 40.0 * k, "Criação", rgba(200, 200, 205, 200));
+        }
+        if let Some(c) = self.clear_rect(w, h) {
+            let confirming = self.clear_confirming();
+            let hot = self.mouse.0 >= c[0] && self.mouse.0 < c[0] + c[2] && self.mouse.1 >= c[1] && self.mouse.1 < c[1] + c[3];
+            ui.rect(c[0], c[1], c[2], c[3], if confirming { rgba(150, 40, 34, 235) } else if hot { rgba(90, 60, 52, 235) } else { rgba(40, 36, 38, 220) });
+            ui.frame(c[0], c[1], c[2], c[3], k, rgba(0, 0, 0, 170));
+            let label = if confirming { "Clique de novo para apagar" } else { "Limpar inventário" };
+            ui.centered(11.0 * k, c[0] + c[2] / 2.0, c[1] + 15.0 * k, label, if confirming || hot { rgba(255, 255, 255, 255) } else { rgba(200, 200, 205, 230) });
         }
         // nome do item embaixo do mouse
         if let Some(r) = hover {

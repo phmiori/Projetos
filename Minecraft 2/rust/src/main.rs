@@ -308,6 +308,8 @@ struct Game {
     /// criaturas de pedaços descarregados: voltam quando o pedaço carregar (texto do Java)
     sleeping: HashMap<(i32, i32), Vec<String>>,
     mob_spawn_timer: f64,
+    /// "Limpar inventário" (criativo) foi clicado uma vez: até 3 s depois o segundo clique apaga
+    clear_confirm: Option<Instant>,
     /// em volta de quem as criaturas aparecem desta vez
     spawn_near: [f64; 2],
     mob_id: i32,
@@ -457,6 +459,7 @@ impl Game {
             mobs: Vec::new(),
             sleeping: HashMap::new(),
             mob_spawn_timer: 0.0,
+            clear_confirm: None,
             spawn_near: [0.0; 2],
             mob_id: 1,
             arrows: Vec::new(),
@@ -1465,6 +1468,8 @@ fn main() {
     // --excluir-teste quadro: clica em "Excluir mundo" nesse quadro e de novo 60 quadros depois (testes)
     // --amigo-teste: depois de entrar (--entrar), faz o papel do amigo do teste automático do Java
     let mut friend_test = args.iter().any(|a| a == "--amigo-teste").then(amigo_teste::FriendTest::default);
+    // --limpar-teste quadro: clica em "Limpar inventário" (criativo) nesse quadro e de novo 30 quadros depois
+    let clear_test = arg("--limpar-teste").and_then(|f| f.parse::<u32>().ok());
     let delete_test = arg("--excluir-teste").and_then(|f| f.parse::<u32>().ok());
     let say_photo = arg("--foto-chat").and_then(|f| f.parse::<u32>().ok()).zip(arg2("--foto-chat"));
     let zoo = args.iter().any(|a| a == "--zoologico");
@@ -1747,6 +1752,13 @@ fn main() {
                             game.open_chat();
                             game.chat_key(KeyCode::KeyA, Some(t));
                             game.chat_key(KeyCode::Enter, None);
+                        }
+                    }
+                    if clear_test.map_or(false, |f| frame_no == f || frame_no == f + 30) {
+                        let size = window.inner_size();
+                        let (fw, fh) = (size.width as f32, size.height as f32);
+                        if let Some(c) = game.clear_rect(fw, fh) {
+                            game.inv_click(fw, fh, c[0] + c[2] / 2.0, c[1] + c[3] / 2.0, false, false);
                         }
                     }
                     if delete_test.map_or(false, |f| frame_no == f || frame_no == f + 60) {
