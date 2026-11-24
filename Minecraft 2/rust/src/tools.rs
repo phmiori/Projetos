@@ -51,7 +51,7 @@ impl Game {
         let f = self.forward();
         let (lx, ly, lz) = (f[0] as f64, f[1] as f64, f[2] as f64);
         let (speed, dmg) = (9.0 + 31.0 * power, 2.0 + 7.0 * power);
-        let p = [self.player.x + lx * 0.4, self.player.y + crate::physics::EYE - 0.12 + ly * 0.4, self.player.z + lz * 0.4];
+        let p = [self.player.x + lx * 0.4, self.player.y + self.player.eye() - 0.12 + ly * 0.4, self.player.z + lz * 0.4];
         if !self.creative {
             if let Some(i) = self.inv.s[..crate::inventory::SIZE].iter().position(|s| s.id == ARROW && s.count > 0) {
                 self.inv.take_one(i);

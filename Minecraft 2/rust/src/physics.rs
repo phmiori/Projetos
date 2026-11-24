@@ -13,6 +13,7 @@ pub const H: f64 = 1.8;
 pub const EYE: f64 = 1.62;
 const EPS: f64 = 1e-4;
 const STEP: f64 = 0.55;
+const CRAWL_H: f64 = 0.6;
 
 /// Corpo com física (o jogador e os itens soltos no chão), como o Entity do Java.
 #[derive(Default, Clone)]
@@ -38,6 +39,8 @@ pub struct Player {
     pub in_lava: bool,
     pub head_in_water: bool,
     pub hit_wall: bool,
+    /// nadando na horizontal (caixa baixa, segue a direção do olhar)
+    pub crawl_swim: bool,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -70,6 +73,11 @@ impl Player {
         Player { hw, h, ..Default::default() }
     }
 
+    /// Altura dos olhos (baixa quando nada na horizontal).
+    pub fn eye(&self) -> f64 {
+        if self.crawl_swim { 0.4 } else { EYE }
+    }
+
     pub fn update<W: Blocks>(&mut self, dt: f64, i: Input, w: &W) {
         let (sy, cy) = (self.yaw.sin(), self.yaw.cos());
         let (mut mx, mut mz) = (0.0, 0.0);
@@ -84,15 +92,25 @@ impl Player {
         }
 
         self.update_fluids(w);
-        self.head_in_water = block::is_water(w.get(fl(self.x), fl(self.y + EYE), fl(self.z)));
+        // nado na horizontal: correndo com a cabeça na água; a caixa fica baixa e o corpo segue o olhar
+        let want_crawl = !self.flying && self.in_water && i.sprint && i.fwd && block::is_water(w.get(fl(self.x), fl(self.y + EYE), fl(self.z)));
+        if want_crawl && !self.crawl_swim && self.h == H {
+            self.crawl_swim = true;
+            self.h = CRAWL_H;
+        } else if !want_crawl && self.crawl_swim && overlapping(self.x, self.y, self.z, self.hw, H, w).is_empty() {
+            self.crawl_swim = false;
+            self.h = H;
+        }
+        self.head_in_water = block::is_water(w.get(fl(self.x), fl(self.y + self.eye()), fl(self.z)));
         let swimming = self.in_water || block::is_water(w.get(fl(self.x), fl(self.y + 0.05), fl(self.z)));
 
         let sprinting = i.sprint && i.fwd && len > 0.0;
         self.sprinting = sprinting;
         let mut speed = if self.flying { if i.sprint { 22.0 } else { 11.0 } } else if sprinting { 5.8 } else { 4.3 };
         if (self.in_water || self.in_lava) && !self.flying {
-            speed *= if self.in_lava { 0.35 } else { 0.55 };
+            speed *= if self.in_lava { 0.35 } else if self.crawl_swim { 0.75 } else { 0.55 };
         }
+        let (mx, mz) = if self.crawl_swim { (mx * self.pitch.cos(), mz * self.pitch.cos()) } else { (mx, mz) };
         let accel = if self.on_ground || self.flying || self.in_water { 12.0 } else { 3.0 };
         let k = (accel * dt).min(1.0);
         self.vx += (mx * speed - self.vx) * k;
@@ -101,14 +119,22 @@ impl Player {
         if self.flying {
             let ty = (if i.jump { speed } else { 0.0 }) - (if i.sneak { speed } else { 0.0 });
             self.vy += (ty - self.vy) * (10.0 * dt).min(1.0);
+        } else if self.crawl_swim {
+            self.vy += (self.pitch.sin() * speed - self.vy) * (6.0 * dt).min(1.0);
         } else if swimming || self.in_lava {
             self.vy -= 9.0 * dt;
             self.vy *= (1.0 - 3.0 * dt).max(0.0);
             if i.jump {
                 self.vy = (self.vy + 25.0 * dt).min(3.6);
             }
-            if self.hit_wall && (i.jump || len > 0.0) {
-                self.vy = self.vy.max(7.8);
+            // sai da água sozinho só quando a parede é o bloco da superfície (por cima dele não tem água nem bloco)
+            if self.hit_wall && len > 0.0 {
+                let (ax, az) = (fl(self.x + mx * (self.hw + 0.3)), fl(self.z + mz * (self.hw + 0.3)));
+                let wy = fl(self.y + 0.4);
+                let above = w.get(ax, wy + 1, az);
+                if solid(w.get(ax, wy, az)) && !solid(above) && !block::is_water(above) {
+                    self.vy = self.vy.max(7.8);
+                }
             }
         } else {
             self.vy -= 28.0 * dt;
@@ -259,5 +285,72 @@ impl Player {
             }
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Piscina: água de y=0 a y=9 (superfície em y=10), chão de pedra em y=-1; um pilar de pedra em x>=5.
+    struct Pool {
+        pillar_top: i32,
+    }
+    impl Blocks for Pool {
+        fn get(&self, x: i32, y: i32, _z: i32) -> u8 {
+            if y < 0 || (x >= 5 && y <= self.pillar_top) {
+                block::STONE
+            } else if y <= 9 {
+                block::WATER
+            } else {
+                block::AIR
+            }
+        }
+    }
+
+    fn run(w: &Pool, p: &mut Player, i: Input, secs: f64) {
+        for _ in 0..(secs * 60.0) as i32 {
+            p.update(1.0 / 60.0, i, w);
+        }
+    }
+
+    fn swimmer() -> Player {
+        let mut p = Player::new();
+        p.x = 0.5;
+        p.z = 0.5;
+        p.y = 4.0;
+        p.yaw = std::f64::consts::FRAC_PI_2; // olhando para +X
+        p
+    }
+
+    #[test]
+    fn parede_funda_nao_e_escalada() {
+        let w = Pool { pillar_top: 6 }; // topo do pilar bem abaixo da superfície
+        let mut p = swimmer();
+        p.y = 1.0;
+        run(&w, &mut p, Input { fwd: true, ..Default::default() }, 3.0);
+        assert!(p.y < 6.0, "subiu a parede submersa: y={}", p.y);
+    }
+
+    #[test]
+    fn parede_da_superficie_sai_da_agua() {
+        let w = Pool { pillar_top: 9 }; // o pilar chega na superfície
+        let mut p = swimmer();
+        p.y = 8.0;
+        run(&w, &mut p, Input { fwd: true, jump: true, ..Default::default() }, 3.0);
+        assert!(p.y > 9.5, "não saiu da água: y={}", p.y);
+    }
+
+    #[test]
+    fn nado_horizontal_segue_o_olhar_e_abaixa_a_caixa() {
+        let w = Pool { pillar_top: -1 };
+        let mut p = swimmer();
+        p.pitch = -0.6; // olhando para baixo
+        let y0 = p.y;
+        run(&w, &mut p, Input { fwd: true, sprint: true, ..Default::default() }, 0.8);
+        assert!(p.crawl_swim && p.h < 1.0);
+        assert!(p.y < y0 - 0.5, "não desceu olhando para baixo: y={}", p.y);
+        run(&w, &mut p, Input::default(), 0.5);
+        assert!(!p.crawl_swim && p.h == H);
     }
 }

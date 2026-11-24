@@ -52,7 +52,7 @@ use glutin::display::GetGlDisplay;
 use glutin::prelude::*;
 use glutin::surface::SwapInterval;
 use glutin_winit::{DisplayBuilder, GlWindow};
-use physics::{Input, Player, EYE};
+use physics::{Input, Player};
 use raw_window_handle::HasRawWindowHandle;
 use save::DAY_LENGTH;
 use std::collections::{HashMap, HashSet};
@@ -519,7 +519,7 @@ impl Game {
     }
 
     fn eye(&self) -> [f32; 3] {
-        [self.player.x as f32, (self.player.y + EYE) as f32, self.player.z as f32]
+        [self.player.x as f32, (self.player.y + self.player.eye()) as f32, self.player.z as f32]
     }
 
     /// Toca um som vindo de um ponto do mundo (mais baixo de longe, do lado certo).
