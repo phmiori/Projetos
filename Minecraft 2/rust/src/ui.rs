@@ -284,29 +284,26 @@ impl Ui {
                 self.quad2(x0, y + s / 2.0, x1, y + s, [0.0, 0.0, 1.0, 1.0], lo * 6.0 + 4.0, [1.0; 4]);
                 return;
             }
-            // altura do cubinho: lajes e camas ficam mais baixas
-            let mut top = 0.0f32;
-            if !info.boxes.is_empty() && info.kind != block::K_STAIR {
-                let hmax = info.boxes.iter().map(|(c, _)| c[4]).fold(0.0f32, f32::max);
-                top = 1.0 - hmax;
+            // cubinho isométrico feito das caixas do modelo (escadas, lajes, lajes verticais, cama...)
+            let mut boxes: Vec<([f32; 6], f32)> = info.boxes.iter().map(|(c, t)| (*c, *t as f32)).collect();
+            if boxes.is_empty() {
+                boxes.push(([0.0, 0.0, 0.0, 1.0, 1.0, 1.0], tex));
             }
+            // de trás para a frente: primeiro as de baixo, depois as mais próximas de quem olha
+            boxes.sort_by(|a, b| (a.0[1], a.0[0] + a.0[2]).partial_cmp(&(b.0[1], b.0[0] + b.0[2])).unwrap());
             let (cx, w) = (x + s / 2.0, s * 0.92);
-            let y0 = y + s * 0.04 + top * w / 2.0;
-            let t = [cx, y0];
-            let ur = [cx + w / 2.0, y0 + w / 4.0];
-            let c = [cx, y0 + w / 2.0];
-            let ul = [cx - w / 2.0, y0 + w / 4.0];
-            let yb = y + s * 0.04 + w;
-            let ll = [cx - w / 2.0, yb - w / 4.0];
-            let bt = [cx, yb];
-            let lr = [cx + w / 2.0, yb - w / 4.0];
-            let p = |a: [f32; 2]| [a[0], a[1], 0.0];
-            let full = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
-            let vt = 1.0 - top; // o lado mostra só a parte de baixo da textura
-            let side = [[0.0, 1.0 - vt], [1.0, 1.0 - vt], [1.0, 1.0], [0.0, 1.0]];
-            self.quad([p(t), p(ur), p(c), p(ul)], full, tex * 6.0 + 2.0, [1.0, 1.0, 1.0, 1.0]);
-            self.quad([p(ul), p(c), p(bt), p(ll)], side, tex * 6.0 + 4.0, [0.8, 0.8, 0.8, 1.0]);
-            self.quad([p(c), p(ur), p(lr), p(bt)], side, tex * 6.0, [0.62, 0.62, 0.62, 1.0]);
+            let top = y + s * 0.04;
+            // ponto do bloco (x,y,z em 0..1) na tela
+            let pt = |px: f32, py: f32, pz: f32| [cx + (px - pz) * w / 2.0, top + (px + pz) * w / 4.0 + (1.0 - py) * w / 2.0, 0.0];
+            for (b, t) in boxes {
+                let [x0, y0, z0, x1, y1, z1] = b;
+                // topo (+Y)
+                self.quad([pt(x0, y1, z0), pt(x1, y1, z0), pt(x1, y1, z1), pt(x0, y1, z1)], [[x0, z0], [x1, z0], [x1, z1], [x0, z1]], t * 6.0 + 2.0, [1.0, 1.0, 1.0, 1.0]);
+                // lado esquerdo (+Z)
+                self.quad([pt(x0, y1, z1), pt(x1, y1, z1), pt(x1, y0, z1), pt(x0, y0, z1)], [[x0, 1.0 - y1], [x1, 1.0 - y1], [x1, 1.0 - y0], [x0, 1.0 - y0]], t * 6.0 + 4.0, [0.8, 0.8, 0.8, 1.0]);
+                // lado direito (+X)
+                self.quad([pt(x1, y1, z1), pt(x1, y1, z0), pt(x1, y0, z0), pt(x1, y0, z1)], [[1.0 - z1, 1.0 - y1], [1.0 - z0, 1.0 - y1], [1.0 - z0, 1.0 - y0], [1.0 - z1, 1.0 - y0]], t * 6.0, [0.62, 0.62, 0.62, 1.0]);
+            }
             return;
         }
         if let Some(i) = items::info(id) {
