@@ -126,8 +126,10 @@ impl Game {
             }
             d.body.do_move(dt, &w, false);
             if d.body.on_ground {
-                d.body.vx *= 0.6;
-                d.body.vz *= 0.6;
+                // no gelo o item desliza: perde pouca velocidade por quadro
+                let keep = if d.body.on_ice(&w) { 0.985f64.powf(dt * 60.0) } else { 0.6 };
+                d.body.vx *= keep;
+                d.body.vz *= keep;
                 if d.body.vy < 0.0 {
                     d.body.vy = 0.0;
                 }

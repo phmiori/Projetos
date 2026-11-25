@@ -34,7 +34,8 @@ pub const POLAR_BEAR: usize = 23;
 pub const PENGUIN: usize = 24;
 pub const MUSKOX: usize = 25;
 pub const NARWHAL: usize = 26;
-pub const TYPES: usize = 27;
+pub const SEAL: usize = 27;
+pub const TYPES: usize = 28;
 
 pub const TAMED_HP: f64 = 20.0;
 pub const FUSE_TIME: f64 = 1.5;
@@ -130,11 +131,11 @@ pub fn data() -> &'static Data {
 }
 
 /// A voz de cada criatura (Mob.SOUNDS), na ordem dos tipos.
-const SOUNDS: [Option<&str>; 27] = [
+const SOUNDS: [Option<&str>; 28] = [
     Some("porco"), Some("ovelha"), Some("galinha"), Some("morto_vivo"), Some("aranha"), None, Some("vaca"), None,
     Some("esqueleto"), Some("lobo"), Some("raposa"), None, None, Some("urso"), Some("passaro"), None, None, None,
     Some("rugido"), Some("rugido"), Some("miau"), Some("aranha"), Some("aranha"), Some("urso"), Some("pinguim"),
-    Some("boi"), None,
+    Some("boi"), None, None,
 ];
 
 pub fn voice(t: usize) -> Option<&'static str> {
@@ -180,6 +181,10 @@ pub struct Mob {
     pub wants_shoot: bool,
     shot_cd: f64,
     out_of_water: f64,
+    /// urso-polar: segundos sem caçar depois de comer
+    pub fed: f64,
+    /// presa fugindo de um urso-polar: de onde (x, z) ela foge
+    pub scare: Option<[f64; 2]>,
 }
 
 /// O que a criatura enxerga do mundo e dos outros a cada passo.
@@ -236,6 +241,8 @@ impl Mob {
             wants_shoot: false,
             shot_cd: 0.0,
             out_of_water: 0.0,
+            fed: 0.0,
+            scare: None,
         }
     }
 
@@ -250,6 +257,10 @@ impl Mob {
     }
     pub fn tiger(&self) -> bool {
         self.t == TIGER || self.t == WHITE_TIGER
+    }
+    /// Presa do urso-polar.
+    pub fn polar_prey(&self) -> bool {
+        self.t == PENGUIN || self.t == SEAL
     }
     pub fn scorpion(&self) -> bool {
         self.t == SCORPION || self.t == EMPEROR
@@ -300,7 +311,11 @@ impl Mob {
         self.attack_cd -= dt;
         self.ai_timer -= dt;
         self.flee -= dt;
+        if self.flee <= 0.0 {
+            self.scare = None;
+        }
         self.angry -= dt;
+        self.fed -= dt;
         self.wants_attack = false;
         self.wants_bite = false;
         let (px, pz, py) = (s.p[0] - self.body.x, s.p[2] - self.body.z, s.p[1] - self.body.y);
@@ -396,6 +411,23 @@ impl Mob {
             } else {
                 self.aim = (self.aim - dt * 2.0).max(0.0);
             }
+        } else if self.t == POLAR_BEAR && s.target.is_some() && !(self.attacks_player() && s.can_target && dist < 18.0 && py.abs() < 8.0) {
+            // urso-polar caçando pinguim ou foca: persegue e morde
+            if let Some((tp, thw, _)) = s.target {
+                let (ddx, ddz) = (tp[0] - self.body.x, tp[2] - self.body.z);
+                let dd = (ddx * ddx + ddz * ddz).sqrt().max(0.01);
+                tx = ddx / dd;
+                tz = ddz / dd;
+                speed *= 1.5;
+                if dd < 1.5 + thw && (tp[1] - self.body.y).abs() < 1.6 {
+                    tx = 0.0;
+                    tz = 0.0;
+                    if self.attack_cd <= 0.0 {
+                        self.wants_bite = true;
+                        self.attack_cd = 1.2;
+                    }
+                }
+            }
         } else if self.t == CREEPER && self.fuse > 0.0 {
             self.yaw = atan2(px, pz); // parado enquanto incha
         } else if self.attacks_player() && s.can_target && dist < 18.0 && py.abs() < 8.0 {
@@ -409,7 +441,7 @@ impl Mob {
             } else if self.bear() || self.tiger() {
                 1.9
             } else if self.t == MUSKOX {
-                1.6
+                1.9
             } else if self.t == EMPEROR {
                 3.4
             } else {
@@ -424,8 +456,16 @@ impl Mob {
                 }
             }
         } else if self.flee > 0.0 {
-            tx = -px / dist.max(0.01);
-            tz = -pz / dist.max(0.01);
+            // foge do jogador, ou do urso-polar que está caçando
+            let (fx, fz, fd) = match self.scare {
+                Some(sc) => {
+                    let (a, b) = (self.body.x - sc[0], self.body.z - sc[1]);
+                    (a, b, (a * a + b * b).sqrt())
+                }
+                None => (-px, -pz, dist),
+            };
+            tx = fx / fd.max(0.01);
+            tz = fz / fd.max(0.01);
             speed *= 1.9;
         } else {
             if self.ai_timer <= 0.0 {
@@ -725,6 +765,7 @@ impl Mob {
             PENGUIN => vec![(FEATHER, 1 + n(r, 2)), (RAW_FISH, n(r, 2))],
             MUSKOX => vec![(RAW_MEAT, 2 + n(r, 2)), (LEATHER, 1 + n(r, 2)), (block::WOOL as i32, n(r, 2))],
             NARWHAL => vec![(RAW_FISH, 2 + n(r, 3)), (BONE, 1)],
+            SEAL => vec![(RAW_FISH, 1 + n(r, 2)), (LEATHER, 1 + n(r, 2))],
             BIRD => vec![(FEATHER, 1 + n(r, 2))],
             SALMON => vec![(RAW_FISH, 1 + n(r, 2))],
             SHARK => vec![(RAW_FISH, 3 + n(r, 3)), (BONE, n(r, 2))],
@@ -820,6 +861,7 @@ impl Mob {
         // cantos de cada face (na ordem dos índices 0..7: bit 0 = x, bit 1 = y, bit 2 = z)
         const FACES: [[usize; 4]; 6] = [[1, 3, 7, 5], [0, 4, 6, 2], [2, 6, 7, 3], [0, 1, 5, 4], [4, 5, 7, 6], [0, 2, 3, 1]];
         let spider = self.t == SPIDER || self.scorpion();
+        let scale = if self.t == MUSKOX { 1.3f32 } else { 1.0 };
         for bx in self.current_model() {
             let mut oz = 0.0;
             let mut mode = 0;
@@ -863,7 +905,7 @@ impl Mob {
                     ly = ny + pv;
                     lz = nz;
                 }
-                let (mx, my, mz) = (bx.c[0] + lx, bx.c[1] + ly, bx.c[2] + lz + oz);
+                let (mx, my, mz) = ((bx.c[0] + lx) * scale, (bx.c[1] + ly) * scale, (bx.c[2] + lz + oz) * scale);
                 *ci = [x + mx * cy + mz * sy, y + my, z - mx * sy + mz * cy];
             }
             let mut col = bx.color;

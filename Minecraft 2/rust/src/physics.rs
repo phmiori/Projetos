@@ -92,8 +92,10 @@ impl Player {
         }
 
         self.update_fluids(w);
-        // nado na horizontal: correndo com a cabeça na água; a caixa fica baixa e o corpo segue o olhar
-        let want_crawl = !self.flying && self.in_water && i.sprint && i.fwd && block::is_water(w.get(fl(self.x), fl(self.y + EYE), fl(self.z)));
+        // nado na horizontal: começa correndo para frente com a cabeça na água; a caixa fica baixa e o corpo segue
+        // o olhar. Continua mesmo sem o sprint, até parar de nadar (soltar as teclas de movimento) ou sair da água
+        let starts = i.sprint && i.fwd && block::is_water(w.get(fl(self.x), fl(self.y + EYE), fl(self.z)));
+        let want_crawl = !self.flying && self.in_water && (starts || (self.crawl_swim && len > 0.0));
         if want_crawl && !self.crawl_swim && self.h == H {
             self.crawl_swim = true;
             self.h = CRAWL_H;
@@ -106,12 +108,14 @@ impl Player {
 
         let sprinting = i.sprint && i.fwd && len > 0.0;
         self.sprinting = sprinting;
-        let mut speed = if self.flying { if i.sprint { 22.0 } else { 11.0 } } else if sprinting { 5.8 } else { 4.3 };
+        let mut speed = if self.flying { if i.sprint { 22.0 } else { 11.0 } } else if sprinting || self.crawl_swim { 5.8 } else { 4.3 };
         if (self.in_water || self.in_lava) && !self.flying {
             speed *= if self.in_lava { 0.35 } else if self.crawl_swim { 0.75 } else { 0.55 };
         }
         let (mx, mz) = if self.crawl_swim { (mx * self.pitch.cos(), mz * self.pitch.cos()) } else { (mx, mz) };
-        let accel = if self.on_ground || self.flying || self.in_water { 12.0 } else { 3.0 };
+        // gelo: pouca aderência, então demora para pegar velocidade e para parar
+        let ice = self.on_ground && !self.in_water && self.on_ice(w);
+        let accel = if ice { if len > 0.0 { 2.5 } else { 0.7 } } else if self.on_ground || self.flying || self.in_water { 12.0 } else { 3.0 };
         let k = (accel * dt).min(1.0);
         self.vx += (mx * speed - self.vx) * k;
         self.vz += (mz * speed - self.vz) * k;
@@ -153,6 +157,11 @@ impl Player {
             self.y = top;
             self.vy = self.vy.min(0.0);
         }
+    }
+
+    /// Há gelo logo abaixo dos pés?
+    pub fn on_ice<W: Blocks>(&self, w: &W) -> bool {
+        matches!(w.get(fl(self.x), fl(self.y - 0.05), fl(self.z)), block::ICE | block::PACKED_ICE | block::BLUE_ICE)
     }
 
     pub fn update_fluids<W: Blocks>(&mut self, w: &W) {
@@ -342,6 +351,31 @@ mod tests {
     }
 
     #[test]
+    fn gelo_escorrega() {
+        struct Floor(u8);
+        impl Blocks for Floor {
+            fn get(&self, _x: i32, y: i32, _z: i32) -> u8 {
+                if y < 0 { self.0 } else { block::AIR }
+            }
+        }
+        let slide = |floor: u8| {
+            let w = Floor(floor);
+            let mut p = Player::new();
+            p.y = 0.0;
+            p.yaw = std::f64::consts::FRAC_PI_2;
+            for _ in 0..60 {
+                p.update(1.0 / 60.0, Input { fwd: true, ..Default::default() }, &w);
+            }
+            for _ in 0..30 {
+                p.update(1.0 / 60.0, Input::default(), &w);
+            }
+            p.vx.abs()
+        };
+        assert!(slide(block::STONE) < 0.01);
+        assert!(slide(block::ICE) > 0.5, "gelo não escorrega");
+    }
+
+    #[test]
     fn nado_horizontal_segue_o_olhar_e_abaixa_a_caixa() {
         let w = Pool { pillar_top: -1 };
         let mut p = swimmer();
@@ -350,6 +384,10 @@ mod tests {
         run(&w, &mut p, Input { fwd: true, sprint: true, ..Default::default() }, 0.8);
         assert!(p.crawl_swim && p.h < 1.0);
         assert!(p.y < y0 - 0.5, "não desceu olhando para baixo: y={}", p.y);
+        // soltou o sprint mas continua andando: segue na horizontal
+        run(&w, &mut p, Input { fwd: true, ..Default::default() }, 0.5);
+        assert!(p.crawl_swim && p.h < 1.0);
+        // parou de nadar: volta ao normal
         run(&w, &mut p, Input::default(), 0.5);
         assert!(!p.crawl_swim && p.h == H);
     }

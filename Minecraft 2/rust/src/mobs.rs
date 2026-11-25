@@ -192,6 +192,9 @@ impl Game {
             if mobs[i].t == mob::SHARK || mobs[i].t == mob::NARWHAL {
                 choose_sea_target(&mut mobs, i);
             }
+            if mobs[i].t == mob::POLAR_BEAR {
+                choose_bear_target(&mut mobs, i);
+            }
             let target = mobs[i].target.and_then(|id| mobs.iter().find(|o| o.id == id && o.health > 0.0)).map(|t| ([t.body.x, t.body.y, t.body.z], t.body.hw, t.small_fish()));
             if target.is_none() {
                 mobs[i].target = None;
@@ -225,11 +228,11 @@ impl Game {
                 if let Some(tid) = mobs[i].target {
                     if let Some(j) = mobs.iter().position(|o| o.id == tid) {
                         let (mt, mid, dmg, mx, mz) = (mobs[i].t, mobs[i].id, mobs[i].attack_damage(), mobs[i].body.x, mobs[i].body.z);
-                        let eat = mt == mob::SHARK && mobs[j].small_fish();
+                        let eat = (mt == mob::SHARK && mobs[j].small_fish()) || (mt == mob::POLAR_BEAR && mobs[j].polar_prey());
                         if (mt == mob::NARWHAL || mt == mob::SHARK) && (mobs[j].t == mob::NARWHAL || mobs[j].t == mob::SHARK) {
                             mobs[j].target = Some(mid); // tubarão e narval revidam
                         }
-                        mobs[j].damage(if mt == mob::WOLF { 4.0 } else if eat { 10.0 } else { dmg });
+                        mobs[j].damage(if mt == mob::WOLF { 4.0 } else if eat && mt == mob::SHARK { 10.0 } else { dmg });
                         if eat {
                             mobs[i].health = (mobs[i].health + 3.0).min(mob::info(mt).hp);
                         }
@@ -241,7 +244,7 @@ impl Game {
                         t.body.vy = 4.0;
                         let at = [t.body.x, t.body.y + 0.8, t.body.z];
                         self.sfx("criatura_dano", at, 0.8);
-                        if mt == mob::SHARK {
+                        if mt == mob::SHARK || mt == mob::POLAR_BEAR {
                             self.blood([at[0], at[1] - 0.5, at[2]]);
                         }
                         let t = &mut mobs[j];
@@ -254,6 +257,9 @@ impl Game {
                                 }
                             }
                             mobs[i].target = None;
+                            if mt == mob::POLAR_BEAR {
+                                mobs[i].fed = 25.0; // comeu: fica um tempo sem caçar
+                            }
                         }
                     }
                 }
@@ -401,9 +407,9 @@ impl Game {
         } else if biome == FOREST || biome == BIRCH_FOREST {
             &[DEER, DEER, FOX, RABBIT, WOLF, PIG, COW, BEAR, TIGER]
         } else if berg {
-            &[PENGUIN, PENGUIN, PENGUIN, POLAR_BEAR, POLAR_BEAR]
+            &[PENGUIN, PENGUIN, PENGUIN, SEAL, SEAL, POLAR_BEAR, POLAR_BEAR]
         } else if biome == TUNDRA {
-            &[WOLF, FOX, RABBIT, BEAR, DEER, WHITE_TIGER, POLAR_BEAR, PENGUIN, PENGUIN, MUSKOX, MUSKOX]
+            &[WOLF, FOX, RABBIT, BEAR, DEER, WHITE_TIGER, POLAR_BEAR, PENGUIN, PENGUIN, SEAL, MUSKOX, MUSKOX]
         } else if biome == MOUNTAINS {
             &[SHEEP, SHEEP, RABBIT, WOLF]
         } else {
@@ -425,6 +431,8 @@ impl Game {
             2 + self.int(2)
         } else if t == PENGUIN {
             2 + self.int(3)
+        } else if t == SEAL {
+            1 + self.int(2)
         } else {
             1 + self.int(3)
         };
@@ -1030,6 +1038,37 @@ fn choose_wolf_target(mobs: &mut [Mob], i: usize, owner: [f64; 3]) {
     mobs[i].target = best;
 }
 
+/// Urso-polar caça pinguins e focas (de até 16 blocos); as presas por perto fogem dele.
+fn choose_bear_target(mobs: &mut [Mob], i: usize) {
+    let (bx, by, bz) = (mobs[i].body.x, mobs[i].body.y, mobs[i].body.z);
+    let d2 = |m: &Mob| (m.body.x - bx).powi(2) + (m.body.z - bz).powi(2);
+    for m in mobs.iter_mut().filter(|m| m.polar_prey() && m.health > 0.0) {
+        if d2(m) < 100.0 && (m.body.y - by).abs() < 4.0 {
+            m.flee = m.flee.max(1.0);
+            m.scare = Some([bx, bz]);
+        }
+    }
+    if let Some(t) = mobs[i].target {
+        if mobs.iter().any(|m| m.id == t && m.health > 0.0 && m.polar_prey() && d2(m) <= 576.0) {
+            return;
+        }
+        mobs[i].target = None;
+    }
+    if mobs[i].fed > 0.0 {
+        return;
+    }
+    let mut bd = 256.0;
+    let mut best = None;
+    for m in mobs.iter().filter(|m| m.polar_prey() && m.health > 0.0 && (m.body.y - by).abs() < 4.0) {
+        let d = d2(m);
+        if d < bd {
+            bd = d;
+            best = Some(m.id);
+        }
+    }
+    mobs[i].target = best;
+}
+
 /// Tubarão caça peixes pequenos (e briga com narval); narval ataca tubarões.
 fn choose_sea_target(mobs: &mut [Mob], i: usize) {
     let me = (mobs[i].body.x, mobs[i].body.y, mobs[i].body.z, mobs[i].t, mobs[i].id);
@@ -1067,5 +1106,54 @@ fn choose_sea_target(mobs: &mut [Mob], i: usize) {
     }
     if best.is_some() {
         mobs[i].target = best;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::survival::Rng;
+
+    struct Flat;
+    impl Blocks for Flat {
+        fn get(&self, _x: i32, y: i32, _z: i32) -> u8 {
+            if y < 0 { block::SNOW } else { block::AIR }
+        }
+    }
+
+    #[test]
+    fn urso_polar_caca_pinguim_e_foca() {
+        let mut r = Rng::new();
+        let mut bear = Mob::new(mob::POLAR_BEAR, 0.0, 0.0, 0.0, 1, &mut r);
+        let penguin = Mob::new(mob::PENGUIN, 6.0, 0.0, 0.0, 2, &mut r);
+        let seal = Mob::new(mob::SEAL, 3.0, 0.0, 3.0, 3, &mut r);
+        let cow = Mob::new(mob::COW, 1.0, 0.0, 0.0, 4, &mut r);
+        bear.yaw = 0.0;
+        let mut mobs = vec![bear, penguin, seal, cow];
+        choose_bear_target(&mut mobs, 0);
+        assert_eq!(mobs[0].target, Some(3), "devia escolher a foca, a presa mais perto (não a vaca)");
+        assert!(mobs[1].scare.is_some() && mobs[1].flee > 0.0, "o pinguim devia fugir do urso");
+        assert!(mobs[3].scare.is_none());
+        // persegue e morde
+        let w = Flat;
+        let mut bites = 0;
+        for _ in 0..600 {
+            let t = mobs[0].target.and_then(|id| mobs.iter().find(|o| o.id == id)).map(|t| ([t.body.x, t.body.y, t.body.z], t.body.hw, false));
+            let sight = Sight { w: &w, p: [100.0, 0.0, 100.0], can_target: false, owner: None, target: t, line_of_sight: false };
+            mobs[0].update(1.0 / 60.0, &sight, &mut r);
+            if mobs[0].wants_bite {
+                bites += 1;
+                mobs[2].health = 0.0;
+                break;
+            }
+        }
+        assert!(bites == 1, "o urso não chegou a morder a foca");
+        assert!(mobs[0].body.x > 1.0 && mobs[0].body.z > 1.0);
+    }
+
+    #[test]
+    fn boi_almiscarado_1_3x() {
+        assert!((mob::info(mob::MUSKOX).hw - 0.65).abs() < 1e-9 && (mob::info(mob::MUSKOX).h - 1.69).abs() < 1e-9);
+        assert_eq!(mob::info(mob::SEAL).name, "Foca");
     }
 }
