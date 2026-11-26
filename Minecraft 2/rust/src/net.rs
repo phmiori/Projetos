@@ -549,7 +549,9 @@ pub fn state_string(g: &Game) -> String {
 }
 
 fn mob_anim(m: &mob::Mob) -> f64 {
-    match m.t {
+    // acima de 1024: filhote, apaixonado, descansando (os bits de baixo continuam como no Java)
+    let breeding = m.is_baby() as i32 + 2 * (m.love > 0.0) as i32 + 4 * (m.rest > 0.0) as i32;
+    (1024 * breeding) as f64 + match m.t {
         mob::CREEPER => m.fuse,
         mob::SKELETON => m.aim,
         _ if m.fighter() => (m.tamed as i32 + if m.sitting { 2 } else { 0 } + if m.angry > 0.0 { 4 } else { 0 }) as f64,
@@ -559,6 +561,13 @@ fn mob_anim(m: &mob::Mob) -> f64 {
 }
 
 fn apply_mob_anim(m: &mut mob::Mob, a: f64) {
+    let breeding = (a / 1024.0).floor() as i32;
+    let a = a - (breeding * 1024) as f64;
+    if (breeding & 1 != 0) != m.is_baby() {
+        m.set_baby((breeding & 1) as f64);
+    }
+    m.love = if breeding & 2 != 0 { m.love.max(0.0) % 30.0 + 0.016 } else { 0.0 };
+    m.rest = (breeding & 4) as f64;
     match m.t {
         mob::CREEPER => m.fuse = a,
         mob::SKELETON => m.aim = a,

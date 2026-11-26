@@ -185,6 +185,20 @@ pub struct Mob {
     pub fed: f64,
     /// presa fugindo de um urso-polar: de onde (x, z) ela foge
     pub scare: Option<[f64; 2]>,
+    /// filhote: segundos até virar adulto (0 = adulto)
+    pub baby: f64,
+    /// alimentado: segundos procurando um par
+    pub love: f64,
+    /// segundos descansando depois de ter um filhote
+    pub rest: f64,
+    /// já foi alimentado ou nasceu de um par: fica salvo no mundo
+    pub bred: bool,
+    /// tempo encostado no par
+    pub mating: f64,
+    /// aonde ir (par, comida na mão do jogador ou um adulto) e até que distância chegar
+    pub goal: Option<([f64; 3], f64)>,
+    /// filhote, apaixonado ou atrás de comida: não ataca nem foge do jogador
+    pub calm: bool,
 }
 
 /// O que a criatura enxerga do mundo e dos outros a cada passo.
@@ -243,6 +257,13 @@ impl Mob {
             out_of_water: 0.0,
             fed: 0.0,
             scare: None,
+            baby: 0.0,
+            love: 0.0,
+            rest: 0.0,
+            bred: false,
+            mating: 0.0,
+            goal: None,
+            calm: false,
         }
     }
 
@@ -258,9 +279,14 @@ impl Mob {
     pub fn tiger(&self) -> bool {
         self.t == TIGER || self.t == WHITE_TIGER
     }
-    /// Presa do urso-polar.
+    /// Presa do urso-polar: qualquer bicho de terra (menos outro urso-polar). Peixes e pássaros no ar ele não alcança.
     pub fn polar_prey(&self) -> bool {
-        self.t == PENGUIN || self.t == SEAL
+        self.t != POLAR_BEAR && !self.swimmer() && !(self.t == BIRD && self.flying)
+    }
+    /// O ponto (dx, dz), relativo a esta criatura, está no campo de visão dela (70 graus para cada lado)?
+    pub fn sees(&self, dx: f64, dz: f64) -> bool {
+        let d = (dx * dx + dz * dz).sqrt().max(0.01);
+        (dx * self.yaw.sin() + dz * self.yaw.cos()) / d > 0.34
     }
     pub fn scorpion(&self) -> bool {
         self.t == SCORPION || self.t == EMPEROR
@@ -272,7 +298,7 @@ impl Mob {
         matches!(self.t, ZOMBIE | SPIDER | CREEPER | SKELETON)
     }
     pub fn attacks_player(&self) -> bool {
-        self.hostile() || self.t == SHARK || self.scorpion() || (self.fighter() && self.angry > 0.0 && !self.tamed)
+        self.hostile() || (!self.calm && (self.t == SHARK || self.scorpion() || (self.fighter() && self.angry > 0.0 && !self.tamed)))
     }
     pub fn attack_damage(&self) -> f64 {
         if self.t == ZOMBIE || self.t == WOLF {
@@ -321,6 +347,9 @@ impl Mob {
         let (px, pz, py) = (s.p[0] - self.body.x, s.p[2] - self.body.z, s.p[1] - self.body.y);
         let dist = (px * px + pz * pz).sqrt();
         let (mut tx, mut tz, mut speed) = (0.0, 0.0, info(self.t).speed);
+        if self.t == POLAR_BEAR && !self.calm && s.can_target && dist < 18.0 && py.abs() < 8.0 && self.sees(px, pz) {
+            self.angry = self.angry.max(3.0); // o urso-polar caça o jogador que vê pela frente
+        }
 
         if self.t == CREEPER {
             // chega perto, para e acende o pavio; se o jogador fugir a tempo, o pavio apaga
@@ -340,13 +369,13 @@ impl Mob {
         if !hunting {
             self.aim = 0.0;
         }
-        if matches!(self.t, DEER | RABBIT | FOX | CAT) && dist < if self.t == DEER { 10.0 } else { 6.0 } && py.abs() < 4.0 {
+        if !self.calm && matches!(self.t, DEER | RABBIT | FOX | CAT) && dist < if self.t == DEER { 10.0 } else { 6.0 } && py.abs() < 4.0 {
             self.flee = self.flee.max(1.5);
         }
-        if self.tiger() && s.can_target && dist < 5.0 && py.abs() < 3.0 {
+        if self.tiger() && !self.calm && s.can_target && dist < 5.0 && py.abs() < 3.0 {
             self.angry = self.angry.max(12.0);
         }
-        if self.t == WOLF && self.tamed {
+        if self.t == WOLF && self.tamed && self.goal.is_none() {
             // lobo domesticado: sentado espera; senão ataca monstros perto do dono ou segue o dono
             if self.sitting {
             } else if let Some((tp, thw, _)) = s.target {
@@ -467,6 +496,17 @@ impl Mob {
             tx = fx / fd.max(0.01);
             tz = fz / fd.max(0.01);
             speed *= 1.9;
+        } else if let Some((g, stop)) = self.goal {
+            // vai até o par, a comida ou (filhote) um adulto
+            let (dx, dz) = (g[0] - self.body.x, g[2] - self.body.z);
+            let dd = (dx * dx + dz * dz).sqrt().max(0.01);
+            if dd > stop {
+                tx = dx / dd;
+                tz = dz / dd;
+                speed *= if self.is_baby() { 1.3 } else { 1.0 };
+            } else {
+                self.yaw = atan2(dx, dz);
+            }
         } else {
             if self.ai_timer <= 0.0 {
                 self.ai_timer = 2.0 + r.next() * 4.0;
@@ -535,7 +575,7 @@ impl Mob {
             let (dx, dy, dz) = (s.p[0] - self.body.x, s.p[1] + 0.6 - self.body.y, s.p[2] - self.body.z);
             let d3 = (dx * dx + dy * dy + dz * dz).sqrt();
             let prey_in_water = block::is_water(w.get(fl(s.p[0]), fl(s.p[1] + 0.5), fl(s.p[2])));
-            if self.t == SHARK && s.can_target && prey_in_water && d3 < 16.0 {
+            if self.t == SHARK && !self.calm && s.can_target && prey_in_water && d3 < 16.0 {
                 self.dir_x = dx / d3;
                 self.dir_y = dy / d3;
                 self.dir_z = dz / d3;
@@ -560,6 +600,11 @@ impl Mob {
                 self.dir_x = ex / l;
                 self.dir_z = ez / l;
                 self.dir_y = 0.0;
+            } else if let Some((g, stop)) = self.goal {
+                let (ex, ey, ez) = (g[0] - self.body.x, g[1] - self.body.y, g[2] - self.body.z);
+                let d = (ex * ex + ey * ey + ez * ez).sqrt().max(0.01);
+                let go = if d > stop { 1.0 / d } else { 0.0 };
+                (self.dir_x, self.dir_y, self.dir_z) = (ex * go, ey * go, ez * go);
             } else if self.ai_timer <= 0.0 {
                 self.ai_timer = 1.5 + r.next() * 3.0;
                 let a = r.next() * std::f64::consts::TAU;
@@ -629,7 +674,7 @@ impl Mob {
         let (px, pz) = (s.p[0] - self.body.x, s.p[2] - self.body.z);
         let dist = (px * px + pz * pz).sqrt();
         if !self.flying {
-            if dist < 5.0 || self.flee > 0.0 || self.body.in_water || r.next() < dt * 0.07 {
+            if (!self.calm && (dist < 5.0 || r.next() < dt * 0.07)) || self.flee > 0.0 || self.body.in_water {
                 self.flying = true;
                 self.landing = false;
                 self.body.vy = 5.0;
@@ -646,6 +691,17 @@ impl Mob {
                     }
                     if hop {
                         self.yaw = a;
+                    }
+                }
+                if let Some((g, stop)) = self.goal {
+                    // pousado: vai pulando até o par ou a comida
+                    let (dx, dz) = (g[0] - self.body.x, g[2] - self.body.z);
+                    let d = (dx * dx + dz * dz).sqrt().max(0.01);
+                    let go = if d > stop { 1.0 / d } else { 0.0 };
+                    (self.dir_x, self.dir_z) = (dx * go, dz * go);
+                    self.yaw = atan2(dx, dz);
+                    if go > 0.0 && self.body.on_ground {
+                        self.body.vy = 3.0;
                     }
                 }
                 let k = (dt * 6.0).min(1.0);
@@ -672,6 +728,9 @@ impl Mob {
             self.dir_z = a.cos();
             self.cruise = 5.0 + r.next() * 9.0;
             self.landing = self.flee <= 0.0 && dist > 10.0 && r.next() < 0.3;
+        }
+        if self.calm && self.flee <= 0.0 {
+            self.landing = true; // com par ou comida à vista, desce
         }
         let (bx, bz, by) = (self.body.x.floor() as i32, self.body.z.floor() as i32, self.body.y.floor() as i32);
         let mut ground = by - 30;
@@ -716,6 +775,10 @@ impl Mob {
     pub fn damage(&mut self, d: f64) {
         self.health -= d;
         self.hurt = 0.35;
+        // apanhar acaba com o namoro e com a calma
+        self.love = 0.0;
+        self.calm = false;
+        self.goal = None;
         if self.fighter() {
             if self.tamed {
                 self.sitting = false; // o lobo domesticado levanta para se defender
@@ -731,6 +794,9 @@ impl Mob {
     /// Itens que a criatura deixa ao morrer: (item, quantidade), como no Mob.drops do Java.
     pub fn drops(&self, r: &mut Rng) -> Vec<(i32, i32)> {
         let n = |r: &mut Rng, k: i32| (r.next() * k as f64) as i32; // nextInt(k)
+        if self.is_baby() {
+            return Vec::new(); // filhote não solta nada
+        }
         let v: Vec<(i32, i32)> = match self.t {
             PIG => vec![(RAW_PORK, 1 + n(r, 2))],
             SHEEP => vec![(block::WOOL as i32, 1), (RAW_MUTTON, 1 + n(r, 2))],
@@ -837,7 +903,7 @@ impl Mob {
                 _ => "9",
             })
             .to_string()
-        } else if self.t == DEER && self.id.rem_euclid(2) == 0 {
+        } else if self.t == DEER && !self.is_baby() && self.id.rem_euclid(2) == 0 {
             "DEER_STAG".to_string()
         } else {
             self.t.to_string()
@@ -861,7 +927,7 @@ impl Mob {
         // cantos de cada face (na ordem dos índices 0..7: bit 0 = x, bit 1 = y, bit 2 = z)
         const FACES: [[usize; 4]; 6] = [[1, 3, 7, 5], [0, 4, 6, 2], [2, 6, 7, 3], [0, 1, 5, 4], [4, 5, 7, 6], [0, 2, 3, 1]];
         let spider = self.t == SPIDER || self.scorpion();
-        let scale = if self.t == MUSKOX { 1.3f32 } else { 1.0 };
+        let scale = if self.t == MUSKOX { 1.3f32 } else { 1.0 } * if self.is_baby() { crate::breeding::BABY_SCALE as f32 } else { 1.0 };
         for bx in self.current_model() {
             let mut oz = 0.0;
             let mut mode = 0;
@@ -930,11 +996,41 @@ impl Mob {
                 ui.solid_quad([c[face[0]], c[face[1]], c[face[2]], c[face[3]]], [r, g, b, 1.0]);
             }
         }
+        if self.love > 0.0 {
+            // corações subindo e descendo em cima do animal apaixonado (cruzados, para aparecer de qualquer lado)
+            const HEART: [[f32; 4]; 5] = [[-0.045, 0.035, 0.07, 0.07], [0.045, 0.035, 0.07, 0.07], [0.0, -0.01, 0.17, 0.05], [0.0, -0.055, 0.10, 0.04], [0.0, -0.09, 0.04, 0.035]];
+            let top = y + self.body.h as f32 + 0.3;
+            for k in 0..3 {
+                let phase = self.love as f32 * 4.0 + k as f32 * 2.1;
+                let (ox, oy, oz) = ((k as f32 - 1.0) * 0.28, phase.sin() * 0.07 + if k == 1 { 0.18 } else { 0.0 }, phase.cos() * 0.08);
+                let (hx, hz) = (x + ox * cy + oz * sy, z - ox * sy + oz * cy);
+                for [px, py, w, h] in HEART {
+                    for (ax, az, wx, wz) in [(px, 0.0, w, 0.03), (0.0, px, 0.03, w)] {
+                        let mut c = [[0f32; 3]; 8];
+                        for (i, ci) in c.iter_mut().enumerate() {
+                            *ci = [
+                                hx + ax + if i & 1 == 0 { -wx } else { wx } / 2.0,
+                                top + oy + py + if i & 2 == 0 { -h } else { h } / 2.0,
+                                hz + az + if i & 4 == 0 { -wz } else { wz } / 2.0,
+                            ];
+                        }
+                        for face in FACES.iter() {
+                            ui.solid_quad([c[face[0]], c[face[1]], c[face[2]], c[face[3]]], [0.93, 0.16, 0.28, 1.0]);
+                        }
+                    }
+                }
+            }
+        }
     }
 
-    /// Texto no formato do Java (Mobs.save): tipo;x;y;z;direção;vida;id.
+    /// Texto no formato do Java (Mobs.save): tipo;x;y;z;direção;vida;id. Quem foi alimentado ou nasceu de um par
+    /// ganha mais três campos (filhote;descanso;criado), que o Java ignora.
     pub fn save(&self) -> String {
-        format!("{};{:.2};{:.2};{:.2};{:.2};{:.1};{}", self.t, self.body.x, self.body.y, self.body.z, self.yaw, self.health, self.id)
+        let mut s = format!("{};{:.2};{:.2};{:.2};{:.2};{:.1};{}", self.t, self.body.x, self.body.y, self.body.z, self.yaw, self.health, self.id);
+        if self.bred || self.is_baby() || self.rest > 0.0 {
+            s += &format!(";{};{};{}", self.baby.ceil(), self.rest.ceil(), self.bred as i32);
+        }
+        s
     }
 
     pub fn load(s: &str, rng: &mut Rng) -> Option<Mob> {
@@ -950,12 +1046,17 @@ impl Mob {
         let mut m = Mob::new(t, f(1)?, f(2)?, f(3)?, p[6].trim().parse().ok()?, rng);
         m.yaw = f(4)?;
         m.health = f(5)?.clamp(1.0, info(t).hp);
+        if p.len() >= 10 {
+            m.set_baby(f(7)?.max(0.0));
+            m.rest = f(8)?.max(0.0);
+            m.bred = p[9].trim() == "1";
+        }
         Some(m)
     }
 
     /// Bichos de terra ficam no mundo (dormem com o pedaço); monstros, pássaros e peixes somem de longe.
     pub fn persistent(&self) -> bool {
-        !self.hostile() && !self.tamed && self.t != BIRD && !self.swimmer()
+        !self.hostile() && !self.tamed && (self.bred || (self.t != BIRD && !self.swimmer()))
     }
 }
 

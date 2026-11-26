@@ -3,6 +3,7 @@
 //! longe e são gravados no meta.properties igual ao Java ("criatura.N" e "lobo.N").
 //! Também: a explosão do creeper, as flechas do esqueleto, domar lobo com osso e os ovos de criatura.
 
+use crate::breeding::{choose_goal, hint, is_meat, mate, GROW_TIME};
 use crate::block::{self, LAVA};
 use crate::inventory::Stack;
 use crate::mob::{self, Mob, Sight};
@@ -44,10 +45,6 @@ impl Arrow {
     }
 }
 
-fn is_meat(id: i32) -> bool {
-    matches!(id, 206 | 207 | 241 | 242 | 243 | 244 | 245 | 246 | 208 | 209)
-}
-
 impl Game {
     fn next_mob_id(&mut self) -> i32 {
         let id = self.mob_id;
@@ -84,7 +81,12 @@ impl Game {
             let id = self.next_mob_id();
             let mut m = Mob::new(mob::WOLF, f(0), f(1), f(2), id, &mut self.rng);
             m.tamed = true;
-            m.sitting = p[3] == "1";
+            // "sentado" ou "sentado,filhote,descanso"
+            let mut extra = p[3].split(',');
+            m.sitting = extra.next() == Some("1");
+            let mut next = || extra.next().and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
+            m.set_baby(next());
+            m.rest = next();
             m.health = f(4).clamp(1.0, mob::TAMED_HP);
             m.owner_name = p[5].to_string();
             self.mobs.push(m);
@@ -100,7 +102,13 @@ impl Game {
             .mobs
             .iter()
             .filter(|m| m.t == mob::WOLF && m.tamed && m.health > 0.0)
-            .map(|m| format!("{:.2};{:.2};{:.2};{};{:.1};{}", m.body.x, m.body.y, m.body.z, m.sitting as i32, m.health, m.owner_name))
+            .map(|m| {
+                let mut state = (m.sitting as i32).to_string();
+                if m.is_baby() || m.rest > 0.0 {
+                    state += &format!(",{},{}", m.baby.ceil(), m.rest.ceil());
+                }
+                format!("{:.2};{:.2};{:.2};{};{:.1};{}", m.body.x, m.body.y, m.body.z, state, m.health, m.owner_name)
+            })
             .collect();
         (out, wolves)
     }
@@ -147,17 +155,21 @@ impl Game {
         let daylight = self.daylight();
         let p = [self.player.x, self.player.y, self.player.z];
         // todos os jogadores do mundo: este e, no anfitrião, os amigos (cada criatura olha o mais perto, como no Java)
-        let mut players: Vec<(Option<usize>, [f64; 3], bool, String)> = vec![(None, p, self.health > 0.0, self.player_name.clone())];
+        let hand = self.inv.s[self.slot];
+        let hand = if hand.empty() { 0 } else { hand.id };
+        let mut players: Vec<(Option<usize>, [f64; 3], bool, String, i32)> = vec![(None, p, self.health > 0.0, self.player_name.clone(), hand)];
         if let Some(n) = &self.net {
             if n.is_host() {
                 for r in n.remotes.values().filter(|r| r.has_state) {
                     if let Some(c) = r.conn {
-                        players.push((Some(c), r.pos, true, r.name.clone()));
+                        players.push((Some(c), r.pos, true, r.name.clone(), r.held));
                     }
                 }
             }
         }
         let mut mobs = std::mem::take(&mut self.mobs);
+        // a comida na mão de cada jogador atrai quem come aquilo
+        let offers: Vec<([f64; 3], i32)> = players.iter().filter(|q| q.2).map(|q| (q.1, q.4)).collect();
         let mut explosions = Vec::new();
         let mut shots: Vec<([f64; 3], [f64; 3])> = Vec::new();
         let mut player_hits: Vec<(Option<usize>, f64, f64, f64)> = Vec::new();
@@ -186,13 +198,18 @@ impl Game {
             // o lobo segue o dono, se ele estiver no mundo (aqui ou um amigo)
             let owner = if mobs[i].tamed { players.iter().find(|q| q.3 == mobs[i].owner_name).map(|q| q.1) } else { None };
             // alvos: lobo domesticado (monstros perto do dono), tubarão (peixes, narval), narval (tubarão)
-            if mobs[i].tamed && !mobs[i].sitting {
+            mobs[i].tick_breeding(dt, &Loaded(&self.chunks));
+            choose_goal(&mut mobs, i, &offers);
+            if mobs[i].calm {
+                mobs[i].target = None; // filhote, namorando ou atrás de comida: não caça
+            }
+            if mobs[i].tamed && !mobs[i].sitting && !mobs[i].calm {
                 choose_wolf_target(&mut mobs, i, owner.unwrap_or(p));
             }
-            if mobs[i].t == mob::SHARK || mobs[i].t == mob::NARWHAL {
+            if (mobs[i].t == mob::SHARK || mobs[i].t == mob::NARWHAL) && !mobs[i].calm {
                 choose_sea_target(&mut mobs, i);
             }
-            if mobs[i].t == mob::POLAR_BEAR {
+            if mobs[i].t == mob::POLAR_BEAR && !mobs[i].calm {
                 choose_bear_target(&mut mobs, i);
             }
             let target = mobs[i].target.and_then(|id| mobs.iter().find(|o| o.id == id && o.health > 0.0)).map(|t| ([t.body.x, t.body.y, t.body.z], t.body.hw, t.small_fish()));
@@ -293,6 +310,19 @@ impl Game {
                 continue;
             }
             i += 1;
+        }
+        // nascimentos
+        for (t, at, parent) in mate(&mut mobs, dt) {
+            let id = self.next_mob_id();
+            let mut baby = Mob::new(t, at[0], at[1], at[2], id, &mut self.rng);
+            baby.set_baby(GROW_TIME);
+            baby.bred = true;
+            (baby.tamed, baby.owner_name, baby.yaw) = (mobs[parent].tamed, mobs[parent].owner_name.clone(), mobs[parent].yaw);
+            if baby.tamed {
+                baby.health = mob::TAMED_HP;
+            }
+            self.sfx(mob::voice(t).unwrap_or("comer"), [at[0], at[1] + 0.5, at[2]], 0.9);
+            mobs.push(baby);
         }
         self.mobs = mobs;
         // golpes no jogador (com o empurrão, como no Java)
@@ -893,11 +923,20 @@ impl Game {
 
     /// Botão direito numa criatura: osso doma o lobo (1 chance em 3), carne cura, mão vazia senta/levanta.
     pub fn use_on_mob(&mut self, i: usize) -> bool {
-        let held = self.inv.s[self.slot].id;
-        if self.mobs[i].t != mob::WOLF {
+        let st = self.inv.s[self.slot];
+        let held = if st.empty() { 0 } else { st.id };
+        let m = &self.mobs[i];
+        if m.hostile() {
             return false;
         }
-        let eats = (!self.mobs[i].tamed && held == mob::BONE) || (self.mobs[i].tamed && is_meat(held));
+        let eats = if m.t != mob::WOLF {
+            m.wants(held)
+        } else if !m.tamed {
+            held == mob::BONE
+        } else {
+            // quem entra no mundo de outro não sabe a vida do lobo
+            is_meat(held) && (self.is_client() || m.health < mob::TAMED_HP || m.wants(held))
+        };
         if eats && !self.creative {
             self.inv.take_one(self.slot);
         }
@@ -917,8 +956,26 @@ impl Game {
 
     /// O que acontece ao usar um item no lobo (do jogador ou de um amigo da LAN). Retorna a mensagem.
     pub fn mob_use(&mut self, i: usize, held: i32, name: &str) -> Option<String> {
-        if self.mobs[i].t != mob::WOLF {
+        if self.mobs[i].hostile() {
             return None;
+        }
+        if self.mobs[i].t != mob::WOLF {
+            let m = &mut self.mobs[i];
+            let species = mob::info(m.t).name.clone();
+            if !m.wants(held) {
+                return if !m.likes(held) {
+                    hint(m)
+                } else if m.love > 0.0 {
+                    Some(format!("{species}: já está procurando um par"))
+                } else {
+                    Some(format!("{species}: ainda descansando, espere um pouco"))
+                };
+            }
+            let baby = m.is_baby();
+            m.feed();
+            let at = [m.body.x, m.body.y + 0.6, m.body.z];
+            self.sfx("comer", at, 0.7);
+            return Some(if baby { format!("Filhote de {} comeu: vai crescer mais rápido", species.to_lowercase()) } else { format!("{species}: quer um filhote! Alimente outro por perto") });
         }
         let name = name.to_string();
         let roll = self.int(3);
@@ -945,8 +1002,19 @@ impl Game {
                 "O lobo cheirou o osso... tente de novo".to_string()
             }
         } else if is_meat(held) {
-            m.health = (m.health + (crate::items::info(held).map_or(2, |i| i.food).max(2)) as f64).min(mob::TAMED_HP);
-            format!("O lobo comeu ({}/{} de vida)", m.health as i32, mob::TAMED_HP as i32)
+            if m.health < mob::TAMED_HP {
+                m.health = (m.health + (crate::items::info(held).map_or(2, |i| i.food).max(2)) as f64).min(mob::TAMED_HP);
+                if m.is_baby() {
+                    m.feed();
+                }
+                format!("O lobo comeu ({}/{} de vida)", m.health as i32, mob::TAMED_HP as i32)
+            } else if m.wants(held) {
+                let baby = m.is_baby();
+                m.feed();
+                if baby { "O filhote comeu: vai crescer mais rápido" } else { "Lobo: quer um filhote! Alimente outro lobo seu por perto" }.to_string()
+            } else {
+                "O lobo não está com fome agora".to_string()
+            }
         } else if m.owner_name != name {
             format!("Esse lobo é de {}", m.owner_name)
         } else {
@@ -1038,11 +1106,11 @@ fn choose_wolf_target(mobs: &mut [Mob], i: usize, owner: [f64; 3]) {
     mobs[i].target = best;
 }
 
-/// Urso-polar caça pinguins e focas (de até 16 blocos); as presas por perto fogem dele.
+/// Urso-polar caça tudo o que vê pela frente (de até 16 blocos); os bichos por perto fogem dele.
 fn choose_bear_target(mobs: &mut [Mob], i: usize) {
     let (bx, by, bz) = (mobs[i].body.x, mobs[i].body.y, mobs[i].body.z);
     let d2 = |m: &Mob| (m.body.x - bx).powi(2) + (m.body.z - bz).powi(2);
-    for m in mobs.iter_mut().filter(|m| m.polar_prey() && m.health > 0.0) {
+    for m in mobs.iter_mut().filter(|m| m.polar_prey() && m.health > 0.0 && !m.hostile() && !m.fighter()) {
         if d2(m) < 100.0 && (m.body.y - by).abs() < 4.0 {
             m.flee = m.flee.max(1.0);
             m.scare = Some([bx, bz]);
@@ -1059,9 +1127,10 @@ fn choose_bear_target(mobs: &mut [Mob], i: usize) {
     }
     let mut bd = 256.0;
     let mut best = None;
-    for m in mobs.iter().filter(|m| m.polar_prey() && m.health > 0.0 && (m.body.y - by).abs() < 4.0) {
+    let me = mobs[i].clone();
+    for m in mobs.iter().filter(|m| m.id != me.id && m.polar_prey() && m.health > 0.0 && (m.body.y - by).abs() < 4.0) {
         let d = d2(m);
-        if d < bd {
+        if d < bd && me.sees(m.body.x - bx, m.body.z - bz) {
             bd = d;
             best = Some(m.id);
         }
@@ -1131,9 +1200,15 @@ mod tests {
         bear.yaw = 0.0;
         let mut mobs = vec![bear, penguin, seal, cow];
         choose_bear_target(&mut mobs, 0);
-        assert_eq!(mobs[0].target, Some(3), "devia escolher a foca, a presa mais perto (não a vaca)");
+        assert_eq!(mobs[0].target, Some(3), "devia escolher a foca: a vaca ao lado e o pinguim a 90 graus estão fora da visão");
         assert!(mobs[1].scare.is_some() && mobs[1].flee > 0.0, "o pinguim devia fugir do urso");
-        assert!(mobs[3].scare.is_none());
+        // um bicho qualquer (vaca) na frente também é presa
+        let mut r2 = Rng::new();
+        let mut bear2 = Mob::new(mob::POLAR_BEAR, 0.0, 0.0, 0.0, 10, &mut r2);
+        bear2.yaw = 0.0;
+        let mut v = vec![bear2, Mob::new(mob::COW, 0.0, 0.0, 5.0, 11, &mut r2), Mob::new(mob::COW, 0.0, 0.0, -5.0, 12, &mut r2)];
+        choose_bear_target(&mut v, 0);
+        assert_eq!(v[0].target, Some(11), "a vaca da frente é presa; a de trás não");
         // persegue e morde
         let w = Flat;
         let mut bites = 0;

@@ -15,6 +15,7 @@
 
 mod amigo_teste;
 mod block;
+mod breeding;
 mod chat;
 mod containers;
 mod edit;
