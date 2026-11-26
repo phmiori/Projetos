@@ -9,6 +9,8 @@ pub struct WorldInfo {
     pub name: String,
     pub seed: i32,
     pub biome_scale: f64,
+    /// blocos a mais embaixo da terra ("alturaExtra"): 0 nos mundos clássicos
+    pub lift: i32,
     pub player: Option<[f64; 5]>, // x, y, z, yaw, pitch
     pub last_played: i64,
     pub creative: bool,
@@ -89,6 +91,7 @@ pub fn read_world(dir: &Path) -> Option<WorldInfo> {
         name: p.get("nome").cloned().unwrap_or_else(|| dir.file_name().unwrap_or_default().to_string_lossy().into()),
         seed: p.get("semente").and_then(|v| v.trim().parse().ok()).unwrap_or(0),
         biome_scale: num("tamanhoBiomas").unwrap_or(1.0),
+        lift: if num("alturaExtra").unwrap_or(0.0) > 0.0 { crate::world::DEEP } else { 0 },
         player,
         last_played: p.get("ultimoJogo").and_then(|v| v.trim().parse().ok()).unwrap_or(0),
         creative: p.get("modo").map_or(false, |m| m.trim() == "criativo"),

@@ -5,9 +5,15 @@ use crate::block::{self, *};
 use crate::noise::{fbm, hash, hash3, noise, noise3, JavaRandom};
 use std::collections::HashMap;
 
-pub const SY: i32 = 64;
+/// Altura dos pedaços na memória.
+pub const SY: i32 = 128;
+/// Altura e nível do mar do mundo clássico (o mesmo do jogo Java).
+pub const CLASSIC_SY: i32 = 64;
 pub const SEA: i32 = 24;
+/// Quantos blocos os mundos novos ganham embaixo da terra: o terreno inteiro sobe isso.
+pub const DEEP: i32 = 64;
 pub const VOLUME: usize = 16 * 16 * SY as usize;
+pub const CLASSIC_VOLUME: usize = 16 * 16 * CLASSIC_SY as usize;
 
 pub const PLAINS: i32 = 0;
 pub const FOREST: i32 = 1;
@@ -21,7 +27,21 @@ pub const BIOME_NAMES: [&str; 7] = ["Planície", "Floresta", "Bosque de bétulas
 /// Índice de um bloco no pedaço (igual ao Chunk.idx do Java).
 #[inline]
 pub fn idx(lx: i32, y: i32, lz: i32) -> usize {
+    ((lx << 11) | (lz << 7) | y) as usize
+}
+
+/// O contrário do idx: (lx, y, lz).
+#[inline]
+pub fn coords(i: usize) -> (i32, i32, i32) {
+    ((i >> 11) as i32, (i & 127) as i32, ((i >> 7) & 15) as i32)
+}
+
+/// Índice no formato clássico (64 de altura) dos arquivos do Java, e a volta.
+fn classic_index(lx: i32, y: i32, lz: i32) -> usize {
     ((lx << 10) | (lz << 6) | y) as usize
+}
+fn from_classic(i: usize) -> usize {
+    idx((i >> 10) as i32, (i & 63) as i32, ((i >> 6) & 15) as i32)
 }
 
 #[derive(Clone)]
@@ -76,7 +96,7 @@ impl Chunk {
             if l <= 0 {
                 continue;
             }
-            let (lx, lz, y) = ((i >> 10) as i32, ((i >> 6) & 15) as i32, (i & 63) as i32);
+            let (lx, y, lz) = coords(i);
             for (dx, dy, dz) in [(1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)] {
                 let (nx, ny, nz) = (lx + dx, y + dy, lz + dz);
                 if !(0..16).contains(&nx) || !(0..16).contains(&nz) || !(0..SY).contains(&ny) {
@@ -106,46 +126,70 @@ impl Chunk {
         self.sky_top[(lx * 16 + lz) as usize] = y as i8;
     }
 
-    /// Grava no mesmo formato do Chunk.toBytes do Java (gzip: versão 1, direções, blocos).
+    /// Grava o pedaço (gzip: versão, direções, blocos). Se nada passa de 64 de altura, sai no formato do
+    /// Chunk.toBytes do Java (versão 1); os mundos fundos usam a versão 2, com os 128 de altura.
     pub fn to_bytes(&self) -> Vec<u8> {
         use std::io::Write;
+        let classic = self.blocks.chunks(SY as usize).all(|col| col[CLASSIC_SY as usize..].iter().all(|&b| b == AIR));
         let mut raw = Vec::with_capacity(VOLUME + 16);
-        raw.push(1u8);
-        let rots: Vec<(&u16, &u8)> = self.rot.iter().filter(|(_, r)| **r != 0).collect();
+        raw.push(if classic { 1u8 } else { 2u8 });
+        let rots: Vec<(usize, u8)> = self.rot.iter().filter(|(i, r)| **r != 0 && (!classic || coords(**i as usize).1 < CLASSIC_SY)).map(|(i, r)| (*i as usize, *r)).collect();
         raw.extend_from_slice(&(rots.len() as i32).to_be_bytes());
         for (i, r) in rots {
-            raw.extend_from_slice(&i.to_be_bytes());
-            raw.push(*r);
+            let i = if classic {
+                let (lx, y, lz) = coords(i);
+                classic_index(lx, y, lz)
+            } else {
+                i
+            };
+            raw.extend_from_slice(&(i as u16).to_be_bytes());
+            raw.push(r);
         }
-        raw.extend_from_slice(&self.blocks);
+        if classic {
+            for col in self.blocks.chunks(SY as usize) {
+                raw.extend_from_slice(&col[..CLASSIC_SY as usize]);
+            }
+        } else {
+            raw.extend_from_slice(&self.blocks);
+        }
         let mut enc = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
         enc.write_all(&raw).unwrap();
         enc.finish().unwrap()
     }
 
-    /// Lê um pedaço salvo pelo jogo Java (worlds/<mundo>/chunks/cx_cz.dat: gzip com versão, direções e blocos).
+    /// Lê um pedaço salvo (worlds/<mundo>/chunks/cx_cz.dat), do Java (versão 1) ou de um mundo fundo (versão 2).
     pub fn from_bytes(cx: i32, cz: i32, data: &[u8]) -> Option<Chunk> {
         use std::io::Read;
         let mut raw = Vec::new();
         flate2::read::GzDecoder::new(data).read_to_end(&mut raw).ok()?;
-        if raw.first() != Some(&1) {
-            return None;
-        }
+        let classic = match raw.first() {
+            Some(1) => true,
+            Some(2) => false,
+            _ => return None,
+        };
+        let volume = if classic { CLASSIC_VOLUME } else { VOLUME };
         let n = i32::from_be_bytes(raw.get(1..5)?.try_into().ok()?);
-        if n < 0 || n as usize > VOLUME {
+        if n < 0 || n as usize > volume {
             return None;
         }
         let mut p = 5;
         let mut c = Chunk::new(cx, cz);
         for _ in 0..n {
-            let i = u16::from_be_bytes(raw.get(p..p + 2)?.try_into().ok()?);
+            let i = u16::from_be_bytes(raw.get(p..p + 2)?.try_into().ok()?) as usize;
             let r = *raw.get(p + 2)?;
             p += 3;
-            if (i as usize) < VOLUME && r != 0 {
-                c.rot.insert(i, r);
+            if i < volume && r != 0 {
+                c.rot.insert(if classic { from_classic(i) } else { i } as u16, r);
             }
         }
-        c.blocks.copy_from_slice(raw.get(p..p + VOLUME)?);
+        let blocks = raw.get(p..p + volume)?;
+        if classic {
+            for (col, old) in c.blocks.chunks_mut(SY as usize).zip(blocks.chunks(CLASSIC_SY as usize)) {
+                col[..CLASSIC_SY as usize].copy_from_slice(old);
+            }
+        } else {
+            c.blocks.copy_from_slice(blocks);
+        }
         c.from_store = true;
         Some(c)
     }
@@ -156,15 +200,27 @@ impl Chunk {
 pub struct Generator {
     pub seed: i32,
     pub biome_scale: f64,
+    /// blocos a mais embaixo da terra: 0 nos mundos clássicos (iguais aos do Java), DEEP nos novos
+    pub lift: i32,
 }
 
 impl Generator {
+    /// Nível do mar deste mundo.
+    pub fn sea(&self) -> i32 {
+        SEA + self.lift
+    }
+
+    /// Até onde se pode construir (y abaixo disto).
+    pub fn build_top(&self) -> i32 {
+        CLASSIC_SY + self.lift
+    }
+
     pub fn height_at(&self, x: i32, z: i32) -> i32 {
         let base = fbm(x as f64 / 96.0, z as f64 / 96.0, 5, self.seed);
         let mountains = fbm(x as f64 / 220.0, z as f64 / 220.0, 3, self.seed.wrapping_add(101));
         let h = (SEA + 3) as f64 + (base - 0.5) * 34.0 + (mountains - 0.52).max(0.0) * 70.0;
         let hi = h as i32;
-        if hi < 2 { 2 } else { hi.min(SY - 10) }
+        self.lift + if hi < 2 { 2 } else { hi.min(CLASSIC_SY - 10) }
     }
 
     pub fn temperature(&self, x: i32, z: i32) -> f64 {
@@ -173,7 +229,7 @@ impl Generator {
     }
 
     pub fn biome_at(&self, x: i32, z: i32, top: i32) -> i32 {
-        if top >= 46 {
+        if top >= 46 + self.lift {
             return MOUNTAINS;
         }
         let t = self.temperature(x, z);
@@ -183,7 +239,7 @@ impl Generator {
             return DESERT;
         }
         if t < 0.43 {
-            return if top < SEA - 3 { ICE_FIELD } else { TUNDRA };
+            return if top < self.sea() - 3 { ICE_FIELD } else { TUNDRA };
         }
         if m > 0.56 {
             return if t > 0.5 { BIRCH_FOREST } else { FOREST };
@@ -205,7 +261,7 @@ impl Generator {
                     if dx.abs() != r && dz.abs() != r {
                         continue;
                     }
-                    if self.height_at(dx, dz) < SEA + 2 {
+                    if self.height_at(dx, dz) < self.sea() + 2 {
                         continue; // água ou praia baixa: nem vale gerar
                     }
                     let c = cache.entry((dx >> 4, dz >> 4)).or_insert_with(|| self.generate(dx >> 4, dz >> 4));
@@ -216,7 +272,7 @@ impl Generator {
                         if b == AIR || block::shape(b) == CROSS {
                             continue;
                         }
-                        if (b == GRASS || b == SNOW || b == SAND) && y >= SEA {
+                        if (b == GRASS || b == SNOW || b == SAND) && y >= self.sea() {
                             top = y;
                         }
                         break;
@@ -230,7 +286,7 @@ impl Generator {
                 }
             }
         }
-        [0.5, (SY - 1) as f64, 0.5]
+        [0.5, (self.build_top() - 1) as f64, 0.5]
     }
 
     pub fn generate(&self, cx: i32, cz: i32) -> Chunk {
@@ -259,11 +315,12 @@ impl Generator {
         let h = self.height_at(x, z);
         let top = h - 1;
         let biome = self.biome_at(x, z, top);
-        let mut beach = top <= SEA + 1;
-        if beach && top >= SEA - 1 && (biome == TUNDRA || biome == ICE_FIELD) {
+        let sea = self.sea();
+        let mut beach = top <= sea + 1;
+        if beach && top >= sea - 1 && (biome == TUNDRA || biome == ICE_FIELD) {
             beach = false;
         }
-        let gravel_floor = top < SEA - 1 && noise(x as f64 / 9.0, z as f64 / 9.0, self.sd(70)) > 0.62;
+        let gravel_floor = top < sea - 1 && noise(x as f64 / 9.0, z as f64 / 9.0, self.sd(70)) > 0.62;
         for v in out.iter_mut() {
             *v = AIR;
         }
@@ -274,19 +331,19 @@ impl Generator {
             } else if depth == 0 {
                 if gravel_floor {
                     GRAVEL
-                } else if beach || biome == DESERT || (biome == ICE_FIELD && top < SEA - 1) {
+                } else if beach || biome == DESERT || (biome == ICE_FIELD && top < sea - 1) {
                     SAND
                 } else if biome == TUNDRA {
                     SNOW
                 } else if biome == MOUNTAINS {
-                    if top >= 49 + (hash(x, z, self.sd(5)) * 3.0) as i32 { SNOW } else { STONE }
+                    if top >= 49 + self.lift + (hash(x, z, self.sd(5)) * 3.0) as i32 { SNOW } else { STONE }
                 } else {
                     GRASS
                 }
             } else if depth < 4 {
                 if gravel_floor && depth < 2 {
                     GRAVEL
-                } else if beach || (biome == ICE_FIELD && top < SEA - 1 && depth < 2) {
+                } else if beach || (biome == ICE_FIELD && top < sea - 1 && depth < 2) {
                     SAND
                 } else if biome == DESERT {
                     if depth < 3 { SAND } else { SANDSTONE }
@@ -300,19 +357,21 @@ impl Generator {
             };
             out[y as usize] = b;
         }
-        for y in h..SEA {
-            out[y as usize] = if (biome == TUNDRA || biome == ICE_FIELD) && y == SEA - 1 { ICE } else { WATER };
+        for y in h..sea {
+            out[y as usize] = if (biome == TUNDRA || biome == ICE_FIELD) && y == sea - 1 { ICE } else { WATER };
         }
         if biome == ICE_FIELD && self.channel(x, z) < 0.035 {
             if noise(x as f64 / 5.0, z as f64 / 5.0, self.sd(155)) * 0.75 + hash(x, z, self.sd(156)) * 0.25 <= 0.66 {
-                out[(SEA - 1) as usize] = WATER;
+                out[(sea - 1) as usize] = WATER;
             }
         }
-        if (biome == ICE_FIELD || biome == TUNDRA) && top < SEA - 1 {
+        if (biome == ICE_FIELD || biome == TUNDRA) && top < sea - 1 {
             self.ice_field(x, z, top, out);
         }
         // cavernas
-        let can_open = top >= SEA + 3;
+        let can_open = top >= sea + 3;
+        let deep = self.lift > 0;
+        let lava_level = if deep { 10 } else { 5 };
         for y in 2..=top {
             let depth = top - y;
             if depth < 5 && !can_open {
@@ -325,10 +384,19 @@ impl Generator {
             let (fx, fy, fz) = (x as f64, y as f64, z as f64);
             let a = noise3(fx / 22.0, fy / 12.0, fz / 22.0, self.sd(20)) - 0.5;
             let cc = noise3(fx / 22.0, fy / 12.0, fz / 22.0, self.sd(21)) - 0.5;
-            let tunnel = a * a + cc * cc < 0.0028;
-            let room = y < 28 && noise3(fx / 34.0, fy / 16.0, fz / 34.0, self.sd(22)) > 0.8;
-            if tunnel || room {
-                out[y as usize] = if y <= 5 { LAVA } else { AIR };
+            let mut open = a * a + cc * cc < 0.0028;
+            open = open || (y < 28 + self.lift && noise3(fx / 34.0, fy / 16.0, fz / 34.0, self.sd(22)) > 0.8);
+            if !open && deep && y < sea - 20 {
+                // lá embaixo: salões grandes e uma segunda rede de túneis, que descem até a lava
+                open = noise3(fx / 52.0, fy / 24.0, fz / 52.0, self.sd(23)) > 0.785;
+                if !open {
+                    let d = noise3(fx / 30.0, fy / 18.0, fz / 30.0, self.sd(24)) - 0.5;
+                    let e = noise3(fx / 30.0, fy / 18.0, fz / 30.0, self.sd(25)) - 0.5;
+                    open = d * d + e * e < 0.0022;
+                }
+            }
+            if open {
+                out[y as usize] = if y <= lava_level { LAVA } else { AIR };
             }
         }
         (h, biome)
@@ -339,7 +407,9 @@ impl Generator {
         if hash3(x, y, z, self.sd(31)) < 0.6 {
             // como no Java: a chance só soma quando a altura passa no teste (o && para antes)
             let mut p = 0.0;
-            for (max_y, chance, ore) in [(14, 0.0018, CRYSTAL_ORE), (24, 0.0035, GOLD_ORE), (42, 0.010, IRON_ORE), (56, 0.016, COAL_ORE)] {
+            // até que altura cada minério aparece: nos mundos fundos, espalhados pela profundidade nova
+            let heights = if self.lift > 0 { [24, 48, 96, 124] } else { [14, 24, 42, 56] };
+            for (max_y, chance, ore) in [(heights[0], 0.0018, CRYSTAL_ORE), (heights[1], 0.0035, GOLD_ORE), (heights[2], 0.010, IRON_ORE), (heights[3], 0.016, COAL_ORE)] {
                 if y <= max_y {
                     p += chance;
                     if cluster < p {
@@ -365,14 +435,15 @@ impl Generator {
 
     fn ice_field(&self, x: i32, z: i32, top: i32, out: &mut [u8]) {
         let (fx, fz) = (x as f64, z as f64);
+        let sea = self.sea();
         let t = self.temperature(x, z);
         let cold = ((0.43 - t) / 0.02).clamp(0.0, 1.0);
-        let mut deep = ((SEA - 1 - top) as f64 / 8.0).clamp(0.0, 1.0);
+        let mut deep = ((sea - 1 - top) as f64 / 8.0).clamp(0.0, 1.0);
         deep = deep * deep * (3.0 - 2.0 * deep);
         let rise = (2.5 + fbm(fx / 30.0, fz / 30.0, 3, self.sd(163)) * 4.5) * cold * deep;
         let r = rise + (noise(fx / 4.0, fz / 4.0, self.sd(164)) - 0.5) * 0.6 * cold * deep;
-        let top_y = SEA - 1 + (r + 0.5).floor() as i32; // Math.round do Java
-        if top_y <= SEA - 1 {
+        let top_y = sea - 1 + (r + 0.5).floor() as i32; // Math.round do Java
+        if top_y <= sea - 1 {
             return;
         }
         let c = self.channel(x, z);
@@ -381,25 +452,25 @@ impl Generator {
         if carve && c < W {
             return;
         }
-        let undercut = carve && top_y >= SEA + 2 && c < W + 0.012;
+        let undercut = carve && top_y >= sea + 2 && c < W + 0.012;
         let streak = noise(fx / 2.5, fz / 2.5, self.sd(165)) > 0.68;
-        for y in (top + 1).max(SEA - 3)..=top_y {
-            if undercut && y == SEA {
+        for y in (top + 1).max(sea - 3)..=top_y {
+            if undercut && y == sea {
                 continue;
             }
             let b = if y == top_y {
                 SNOW
             } else if y == top_y - 1 && hash(x, z, self.sd(166)) < 0.6 {
                 SNOW
-            } else if y <= SEA || streak {
+            } else if y <= sea || streak {
                 BLUE_ICE
             } else {
                 PACKED_ICE
             };
             out[y as usize] = b;
         }
-        if undercut && out[(SEA + 1) as usize] != AIR && hash3(x, SEA, z, self.sd(167)) < 0.55 {
-            out[SEA as usize] = ICICLE;
+        if undercut && out[(sea + 1) as usize] != AIR && hash3(x, sea, z, self.sd(167)) < 0.55 {
+            out[sea as usize] = ICICLE;
         }
     }
 
@@ -415,7 +486,7 @@ impl Generator {
         for dx in -4..=4 {
             for dz in -4..=6 {
                 let h = self.height_at(x + dx, z + dz);
-                if h - 1 <= SEA + 1 || h + 6 >= SY {
+                if h - 1 <= self.sea() + 1 || h + 6 >= self.build_top() {
                     return None;
                 }
                 if self.biome_at(x + dx, z + dz, h - 1) != TUNDRA {
@@ -574,7 +645,7 @@ impl Generator {
                     col = &tmp;
                 }
                 let top = h - 1;
-                if top + 6 >= SY || col[(top + 1) as usize] != AIR {
+                if top + 6 >= self.build_top() || col[(top + 1) as usize] != AIR {
                     continue;
                 }
                 let b = col[top as usize];
@@ -642,6 +713,64 @@ impl Generator {
         }
         if y - 1 >= 0 && c.blocks[idx(tx, y - 1, tz)] == GRASS {
             c.blocks[idx(tx, y - 1, tz)] = DIRT;
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mundo_fundo_tem_cavernas_ate_la_embaixo() {
+        let flat = Generator { seed: 12345, biome_scale: 2.0, lift: 0 };
+        let deep = Generator { seed: 12345, biome_scale: 2.0, lift: DEEP };
+        assert_eq!(deep.height_at(37, -80), flat.height_at(37, -80) + DEEP);
+        let mut air = [0usize; 8]; // por faixa de 10 blocos de altura
+        let (mut lava_top, mut crystal_top, mut iron_top, mut cells) = (0, 0, 0, 0usize);
+        for cx in -8..8 {
+            for cz in -8..8 {
+                let c = deep.generate(cx, cz);
+                for (i, &b) in c.blocks.iter().enumerate() {
+                    let y = coords(i).1;
+                    if (2..82).contains(&y) {
+                        if b == AIR {
+                            air[(y as usize - 2) / 10] += 1;
+                        }
+                        cells += 1;
+                    }
+                    match b {
+                        LAVA => lava_top = lava_top.max(y),
+                        CRYSTAL_ORE => crystal_top = crystal_top.max(y),
+                        IRON_ORE => iron_top = iron_top.max(y),
+                        _ => {}
+                    }
+                }
+            }
+        }
+        let share: Vec<f64> = air.iter().map(|&a| a as f64 / (cells as f64 / 8.0) * 100.0).collect();
+        println!("% de ar por faixa de 10 blocos, de baixo para cima: {share:.1?}");
+        assert!(share[1..6].iter().all(|&s| s > 3.0 && s < 35.0), "{share:?}");
+        assert!(lava_top <= 10 && crystal_top <= 24 && iron_top > 80 && iron_top <= 96, "{lava_top} {crystal_top} {iron_top}");
+    }
+
+    #[test]
+    fn pedaco_grava_no_formato_do_java_quando_cabe() {
+        for (lift, version) in [(0, 1u8), (DEEP, 2u8)] {
+            let g = Generator { seed: 7, biome_scale: 2.0, lift };
+            let mut c = g.generate(3, -2);
+            c.rot.insert(idx(15, 40, 9) as u16, 2);
+            let bytes = c.to_bytes();
+            let mut raw = Vec::new();
+            std::io::Read::read_to_end(&mut flate2::read::GzDecoder::new(&bytes[..]), &mut raw).unwrap();
+            assert_eq!(raw[0], version);
+            if version == 1 {
+                assert_eq!(raw.len(), 5 + 3 + CLASSIC_VOLUME);
+                // posição no arquivo igual à do Chunk.idx do Java
+                assert_eq!(u16::from_be_bytes([raw[5], raw[6]]), (15 << 10 | 9 << 6 | 40) as u16);
+            }
+            let back = Chunk::from_bytes(3, -2, &bytes).unwrap();
+            assert!(back.blocks == c.blocks && back.rot == c.rot);
         }
     }
 }

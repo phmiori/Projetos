@@ -195,6 +195,8 @@ pub struct Mob {
     pub bred: bool,
     /// tempo encostado no par
     pub mating: f64,
+    /// lobo que estava sentado e levantou para namorar: senta de novo depois
+    pub sit_after: bool,
     /// aonde ir (par, comida na mão do jogador ou um adulto) e até que distância chegar
     pub goal: Option<([f64; 3], f64)>,
     /// filhote, apaixonado ou atrás de comida: não ataca nem foge do jogador
@@ -262,6 +264,7 @@ impl Mob {
             rest: 0.0,
             bred: false,
             mating: 0.0,
+            sit_after: false,
             goal: None,
             calm: false,
         }
@@ -777,6 +780,7 @@ impl Mob {
         self.hurt = 0.35;
         // apanhar acaba com o namoro e com a calma
         self.love = 0.0;
+        self.sit_after = false;
         self.calm = false;
         self.goal = None;
         if self.fighter() {

@@ -32,7 +32,7 @@ impl Game {
     /// Troca um bloco: refaz a luz da coluna, marca o pedaço para gravar e para redesenhar (e os vizinhos,
     /// se for na borda), e faz o que o Java faz em volta (plantas e tochas sem apoio caem, areia cai).
     pub fn set(&mut self, x: i32, y: i32, z: i32, b: u8, rot: u8) {
-        if !(0..SY).contains(&y) {
+        if !(0..self.gen.build_top()).contains(&y) {
             return;
         }
         let k = (x >> 4, z >> 4);
@@ -127,7 +127,7 @@ impl Game {
     }
 
     fn replaceable(&self, x: i32, y: i32, z: i32) -> bool {
-        if !(0..SY).contains(&y) || !self.loaded(x, z) {
+        if !(0..self.gen.build_top()).contains(&y) || !self.loaded(x, z) {
             return false;
         }
         let b = self.get(x, y, z);

@@ -256,11 +256,13 @@ impl Game {
         if self.grow_timer < 0.05 {
             return;
         }
-        let n = (self.grow_timer * 8000.0).min(2000.0) as i32;
+        // mais sorteios nos mundos mais altos, para as plantas crescerem no mesmo ritmo
+        let tall = self.gen.build_top() as f64 / crate::world::CLASSIC_SY as f64;
+        let n = (self.grow_timer * 8000.0 * tall).min(2000.0 * tall) as i32;
         self.grow_timer = 0.0;
         let (cx, cz) = (self.player.x.floor() as i32, self.player.z.floor() as i32);
         for _ in 0..n {
-            let (x, z, y) = (cx - 48 + self.int(96), cz - 48 + self.int(96), self.int(SY));
+            let (x, z, y) = (cx - 48 + self.int(96), cz - 48 + self.int(96), self.int(self.gen.build_top()));
             if !self.chunks.contains_key(&(x >> 4, z >> 4)) {
                 continue;
             }
@@ -329,7 +331,7 @@ impl Game {
     fn grow_tree(&mut self, x: i32, y: i32, z: i32, birch: bool) {
         let (log, leaf) = if birch { (block::BIRCH_LOG, block::BIRCH_LEAVES) } else { (block::LOG, block::LEAVES) };
         let h = if birch { 5 } else { 4 } + self.int(3);
-        if y + h + 2 >= SY {
+        if y + h + 2 >= self.gen.build_top() {
             return;
         }
         for i in 1..=h {

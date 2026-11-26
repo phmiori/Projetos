@@ -365,6 +365,7 @@ pub struct Welcome {
     pub spawn: [f64; 3],
     pub state: String,
     pub biome_scale: f64,
+    pub lift: i32,
     pub chunks: HashMap<(i32, i32), Vec<u8>>,
 }
 
@@ -379,7 +380,8 @@ pub fn connect(ip: &str, name: &str, persona: [usize; 4]) -> Result<(Net, Welcom
     let _ = s.set_read_timeout(Some(std::time::Duration::from_secs(60)));
     let conn = Conn::new(s.try_clone().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     let p = persona.map(|v| v as i32);
-    conn.send(&Out::new(HELLO).i(VERSION).s(name).i(p[0]).i(p[1]).i(p[2]).i(p[3]));
+    // o último número (que o Java ignora) diz até que profundidade de mundo este jogo entende
+    conn.send(&Out::new(HELLO).i(VERSION).s(name).i(p[0]).i(p[1]).i(p[2]).i(p[3]).i(crate::world::DEEP));
     conn.flush();
     let mut r = BufReader::new(s.try_clone().map_err(|e| e.to_string())?);
     let (t, d) = read_packet(&mut r).map_err(|e| format!("conexão interrompida: {e}"))?;
@@ -397,6 +399,7 @@ pub fn connect(ip: &str, name: &str, persona: [usize; 4]) -> Result<(Net, Welcom
     let state = d.s();
     let biome_scale = d.dbl();
     let raw = d.raw();
+    let lift = d.i().clamp(0, crate::world::DEEP); // só vem nos mundos fundos
     let mut chunks = HashMap::new();
     let mut m = In::new(&raw);
     for _ in 0..m.i() {
@@ -421,7 +424,7 @@ pub fn connect(ip: &str, name: &str, persona: [usize; 4]) -> Result<(Net, Welcom
         })
         .ok();
     let net = Net::new(Role::Client(conn), rx, my_id);
-    Ok((net, Welcome { name: format!("LAN: {w_name}"), seed, creative, time, day, spawn, state, biome_scale, chunks }))
+    Ok((net, Welcome { name: format!("LAN: {w_name}"), seed, creative, time, day, spawn, state, biome_scale, lift, chunks }))
 }
 
 impl Net {
@@ -622,7 +625,7 @@ impl Game {
 
     /// Mudança vinda da rede: aplica (ou guarda até o pedaço carregar).
     fn remote_set(&mut self, x: i32, y: i32, z: i32, b: u8, rot: u8) {
-        if !(0..crate::world::SY).contains(&y) || b as usize >= block::count() {
+        if !(0..self.gen.build_top()).contains(&y) || b as usize >= block::count() {
             return;
         }
         let k = (x >> 4, z >> 4);
@@ -1028,7 +1031,14 @@ impl Game {
                 let version = d.i();
                 let name = d.s();
                 let p = persona_from([d.i(), d.i(), d.i(), d.i()]);
+                let deep = d.i();
+                let lift = self.gen.lift;
                 let n = self.net.as_mut().unwrap();
+                if version == VERSION && deep < lift {
+                    n.send_to(conn, Out::new(BYE).s("Este mundo tem cavernas profundas e só abre na versão nova do jogo (não no Java)."));
+                    n.flush();
+                    return;
+                }
                 if version != VERSION {
                     n.send_to(conn, Out::new(BYE).s("Versões diferentes do jogo: atualize os dois para a mesma versão."));
                     n.flush();
@@ -1059,6 +1069,9 @@ impl Game {
                     .s(&saved)
                     .dbl(self.gen.biome_scale);
                 o = o.raw(&modified);
+                if self.gen.lift > 0 {
+                    o = o.i(self.gen.lift);
+                }
                 let me = (self.player_name.clone(), self.persona);
                 let drops: Vec<Out> = self.drops.iter().map(drop_packet).collect();
                 let arrows: Vec<(Out, Option<Out>)> = self.arrows.iter().map(|a| (arrow_packet(a, false), if a.stuck { Some(stuck_packet(a)) } else { None })).collect();

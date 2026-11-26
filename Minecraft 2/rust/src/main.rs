@@ -67,7 +67,7 @@ use winit::event::{DeviceEvent, ElementState, Event, MouseButton, MouseScrollDel
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{CursorGrabMode, WindowBuilder};
-use world::{Chunk, Generator, SEA};
+use world::{Chunk, Generator};
 use inventory::{Inventory, Stack};
 
 /// Qual tela está aberta.
@@ -571,7 +571,10 @@ impl Game {
                     let flowing: Vec<(i32, i32, i32)> = if c.from_store {
                         (0..world::VOLUME)
                             .filter(|&i| block::water_level(c.blocks[i]) > 0)
-                            .map(|i| (k.0 * 16 + (i >> 10) as i32, (i & 63) as i32, k.1 * 16 + ((i >> 6) & 15) as i32))
+                            .map(|i| {
+                                let (lx, y, lz) = world::coords(i);
+                                (k.0 * 16 + lx, y, k.1 * 16 + lz)
+                            })
                             .collect()
                     } else {
                         Vec::new()
@@ -955,9 +958,9 @@ impl Game {
         let uchunk = g.u(g.block, "uChunk");
         // descarta pedaços fora da visão: atrás da câmera ou longe demais
         let visible = |k: &(i32, i32)| {
-            let c = [k.0 as f32 * 16.0 + 8.0 - eye[0], 32.0 - eye[1], k.1 as f32 * 16.0 + 8.0 - eye[2]];
+            let c = [k.0 as f32 * 16.0 + 8.0 - eye[0], 64.0 - eye[1], k.1 as f32 * 16.0 + 8.0 - eye[2]];
             let d2 = c[0] * c[0] + c[2] * c[2];
-            dot(c, f) > -40.0 && d2 < (view_dist + 24.0) * (view_dist + 24.0)
+            dot(c, f) > -70.0 && d2 < (view_dist + 24.0) * (view_dist + 24.0)
         };
         for (k, m) in &self.meshes {
             if m.quads == 0 || !visible(k) {
@@ -1172,23 +1175,24 @@ fn compare(path: &str) -> ! {
     let seed = i32::from_be_bytes(data[0..4].try_into().unwrap());
     let scale = f64::from_be_bytes(data[4..12].try_into().unwrap());
     let n = i32::from_be_bytes(data[12..16].try_into().unwrap());
-    let gen = Generator { seed, biome_scale: scale };
+    let gen = Generator { seed, biome_scale: scale, lift: 0 }; // o Java só tem o mundo clássico
     let mut p = 16;
     let (mut diff_chunks, mut diff_blocks) = (0, 0);
     for _ in 0..n {
         let cx = i32::from_be_bytes(data[p..p + 4].try_into().unwrap());
         let cz = i32::from_be_bytes(data[p + 4..p + 8].try_into().unwrap());
         p += 8;
-        let java = &data[p..p + world::VOLUME];
-        p += world::VOLUME;
+        let java = &data[p..p + world::CLASSIC_VOLUME];
+        p += world::CLASSIC_VOLUME;
         let c = gen.generate(cx, cz);
-        let d = c.blocks.iter().zip(java).filter(|(a, b)| a != b).count();
+        let blocks: Vec<u8> = c.blocks.chunks(world::SY as usize).flat_map(|col| col[..world::CLASSIC_SY as usize].iter().copied()).collect();
+        let d = blocks.iter().zip(java).filter(|(a, b)| a != b).count();
         if d > 0 {
             diff_chunks += 1;
             diff_blocks += d;
             if diff_chunks <= 5 {
-                let i = c.blocks.iter().zip(java).position(|(a, b)| a != b).unwrap();
-                println!("pedaço {cx},{cz}: {d} blocos diferentes (primeiro: índice {i}, rust {} java {})", c.blocks[i], java[i]);
+                let i = blocks.iter().zip(java).position(|(a, b)| a != b).unwrap();
+                println!("pedaço {cx},{cz}: {d} blocos diferentes (primeiro: índice {i}, rust {} java {})", blocks[i], java[i]);
             }
         }
     }
@@ -1208,7 +1212,7 @@ fn load_game(info: Option<save::WorldInfo>, seed_arg: Option<i32>, settings: sav
     let spawn: [f64; 3];
     let (gen, save_dir, name, creative, time, day) = match (&info, seed_arg) {
         (Some(w), None) => {
-            let gen = Generator { seed: w.seed, biome_scale: w.biome_scale };
+            let gen = Generator { seed: w.seed, biome_scale: w.biome_scale, lift: w.lift };
             match w.player {
                 Some(p) => {
                     (player.x, player.y, player.z, player.yaw, player.pitch) = (p[0], p[1], p[2], p[3], p[4]);
@@ -1230,8 +1234,8 @@ fn load_game(info: Option<save::WorldInfo>, seed_arg: Option<i32>, settings: sav
             (gen, Some(w.dir.clone()), w.name.clone(), w.creative, w.time, w.day)
         }
         _ => {
-            let gen = Generator { seed: seed_arg.unwrap_or(2024), biome_scale: 2.0 };
-            (player.x, player.y, player.z) = (0.5, gen.height_at(0, 0).max(SEA) as f64 + 1.0, 0.5);
+            let gen = Generator { seed: seed_arg.unwrap_or(2024), biome_scale: 2.0, lift: world::DEEP };
+            (player.x, player.y, player.z) = (0.5, gen.height_at(0, 0).max(gen.sea()) as f64 + 1.0, 0.5);
             let name = format!("semente {}", gen.seed);
             spawn = [player.x, player.y, player.z];
             (gen, None, name, true, DAY_LENGTH * 0.3, 1)
@@ -1256,7 +1260,7 @@ fn load_game(info: Option<save::WorldInfo>, seed_arg: Option<i32>, settings: sav
 
 /// Entra no mundo de um anfitrião da LAN: o terreno sai da semente, mais os pedaços que ele mandou.
 fn load_lan_game(n: net::Net, w: net::Welcome, settings: save::Settings, name: String, persona: [usize; 4]) -> Game {
-    let gen = Generator { seed: w.seed, biome_scale: w.biome_scale };
+    let gen = Generator { seed: w.seed, biome_scale: w.biome_scale, lift: w.lift };
     let mut player = Player::new();
     (player.x, player.y, player.z) = (w.spawn[0], w.spawn[1], w.spawn[2]);
     let mut inv = Inventory::default();
@@ -1737,7 +1741,7 @@ fn main() {
                         for t in 0..mob::TYPES {
                             let (row, col) = ((t / 14) as f64, (t % 14) as f64 - 6.5);
                             let (x, z) = (game.player.x + fx * (7.0 + row * 4.0) + rx * col * 2.2, game.player.z + fz * (7.0 + row * 4.0) + rz * col * 2.2);
-                            let mut y = world::SY - 1;
+                            let mut y = game.gen.build_top() - 1;
                             while y > 0 && !block::solid(game.get(x.floor() as i32, y, z.floor() as i32)) {
                                 y -= 1;
                             }

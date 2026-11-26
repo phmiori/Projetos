@@ -134,13 +134,14 @@ pub fn create_world(name: &str, seed_text: &str, creative: bool, char_name: &str
     let now = now_ms();
     let char_name = if char_name.trim().is_empty() { "Explorador" } else { char_name.trim() };
     let text = format!(
-        "#Mundo de Blocos\nnome={}\nsemente={seed}\ntamanhoBiomas={}\nmodo={}\ncriado={now}\nultimoJogo={now}\npersonagem.nome={}\nhora={}\ndiaDuracao={}\ndia=1\n",
+        "#Mundo de Blocos\nnome={}\nsemente={seed}\ntamanhoBiomas={}\nmodo={}\ncriado={now}\nultimoJogo={now}\npersonagem.nome={}\nhora={}\ndiaDuracao={}\ndia=1\nalturaExtra={}\n",
         escape(name),
         2.0,
         if creative { "criativo" } else { "sobrevivencia" },
         escape(char_name),
         save::DAY_LENGTH * 0.3, // começa de manhã, como no Java
         save::DAY_LENGTH,
+        crate::world::DEEP, // cavernas fundas (o jogo Java não abre estes mundos)
     );
     std::fs::write(dir.join("meta.properties"), text)?;
     Ok(dir)

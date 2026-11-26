@@ -66,6 +66,9 @@ impl Mob {
             self.baby = (self.baby - GROW_TIME * 0.1).max(0.01);
         } else {
             self.love = LOVE_TIME;
+            if self.sitting {
+                (self.sitting, self.sit_after) = (false, true); // levanta para ir até o par
+            }
             self.angry = 0.0;
             self.flee = 0.0;
             self.target = None;
@@ -87,6 +90,9 @@ impl Mob {
         self.rest = (self.rest - dt).max(0.0);
         if self.love <= 0.0 {
             self.mating = 0.0;
+            if self.sit_after {
+                (self.sitting, self.sit_after) = (true, false);
+            }
         }
         if self.baby > 0.0 {
             self.baby -= dt;

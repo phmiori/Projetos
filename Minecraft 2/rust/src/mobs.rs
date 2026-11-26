@@ -8,7 +8,7 @@ use crate::block::{self, LAVA};
 use crate::inventory::Stack;
 use crate::mob::{self, Mob, Sight};
 use crate::physics::Blocks;
-use crate::world::{SEA, SY};
+use crate::world::SY;
 use crate::{Game, Loaded};
 
 pub const SPAWN_EGG: i32 = 265;
@@ -103,7 +103,7 @@ impl Game {
             .iter()
             .filter(|m| m.t == mob::WOLF && m.tamed && m.health > 0.0)
             .map(|m| {
-                let mut state = (m.sitting as i32).to_string();
+                let mut state = ((m.sitting || m.sit_after) as i32).to_string();
                 if m.is_baby() || m.rest > 0.0 {
                     state += &format!(",{},{}", m.baby.ceil(), m.rest.ceil());
                 }
@@ -311,6 +311,7 @@ impl Game {
             }
             i += 1;
         }
+        separate(&mut mobs, dt, &Loaded(&self.chunks));
         // nascimentos
         for (t, at, parent) in mate(&mut mobs, dt) {
             let id = self.next_mob_id();
@@ -408,7 +409,7 @@ impl Game {
             if b == block::AIR || block::shape(b) == block::CROSS {
                 continue;
             }
-            return if (b == block::GRASS || b == block::SNOW || b == block::SAND) && y >= SEA { y } else { -1 };
+            return if (b == block::GRASS || b == block::SNOW || b == block::SAND) && y >= self.gen.sea() { y } else { -1 };
         }
         -1
     }
@@ -430,7 +431,7 @@ impl Game {
         if ground != block::GRASS && !(ground == block::SNOW && biome == TUNDRA) && !desert {
             return;
         }
-        let berg = biome == TUNDRA && self.gen.height_at(x, z) < SEA;
+        let berg = biome == TUNDRA && self.gen.height_at(x, z) < self.gen.sea();
         use mob::*;
         let pool: &[usize] = if desert {
             &[SCORPION, SCORPION, SCORPION, RABBIT, EMPEROR]
@@ -479,7 +480,7 @@ impl Game {
             if !self.loaded_at(x as f64, z as f64) {
                 continue;
             }
-            for y in (3..SEA).rev() {
+            for y in (3..self.gen.sea()).rev() {
                 if !block::is_water(self.get(x, y, z)) {
                     continue;
                 }
@@ -532,7 +533,7 @@ impl Game {
             return;
         }
         let top = self.gen.height_at(x, z);
-        if self.gen.biome_at(x, z, top - 1) == crate::world::DESERT || top < SEA {
+        if self.gen.biome_at(x, z, top - 1) == crate::world::DESERT || top < self.gen.sea() {
             return;
         }
         let n = 2 + self.int(3);
@@ -545,6 +546,10 @@ impl Game {
         }
     }
 
+    fn spawn_height(&self) -> i32 {
+        self.player.y.floor() as i32
+    }
+
     /// Monstros: num lugar escuro com chão firme e duas células livres.
     fn spawn_hostile(&mut self, daylight: f64) {
         for _ in 0..4 {
@@ -552,7 +557,11 @@ impl Game {
             if !self.loaded_at(x as f64, z as f64) {
                 continue;
             }
-            let mut y = 2 + self.int(SY - 4);
+            let mut y = 2 + self.int(self.gen.build_top() - 4);
+            if self.gen.lift > 0 && self.int(2) == 0 {
+                // nos mundos fundos, metade nasce perto da altura do jogador (senão quase todos iriam lá para o fundo)
+                y = (self.spawn_height() - 12 + self.int(28)).clamp(2, self.gen.build_top() - 3);
+            }
             let mut k = 0;
             while k < 12 && y > 1 {
                 let ok = block::solid(self.get(x, y - 1, z)) && !block::solid(self.get(x, y, z)) && !block::solid(self.get(x, y + 1, z));
@@ -1020,6 +1029,10 @@ impl Game {
         } else {
             m.sitting = !m.sitting;
             m.target = None;
+            m.sit_after = false;
+            if m.sitting {
+                m.love = 0.0; // mandou sentar: desiste do par
+            }
             if m.sitting { "Lobo: senta!" } else { "Lobo: vem comigo!" }.to_string()
         };
         Some(msg)
@@ -1104,6 +1117,47 @@ fn choose_wolf_target(mobs: &mut [Mob], i: usize, owner: [f64; 3]) {
         }
     }
     mobs[i].target = best;
+}
+
+/// Colisão entre as criaturas: quem se sobrepõe é afastado (o mais pesado cede menos), sem entrar nos blocos.
+fn separate<W: Blocks>(mobs: &mut [Mob], dt: f64, w: &W) {
+    const PUSH: f64 = 6.0; // blocos por segundo: mais rápido que qualquer criatura andando
+    for i in 0..mobs.len() {
+        for j in i + 1..mobs.len() {
+            let (a, b) = (&mobs[i].body, &mobs[j].body);
+            let reach = a.hw + b.hw;
+            let (dx, dz) = (b.x - a.x, b.z - a.z);
+            let d2 = dx * dx + dz * dz;
+            // um em cima do outro (sem se tocar na altura) não conta
+            if d2 >= reach * reach || a.y >= b.y + b.h || b.y >= a.y + a.h {
+                continue;
+            }
+            let d = d2.sqrt();
+            let (ux, uz) = if d > 1e-4 {
+                (dx / d, dz / d)
+            } else {
+                // exatamente no mesmo lugar: cada par sai para um lado
+                let a = (mobs[i].id * 7 + mobs[j].id) as f64;
+                (a.sin(), a.cos())
+            };
+            let amount = (reach - d).min(PUSH * dt);
+            let (ma, mb) = (a.hw * a.hw * a.h, b.hw * b.hw * b.h);
+            for (k, share) in [(i, -mb / (ma + mb)), (j, ma / (ma + mb))] {
+                let body = &mut mobs[k].body;
+                // um eixo de cada vez, para escorregar na parede
+                let old = body.x;
+                body.x += ux * amount * share;
+                if body.collides(w) {
+                    body.x = old;
+                }
+                let old = body.z;
+                body.z += uz * amount * share;
+                if body.collides(w) {
+                    body.z = old;
+                }
+            }
+        }
+    }
 }
 
 /// Urso-polar caça tudo o que vê pela frente (de até 16 blocos); os bichos por perto fogem dele.
@@ -1224,6 +1278,49 @@ mod tests {
         }
         assert!(bites == 1, "o urso não chegou a morder a foca");
         assert!(mobs[0].body.x > 1.0 && mobs[0].body.z > 1.0);
+    }
+
+    #[test]
+    fn criaturas_nao_se_atravessam() {
+        let mut r = Rng::new();
+        let mut v = vec![Mob::new(mob::COW, 0.0, 0.0, 0.0, 1, &mut r), Mob::new(mob::COW, 0.0, 0.0, 0.0, 2, &mut r), Mob::new(mob::CHICKEN, 5.0, 0.0, 0.0, 3, &mut r), Mob::new(mob::MUSKOX, 5.1, 0.0, 0.0, 4, &mut r)];
+        for _ in 0..120 {
+            separate(&mut v, 1.0 / 60.0, &Flat);
+        }
+        let dist = |a: &Mob, b: &Mob| ((a.body.x - b.body.x).powi(2) + (a.body.z - b.body.z).powi(2)).sqrt();
+        assert!(dist(&v[0], &v[1]) > v[0].body.hw * 2.0 - 0.01);
+        assert!(dist(&v[2], &v[3]) > v[2].body.hw + v[3].body.hw - 0.01);
+        assert!((v[3].body.x - 5.1).abs() < (v[2].body.x - 5.0).abs() / 5.0, "o boi pesado quase não sai do lugar");
+        // um por cima do outro não se empurra
+        let mut v = vec![Mob::new(mob::COW, 0.0, 0.0, 0.0, 1, &mut r), Mob::new(mob::BIRD, 0.1, 3.0, 0.0, 2, &mut r)];
+        separate(&mut v, 1.0, &Flat);
+        assert!(v[0].body.x == 0.0 && v[1].body.x == 0.1);
+    }
+
+    #[test]
+    fn lobos_sentados_levantam_acasalam_e_sentam_de_novo() {
+        let mut r = Rng::new();
+        let mut mobs = vec![Mob::new(mob::WOLF, 0.0, 0.0, 0.0, 1, &mut r), Mob::new(mob::WOLF, 6.0, 0.0, 0.0, 2, &mut r)];
+        for m in mobs.iter_mut() {
+            (m.tamed, m.sitting) = (true, true);
+            m.feed();
+            assert!(!m.sitting, "devia levantar");
+        }
+        let (w, dt) = (Flat, 1.0 / 60.0);
+        let owner = [3.0, 0.0, 3.0];
+        let mut births = 0;
+        for _ in 0..900 {
+            for i in 0..2 {
+                mobs[i].tick_breeding(dt, &w);
+                choose_goal(&mut mobs, i, &[]);
+                let sight = Sight { w: &w, p: owner, can_target: true, owner: Some(owner), target: None, line_of_sight: false };
+                mobs[i].update(dt, &sight, &mut r);
+            }
+            separate(&mut mobs, dt, &w);
+            births += mate(&mut mobs, dt).len();
+        }
+        assert_eq!(births, 1);
+        assert!(mobs.iter().all(|m| m.sitting && !m.sit_after), "depois do filhote voltam a sentar");
     }
 
     #[test]

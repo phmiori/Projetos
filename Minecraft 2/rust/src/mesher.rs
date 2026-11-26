@@ -123,7 +123,7 @@ fn l(layer: i32) -> u32 {
 }
 #[inline]
 fn pos(x: i32, y: i32, z: i32) -> u32 {
-    ((x + POS_BIAS) | (y << 9) | ((z + POS_BIAS) << 20)) as u32
+    ((x + POS_BIAS) | (y << 9) | ((z + POS_BIAS) << 21)) as u32
 }
 #[inline]
 fn uv(u: i32, v: i32, face: i32, occ: i32, corner: i32) -> u32 {

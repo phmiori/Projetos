@@ -58,7 +58,7 @@ out vec2 vUV; flat out float vLayer; out float vAO; flat out vec3 vN; out vec3 v
 out float vSky; out float vBlk; flat out int vFlags;
 const vec3 NORMALS[8] = vec3[8](vec3(1,0,0),vec3(-1,0,0),vec3(0,1,0),vec3(0,-1,0),vec3(0,0,1),vec3(0,0,-1),vec3(0,1,0),vec3(0,1,0));
 void main(){
-  vec3 p = vec3(float(aA & 511u), float((aA>>9u)&2047u), float((aA>>20u)&511u)) / 16.0 - vec3(4.0, 0.0, 4.0) + uChunk;
+  vec3 p = vec3(float(aA & 511u), float((aA>>9u)&4095u), float((aA>>21u)&511u)) / 16.0 - vec3(4.0, 0.0, 4.0) + uChunk;
   uint f = (aC>>10u)&7u; uint occ = (aC>>13u)&3u; uint corner = (aC>>15u)&3u;
   vN = NORMALS[f]; vAO = 1.0 - float(occ)*0.19; vLayer = float((aB & 1023u) | ((aB >> 26u) & 1u) << 10u);
   vSky = float((aB>>10u)&15u)/15.0; vBlk = float((aB>>14u)&15u)/15.0; vFlags = int((aB>>18u)&15u);
@@ -190,7 +190,7 @@ layout(location=2) in uint aC;
 uniform mat4 uLightVP; uniform vec3 uChunk;
 out vec2 vUV; flat out float vLayer;
 void main(){
-  vec3 p = vec3(float(aA & 511u), float((aA>>9u)&2047u), float((aA>>20u)&511u)) / 16.0 - vec3(4.0, 0.0, 4.0) + uChunk;
+  vec3 p = vec3(float(aA & 511u), float((aA>>9u)&4095u), float((aA>>21u)&511u)) / 16.0 - vec3(4.0, 0.0, 4.0) + uChunk;
   vLayer = float((aB & 1023u) | ((aB >> 26u) & 1u) << 10u); vec2 uv = vec2(float(aC & 31u), float((aC>>5u)&31u)) / 16.0; vUV = vec2(uv.x, 1.0-uv.y);
   gl_Position = uLightVP * vec4(p, 1.0); }
 "#;
