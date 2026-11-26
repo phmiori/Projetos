@@ -9,14 +9,21 @@
 //! Teclas: WASD anda, Espaço pula (dois toques: voa, no criativo), Shift desce voando, Ctrl corre,
 //! botão esquerdo quebra, direito coloca (ou abre porta), do meio pega o bloco, 1-9 e a rodinha escolhem o bloco,
 //! Esc solta o mouse (clique para prender de novo), F2 foto (pasta fotos/), F3 sombra dos cantos,
-//! F4 (segurando) passa as horas depressa.
+//! F4 (segurando) passa as horas depressa, F6 (criativo) troca o clima.
 //!
 //! Uso: mundo-de-blocos [--mundo pasta] [--semente N] [--posicao x y z yaw pitch] [--hora 0..1] [--comparar arquivo]
 
 mod amigo_teste;
 mod block;
+mod book;
 mod breeding;
 mod chat;
+mod combat;
+mod commands;
+mod explore;
+mod farm;
+mod village;
+mod weather;
 mod containers;
 mod edit;
 mod fluid;
@@ -76,6 +83,8 @@ pub enum Screen {
     /// menu inicial (lista de mundos) e a tela de criar mundo
     Menu,
     Create,
+    /// trocas com um aldeão
+    Trade,
     /// entrar no mundo de alguém pela LAN
     Join,
     /// configurações (abertas da pausa ou do menu)
@@ -276,6 +285,8 @@ struct Game {
     at_table: bool,
     palette: Vec<i32>,
     palette_scroll: usize,
+    /// livro de receitas
+    book: book::Book,
     mouse: (f32, f32),
     /// pausa: mostrando a aba de controles
     controls_open: bool,
@@ -339,6 +350,8 @@ struct Game {
     chat: chat::Chat,
     primed: Vec<(i32, i32, i32, f64, bool)>,
     grow_timer: f64,
+    /// experiência, vilas, barcos, pesca e clima
+    ex: combat::Extras,
     l_held: bool,
     r_held: bool,
     l_pending: bool,
@@ -372,6 +385,8 @@ struct Game {
     fps_time: Instant,
     fps: u32,
     screenshot: bool,
+    /// pasta do mundo que precisa de uma miniatura nova (tirada no próximo quadro com o mundo pronto)
+    thumb_dir: Option<PathBuf>,
 }
 
 impl Game {
@@ -429,8 +444,10 @@ impl Game {
             cursor: Stack::default(),
             craft: [Stack::default(); 9],
             at_table: false,
+            ex: combat::Extras::default(),
             palette: items::palette(),
             palette_scroll: 0,
+            book: book::Book::default(),
             mouse: (0.0, 0.0),
             controls_open: false,
             drops: Vec::new(),
@@ -516,6 +533,7 @@ impl Game {
             fps_time: now,
             fps: 0,
             screenshot: false,
+            thumb_dir: None,
         }
     }
 
@@ -724,13 +742,19 @@ impl Game {
             right: self.key(KeyCode::KeyD),
             jump: self.key(KeyCode::Space),
             sneak: self.key(KeyCode::ShiftLeft) || self.key(KeyCode::ShiftRight),
-            sprint: self.key(KeyCode::ControlLeft),
+            sprint: self.key(KeyCode::ControlLeft) && !self.blocking(),
         } };
+        // no barco, as teclas remam e o Shift desembarca
+        let rowing = self.ex.riding.is_some();
+        let (row, turn) = (input.fwd as i32 - input.back as i32, input.left as i32 - input.right as i32);
+        self.tick_boats(dt, row as f64, turn as f64, rowing && input.sneak);
         // passos de no máximo 1/30 s, como um quadro lento no Java
         let mut left = dt;
         while left > 0.0 {
             let step = left.min(1.0 / 30.0);
-            self.player.update(step, input, &Loaded(&self.chunks));
+            if !rowing {
+                self.player.update(step, input, &Loaded(&self.chunks));
+            }
             left -= step;
         }
         // no mundo de outro, quem cuida da água, das quedas e do crescimento é o anfitrião
@@ -754,6 +778,9 @@ impl Game {
         self.update_particles(dt);
         self.swing = (self.swing - dt).max(0.0);
         self.update_mobs(dt);
+        self.tick_villages(dt);
+        self.tick_explore(dt);
+        self.tick_weather(dt);
         self.blast_flash = (self.blast_flash - dt).max(0.0);
         self.tick_furnaces(dt);
         self.tick_primed(dt);
@@ -772,6 +799,7 @@ impl Game {
         // criatura na mira (só se estiver mais perto que o bloco mirado)
         let block_dist = self.aim.map_or(99.0, |h| h.t);
         let target = if playing { self.aimed_mob(block_dist.min(3.6)) } else { None };
+        let boat = if playing && target.is_none() { self.aimed_boat() } else { None };
         // arco na mão: segurar o botão esquerdo puxa a corda; soltar dispara
         let bow = playing && self.inv.s[self.slot].id == tools::BOW;
         if !bow {
@@ -783,6 +811,8 @@ impl Game {
             if rp {
                 self.use_aimed();
             }
+        } else if let Some(b) = boat.filter(|_| lp || rp) {
+            self.click_boat(b, lp, rp);
         } else if let Some(i) = target {
             if lp || (self.l_held && self.cool_l <= 0.0) {
                 self.hit_mob(i);
@@ -803,7 +833,9 @@ impl Game {
                 // sobrevivência: segurando, o bloco vai rachando (mais rápido com a ferramenta certa)
                 self.mine(dt, self.l_held);
             }
-            if rp || (self.r_held && self.cool_r <= 0.0) {
+            // balde, vara, barco e pérola: um uso por clique (segurar não repete)
+            let once = matches!(self.inv.s[self.slot].id, 308..=314);
+            if rp || (self.r_held && self.cool_r <= 0.0 && !once) {
                 self.use_aimed();
                 self.cool_r = 0.2;
             }
@@ -843,6 +875,7 @@ impl Game {
         }
         self.save_chunks(None);
         let Some(dir) = self.save_dir.clone() else { return };
+        self.thumb_dir = Some(dir.clone());
         let p = &self.player;
         let mut v: Vec<(&str, String)> = vec![
             ("jogador.x", p.x.to_string()),
@@ -858,9 +891,12 @@ impl Game {
             ("hora", self.time.to_string()),
             ("diaDuracao", DAY_LENGTH.to_string()),
             ("dia", self.day.to_string()),
+            ("modo", if self.creative { "criativo" } else { "sobrevivencia" }.to_string()),
             ("ultimoJogo", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0).to_string()),
         ];
         v.push(("inventario", self.inv.serialize()));
+        v.push(("jogador.xp", self.ex.xp.to_string()));
+        v.push(("clima", self.ex.weather.save()));
         v.push(("inventarioFormato", "2".to_string()));
         if !self.creative {
             v.push(("jogador.vida", self.health.max(0.0).to_string()));
@@ -875,7 +911,11 @@ impl Game {
             .collect();
         let chests: Vec<(String, String)> = self.chests.iter().map(|(k, c)| (k.clone(), containers::serialize_slots(c))).collect();
         let furnaces: Vec<(String, String)> = self.furnaces.iter().map(|(k, f)| (k.clone(), f.serialize())).collect();
-        if let Err(e) = save::update_meta(&dir, &v, &[("bau.", chests), ("fornalha.", furnaces), ("criatura.", mob_lines), ("lobo.", wolf_lines), ("lan.", lan_lines)]) {
+        let mut done: Vec<&(i32, i32)> = self.ex.villages_done.iter().collect();
+        done.sort();
+        let villages: Vec<(String, String)> = done.iter().enumerate().map(|(i, r)| (i.to_string(), format!("{};{}", r.0, r.1))).collect();
+        let boats: Vec<(String, String)> = self.ex.boats.iter().enumerate().map(|(i, b)| (i.to_string(), b.save())).collect();
+        if let Err(e) = save::update_meta(&dir, &v, &[("vila.", villages), ("barco.", boats), ("bau.", chests), ("fornalha.", furnaces), ("criatura.", mob_lines), ("lobo.", wolf_lines), ("lan.", lan_lines)]) {
             println!("não consegui gravar o meta.properties: {e}");
         }
     }
@@ -889,7 +929,10 @@ impl Game {
 
     unsafe fn render(&mut self, g: &mut Gl, w: u32, h: u32) {
         let view_dist = self.settings.view_dist as f32;
-        let sky = sky_at(self.time);
+        let mut sky = sky_at(self.time);
+        let gloom = self.ex.weather.gloom() as f32;
+        sky.daylight *= 1.0 - gloom * 0.75;
+        sky.light_str *= 1.0 - gloom * 1.5;
         // sombras do sol (só de dia, com o sol alto o bastante)
         let cast_shadows = self.settings.shadows && sky.light[1] > 0.1 && sky.light_str > 0.05;
         if cast_shadows {
@@ -973,12 +1016,14 @@ impl Game {
 
         // criaturas, itens soltos, flechas e jogadores: antes da água, para a água transparente ficar por cima
         // dos que estão mergulhados (com o tom azul dela), como os blocos do fundo
-        if !self.drops.is_empty() || !self.mobs.is_empty() || !self.arrows.is_empty() || !self.primed.is_empty() || !self.particles.is_empty() || self.net.is_some() {
+        if !self.drops.is_empty() || !self.mobs.is_empty() || !self.arrows.is_empty() || !self.primed.is_empty() || !self.particles.is_empty() || self.net.is_some() || !self.ex.boats.is_empty() || self.ex.fishing.is_some() || self.ex.weather.strength > 0.0 {
             self.draw_drops(&mut g.ui, sky.daylight);
             self.draw_players(&mut g.ui, sky.daylight);
             self.draw_particles(&mut g.ui, sky.daylight);
             self.draw_primed(&mut g.ui);
             self.draw_mobs(&mut g.ui, sky.daylight);
+            self.draw_explore(&mut g.ui, sky.daylight);
+            self.draw_weather(&mut g.ui, sky.daylight);
             gl.disable(glow::CULL_FACE);
             gl.enable(glow::BLEND);
             gl.blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
@@ -1059,6 +1104,28 @@ impl Game {
             gl.draw_arrays(glow::LINES, 0, 24);
         }
 
+        // miniatura do mundo para o menu: o que está na tela agora, sem a mão e a interface
+        if self.thumb_dir.is_some() && self.meshes.len() >= 25 && !matches!(self.screen, Screen::Create | Screen::Join) {
+            let dir = self.thumb_dir.take().unwrap();
+            let mut px = vec![0u8; (w * h * 4) as usize];
+            gl.read_pixels(0, 0, w as i32, h as i32, glow::RGBA, glow::UNSIGNED_BYTE, glow::PixelPackData::Slice(&mut px));
+            // corta na proporção da miniatura (do meio da tela) e diminui
+            let ch = ((w as f32) * ui::THUMB_H as f32 / ui::THUMB_W as f32).min(h as f32) as u32;
+            let y0 = (h - ch) / 2;
+            let img = image::RgbaImage::from_fn(w, ch, |x, y| {
+                let i = (((h - 1 - (y0 + y)) * w + x) * 4) as usize;
+                image::Rgba([px[i], px[i + 1], px[i + 2], 255])
+            });
+            let small = image::imageops::resize(&img, ui::THUMB_W, ui::THUMB_H, image::imageops::FilterType::Triangle);
+            if small.save(dir.join("miniatura.png")).is_ok() && self.screen == Screen::Menu {
+                self.load_thumbs();
+            }
+        }
+        for (slot, px) in std::mem::take(&mut self.menu.pending_thumbs) {
+            g.ui.upload_thumb(&g.gl, slot, &px);
+        }
+        let gl = &g.gl;
+
         // a mão e o item, por cima da cena (com um campo de visão fixo, para não esticar)
         let in_world = !matches!(self.screen, Screen::Menu | Screen::Create | Screen::Join | Screen::Dead) && !(self.screen == Screen::Settings && self.settings_return == Screen::Menu);
         if in_world {
@@ -1098,6 +1165,7 @@ impl Game {
         if in_world {
             self.draw_name_tags(&mut g.ui, &vp, fw, fh);
             self.draw_hud(&mut g.ui, fw, fh);
+            self.draw_combat_hud(&mut g.ui, fw, fh);
             self.draw_chat(&mut g.ui, fw, fh);
             self.draw_bow_charge(&mut g.ui, fw, fh);
         }
@@ -1106,6 +1174,7 @@ impl Game {
             Screen::Join => self.draw_join(&mut g.ui, fw, fh),
             Screen::Settings => self.draw_settings(&mut g.ui, fw, fh),
             Screen::Inventory => self.draw_inventory(&mut g.ui, fw, fh),
+            Screen::Trade => self.draw_trade(&mut g.ui, fw, fh),
             Screen::Pause | Screen::Dead => self.draw_menu(&mut g.ui, fw, fh),
             Screen::Play => {}
         }
@@ -1175,7 +1244,7 @@ fn compare(path: &str) -> ! {
     let seed = i32::from_be_bytes(data[0..4].try_into().unwrap());
     let scale = f64::from_be_bytes(data[4..12].try_into().unwrap());
     let n = i32::from_be_bytes(data[12..16].try_into().unwrap());
-    let gen = Generator { seed, biome_scale: scale, lift: 0 }; // o Java só tem o mundo clássico
+    let gen = Generator { seed, biome_scale: scale, lift: 0, modern: false }; // o Java só tem o mundo clássico
     let mut p = 16;
     let (mut diff_chunks, mut diff_blocks) = (0, 0);
     for _ in 0..n {
@@ -1212,7 +1281,7 @@ fn load_game(info: Option<save::WorldInfo>, seed_arg: Option<i32>, settings: sav
     let spawn: [f64; 3];
     let (gen, save_dir, name, creative, time, day) = match (&info, seed_arg) {
         (Some(w), None) => {
-            let gen = Generator { seed: w.seed, biome_scale: w.biome_scale, lift: w.lift };
+            let gen = Generator { seed: w.seed, biome_scale: w.biome_scale, lift: w.lift, modern: w.modern };
             match w.player {
                 Some(p) => {
                     (player.x, player.y, player.z, player.yaw, player.pitch) = (p[0], p[1], p[2], p[3], p[4]);
@@ -1234,7 +1303,7 @@ fn load_game(info: Option<save::WorldInfo>, seed_arg: Option<i32>, settings: sav
             (gen, Some(w.dir.clone()), w.name.clone(), w.creative, w.time, w.day)
         }
         _ => {
-            let gen = Generator { seed: seed_arg.unwrap_or(2024), biome_scale: 2.0, lift: world::DEEP };
+            let gen = Generator { seed: seed_arg.unwrap_or(2024), biome_scale: 2.0, lift: world::DEEP, modern: true };
             (player.x, player.y, player.z) = (0.5, gen.height_at(0, 0).max(gen.sea()) as f64 + 1.0, 0.5);
             let name = format!("semente {}", gen.seed);
             spawn = [player.x, player.y, player.z];
@@ -1254,13 +1323,18 @@ fn load_game(info: Option<save::WorldInfo>, seed_arg: Option<i32>, settings: sav
         game.persona = w.persona;
         game.lan_saved = w.lan_players.clone();
         game.load_mobs(&w.mobs, &w.wolves);
+        game.thumb_dir = game.save_dir.clone(); // a miniatura do menu sai logo que o mundo aparece
+        game.ex.xp = w.xp;
+        game.ex.weather = weather::Weather::load(&w.weather);
+        game.ex.villages_done = w.villages.iter().filter_map(|s| s.split_once(';').and_then(|(a, b)| Some((a.parse().ok()?, b.parse().ok()?)))).collect();
+        game.ex.boats = w.boats.iter().filter_map(|s| explore::Boat::load(s)).collect();
     }
     game
 }
 
 /// Entra no mundo de um anfitrião da LAN: o terreno sai da semente, mais os pedaços que ele mandou.
 fn load_lan_game(n: net::Net, w: net::Welcome, settings: save::Settings, name: String, persona: [usize; 4]) -> Game {
-    let gen = Generator { seed: w.seed, biome_scale: w.biome_scale, lift: w.lift };
+    let gen = Generator { seed: w.seed, biome_scale: w.biome_scale, lift: w.lift, modern: w.modern };
     let mut player = Player::new();
     (player.x, player.y, player.z) = (w.spawn[0], w.spawn[1], w.spawn[2]);
     let mut inv = Inventory::default();
@@ -1436,12 +1510,42 @@ fn main() {
     }
     match arg("--tela").as_deref() {
         Some("inventario") => game.screen = Screen::Inventory,
+        Some("livro") => {
+            game.at_table = true;
+            game.book.open = true;
+            game.screen = Screen::Inventory;
+        }
+        Some("bancada") => {
+            game.at_table = true;
+            game.screen = Screen::Inventory;
+            game.craft[0] = inventory::Stack::new(8, 1, 0);
+            game.craft[3] = inventory::Stack::new(8, 1, 0);
+        }
+        Some("fornalha") => {
+            // teste: uma fornalha assando ferro, com metade do carvão queimado
+            let mut f = containers::Furnace::parse("");
+            f.inv[0] = inventory::Stack::new(13, 5, 0);
+            f.inv[1] = inventory::Stack::new(201, 3, 0);
+            (f.heat, f.heat_max, f.progress) = (6.0, 10.0, 0.45);
+            game.furnaces.insert("teste".into(), f);
+            game.open = Some(containers::Open::Furnace("teste".into()));
+            game.screen = Screen::Inventory;
+        }
         Some("pausa") => game.screen = Screen::Pause,
         Some("controles") => {
             game.screen = Screen::Pause;
             game.controls_open = true;
         }
         Some("morte") => game.screen = Screen::Dead,
+        Some(t) if t.starts_with("paleta") => {
+            game.screen = Screen::Inventory;
+            game.palette_scroll = t.trim_start_matches("paleta").parse().unwrap_or(0);
+        }
+        Some(t) if t.starts_with("clima") => {
+            let kind = if t.ends_with("trovao") { weather::Sky::Thunder } else { weather::Sky::Rain };
+            game.ex.weather.start(kind, 0.9);
+            game.ex.weather.strength = 1.0;
+        }
         Some("criar") => game.start_create(),
         Some("config") => game.open_settings(),
         Some("lan") => game.start_join(),
@@ -1559,6 +1663,11 @@ fn main() {
                                 } else if matches!(game.screen, Screen::Menu | Screen::Create) {
                                     let action = game.menu_key(code, event.text.as_deref());
                                     menu_action = Some(action);
+                                } else if game.screen == Screen::Trade {
+                                    if code == KeyCode::KeyE || code == KeyCode::Escape {
+                                        game.screen = Screen::Play;
+                                        game.grab_mouse = true;
+                                    }
                                 } else if game.screen == Screen::Inventory {
                                     if code == KeyCode::KeyE || code == KeyCode::Escape {
                                         game.close_inventory();
@@ -1575,6 +1684,11 @@ fn main() {
                                         }
                                     }
                                 } else if game.screen == Screen::Play {
+                                // a tecla "/" (onde quer que ela esteja no teclado) abre o chat já num comando
+                                if event.text.as_deref() == Some("/") {
+                                    game.open_chat();
+                                    game.chat.input.push('/');
+                                } else {
                                 match code {
                                     KeyCode::Escape => {
                                         game.screen = Screen::Pause;
@@ -1590,6 +1704,7 @@ fn main() {
                                         game.throw_held(all);
                                     }
                                     KeyCode::F2 => game.screenshot = true,
+                                    KeyCode::F6 if game.creative => game.next_weather(),
                                     KeyCode::Digit1 | KeyCode::Digit2 | KeyCode::Digit3 | KeyCode::Digit4 | KeyCode::Digit5 | KeyCode::Digit6
                                     | KeyCode::Digit7 | KeyCode::Digit8 | KeyCode::Digit9 => {
                                         game.slot = digit.unwrap_or(0);
@@ -1608,6 +1723,7 @@ fn main() {
                                         }
                                     }
                                     _ => {}
+                                }
                                 }
                                 }
                             }
@@ -1633,6 +1749,11 @@ fn main() {
                     } else if matches!(game.screen, Screen::Menu | Screen::Create) {
                         if down && button == MouseButton::Left {
                             menu_action = Some(game.menu_mouse(fw, fh));
+                        }
+                    } else if game.screen == Screen::Trade {
+                        if down && button == MouseButton::Left {
+                            let shift = game.key(KeyCode::ShiftLeft) || game.key(KeyCode::ShiftRight);
+                            game.trade_click(fw, fh, shift);
                         }
                     } else if game.screen == Screen::Inventory {
                         if down && (button == MouseButton::Left || button == MouseButton::Right) {
@@ -1704,7 +1825,10 @@ fn main() {
                         if game.screen == Screen::Menu {
                             game.menu_scroll(d > 0.0);
                         } else if game.screen == Screen::Inventory {
-                            game.inv_scroll(d > 0.0);
+                            let size = window.inner_size();
+                            if !game.book_wheel(size.width as f32, size.height as f32, d > 0.0) {
+                                game.inv_scroll(d > 0.0);
+                            }
                         } else if game.screen == Screen::Play {
                             let n = if d > 0.0 { 8 } else { 1 }; // rodinha para cima volta um espaço
                             game.slot = (game.slot + n) % 9;
@@ -1734,6 +1858,14 @@ fn main() {
                     game.stream(&mut g);
                     let size = window.inner_size();
                     frame_no += 1;
+                    // --trocas: um ferreiro com a tela de trocas aberta (testes)
+                    if frame_no == 200 && args.iter().any(|a| a == "--trocas") {
+                        let mut m = mob::Mob::new(mob::VILLAGER, game.player.x, game.player.y, game.player.z + 2.0, 100_002, &mut game.rng);
+                        m.id = 100_002; // resto 2 por 5: ferreiro
+                        game.mobs.push(m);
+                        game.inv.s[0] = inventory::Stack::new(296, 12, 0);
+                        game.open_trade(100_002);
+                    }
                     if zoo && frame_no == 100 {
                         // teste: um de cada criatura em duas filas na frente da câmera
                         let (fx, fz) = (game.player.yaw.sin(), game.player.yaw.cos());

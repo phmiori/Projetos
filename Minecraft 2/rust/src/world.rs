@@ -22,7 +22,8 @@ pub const DESERT: i32 = 3;
 pub const TUNDRA: i32 = 4;
 pub const MOUNTAINS: i32 = 5;
 pub const ICE_FIELD: i32 = 6;
-pub const BIOME_NAMES: [&str; 7] = ["Planície", "Floresta", "Bosque de bétulas", "Deserto", "Tundra", "Montanhas", "Campo de gelo"];
+pub const CHERRY: i32 = 7;
+pub const BIOME_NAMES: [&str; 8] = ["Planície", "Floresta", "Bosque de bétulas", "Deserto", "Tundra", "Montanhas", "Campo de gelo", "Bosque de cerejeiras"];
 
 /// Índice de um bloco no pedaço (igual ao Chunk.idx do Java).
 #[inline]
@@ -202,6 +203,8 @@ pub struct Generator {
     pub biome_scale: f64,
     /// blocos a mais embaixo da terra: 0 nos mundos clássicos (iguais aos do Java), DEEP nos novos
     pub lift: i32,
+    /// mundos criados a partir da atualização das vilas: vilas, cerejeiras, pedras e minérios novos
+    pub modern: bool,
 }
 
 impl Generator {
@@ -240,6 +243,9 @@ impl Generator {
         }
         if t < 0.43 {
             return if top < self.sea() - 3 { ICE_FIELD } else { TUNDRA };
+        }
+        if self.modern && t < 0.6 && crate::noise::noise(x as f64 / 170.0, z as f64 / 170.0, self.seed.wrapping_add(320)) > 0.7 {
+            return CHERRY;
         }
         if m > 0.56 {
             return if t > 0.5 { BIRCH_FOREST } else { FOREST };
@@ -306,6 +312,7 @@ impl Generator {
         if let Some(s) = self.igloo_site(cx, cz) {
             self.build_igloo(&mut c, s);
         }
+        self.build_villages(&mut c);
         c.prepare();
         c
     }
@@ -353,7 +360,8 @@ impl Generator {
                     DIRT
                 }
             } else {
-                self.ore(x, y, z)
+                let o = self.ore(x, y, z);
+                if self.modern && o == STONE { self.stone_kind(x, y, z, biome) } else { o }
             };
             out[y as usize] = b;
         }
@@ -419,6 +427,28 @@ impl Generator {
             }
             if cluster > 0.994 {
                 return GRAVEL;
+            }
+        }
+        STONE
+    }
+
+    /// Nos mundos novos, onde não há minério clássico: cobre, esmeralda (nas montanhas), ardósia-abismo no fundo
+    /// e bolsões de granito, diorito e andesito.
+    fn stone_kind(&self, x: i32, y: i32, z: i32, biome: i32) -> u8 {
+        let vein = hash3(x >> 1, y >> 1, z >> 1, self.sd(321));
+        if (32..=104).contains(&y) && vein < 0.009 && hash3(x, y, z, self.sd(322)) < 0.65 {
+            return COPPER_ORE;
+        }
+        if biome == MOUNTAINS && hash3(x, y, z, self.sd(323)) < 0.004 {
+            return EMERALD_ORE;
+        }
+        if y < 30 || (y < 36 && hash3(x, y, z, self.sd(324)) < (36 - y) as f64 / 6.0) {
+            return DEEPSLATE;
+        }
+        let (fx, fy, fz) = (x as f64 / 13.0, y as f64 / 11.0, z as f64 / 13.0);
+        for (k, rock) in [(325, GRANITE), (326, DIORITE), (327, ANDESITE)] {
+            if noise3(fx, fy, fz, self.sd(k)) > 0.78 {
+                return rock;
             }
         }
         STONE
@@ -611,6 +641,7 @@ impl Generator {
     fn tree_chance(biome: i32) -> f64 {
         match biome {
             FOREST => 0.05,
+            CHERRY => 0.022,
             BIRCH_FOREST => 0.045,
             TUNDRA => 0.006,
             MOUNTAINS => 0.003,
@@ -620,6 +651,7 @@ impl Generator {
 
     fn decorate(&self, c: &mut Chunk, heights: &[i32; 256], biomes: &[i32; 256]) {
         let (x0, z0) = (c.cx * 16, c.cz * 16);
+        let villages = self.villages_near(x0 - 4, z0 - 4, x0 + 20, z0 + 20);
         let terrain = c.blocks.clone();
         let mut tmp = vec![AIR; SY as usize];
         for x in x0 - 2..x0 + 18 {
@@ -649,13 +681,17 @@ impl Generator {
                     continue;
                 }
                 let b = col[top as usize];
+                if inside && self.modern && !self.near_village(&villages, x, z) && self.wild_plant(c, x, top, z, b, biome) {
+                    continue;
+                }
                 if b == GRASS || (b == SNOW && biome == TUNDRA) {
                     if roll < Self::tree_chance(biome) {
-                        if self.near_igloo(x, z) {
+                        if self.near_igloo(x, z) || self.near_village(&villages, x, z) {
                             continue;
                         }
                         let birch = biome == BIRCH_FOREST || (biome == FOREST && r.next_double() < 0.2);
-                        Self::place_tree(c, x, top + 1, z, &mut r, birch);
+                        let kind = if biome == CHERRY { 2 } else if birch { 1 } else { 0 };
+                        Self::place_tree(c, x, top + 1, z, &mut r, kind);
                     } else if inside && b == GRASS {
                         let grass_p = if biome == PLAINS { 0.16 } else { 0.08 };
                         let flower_p = if biome == PLAINS { 0.025 } else { 0.01 };
@@ -677,13 +713,47 @@ impl Generator {
         }
     }
 
-    fn place_tree(c: &mut Chunk, x: i32, y: i32, z: i32, r: &mut JavaRandom, birch: bool) {
-        let (log, leaf) = if birch { (BIRCH_LOG, BIRCH_LEAVES) } else { (LOG, LEAVES) };
+    /// Cana na beira d'água, abóboras na planície e melancias na floresta. Retorna true se plantou algo.
+    fn wild_plant(&self, c: &mut Chunk, x: i32, top: i32, z: i32, ground: u8, biome: i32) -> bool {
+        let (lx, lz) = (x - c.cx * 16, z - c.cz * 16);
+        let shore = top == self.sea() - 1 && matches!(ground, GRASS | DIRT | SAND) && biome != TUNDRA && biome != ICE_FIELD;
+        if shore && hash(x, z, self.sd(330)) < 0.22 && [(1, 0), (-1, 0), (0, 1), (0, -1)].iter().any(|(dx, dz)| self.height_at(x + dx, z + dz) < self.sea()) {
+            let tall = 1 + (hash(x, z, self.sd(331)) * 3.0) as i32;
+            for i in 1..=tall.min(3) {
+                c.blocks[idx(lx, top + i, lz)] = SUGAR_CANE;
+            }
+            return true;
+        }
+        if ground == GRASS {
+            let roll = hash(x, z, self.sd(332));
+            let fruit = if (biome == PLAINS || biome == TUNDRA) && roll < 0.0012 {
+                PUMPKIN
+            } else if (biome == FOREST || biome == BIRCH_FOREST) && roll < 0.0012 {
+                MELON
+            } else {
+                AIR
+            };
+            if fruit != AIR {
+                c.blocks[idx(lx, top + 1, lz)] = fruit;
+                return true;
+            }
+        }
+        false
+    }
+
+    /// kind: 0 carvalho, 1 bétula, 2 cerejeira (copa mais larga).
+    fn place_tree(c: &mut Chunk, x: i32, y: i32, z: i32, r: &mut JavaRandom, kind: u8) {
+        let birch = kind == 1;
+        let (log, leaf) = match kind {
+            1 => (BIRCH_LOG, BIRCH_LEAVES),
+            2 => (CHERRY_LOG, CHERRY_LEAVES),
+            _ => (LOG, LEAVES),
+        };
         let (x0, z0) = (c.cx * 16, c.cz * 16);
         let h = if birch { 5 } else { 4 } + r.next_int(3);
         let top = y + h;
         for dy in -2..=1 {
-            let rad: i32 = if dy < 0 { 2 } else { 1 };
+            let rad: i32 = if dy < 0 { 2 } else { 1 } + (kind == 2) as i32;
             for dx in -rad..=rad {
                 for dz in -rad..=rad {
                     let (dx, dz): (i32, i32) = (dx, dz);
@@ -723,8 +793,8 @@ mod tests {
 
     #[test]
     fn mundo_fundo_tem_cavernas_ate_la_embaixo() {
-        let flat = Generator { seed: 12345, biome_scale: 2.0, lift: 0 };
-        let deep = Generator { seed: 12345, biome_scale: 2.0, lift: DEEP };
+        let flat = Generator { seed: 12345, biome_scale: 2.0, lift: 0, modern: false };
+        let deep = Generator { seed: 12345, biome_scale: 2.0, lift: DEEP, modern: false };
         assert_eq!(deep.height_at(37, -80), flat.height_at(37, -80) + DEEP);
         let mut air = [0usize; 8]; // por faixa de 10 blocos de altura
         let (mut lava_top, mut crystal_top, mut iron_top, mut cells) = (0, 0, 0, 0usize);
@@ -757,7 +827,7 @@ mod tests {
     #[test]
     fn pedaco_grava_no_formato_do_java_quando_cabe() {
         for (lift, version) in [(0, 1u8), (DEEP, 2u8)] {
-            let g = Generator { seed: 7, biome_scale: 2.0, lift };
+            let g = Generator { seed: 7, biome_scale: 2.0, lift, modern: lift > 0 };
             let mut c = g.generate(3, -2);
             c.rot.insert(idx(15, 40, 9) as u16, 2);
             let bytes = c.to_bytes();

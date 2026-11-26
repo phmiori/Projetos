@@ -13,6 +13,14 @@ const SIZES: [u32; 5] = [11, 13, 16, 20, 30];
 /// fotos do chat: cada uma numa camada de PHOTO x PHOTO (o maior lado tem no máximo 640, como no Java)
 pub const PHOTO: u32 = 640;
 pub const PHOTO_SLOTS: usize = 8;
+/// miniaturas dos mundos no menu: 320 x 144; as 3 primeiras camadas são as de exemplo da arte
+pub const THUMB_W: u32 = 320;
+pub const THUMB_H: u32 = 144;
+pub const THUMB_SLOTS: usize = 16;
+/// tamanho da arte de fundo do menu (dados/menu_fundo.jpg)
+pub const ART_W: f32 = 1644.0;
+pub const ART_H: f32 = 920.0;
+const ART_LAYER: f32 = -1000.0;
 
 #[derive(Clone, Copy)]
 struct Glyph {
@@ -37,6 +45,8 @@ pub struct Ui {
     vbo: glow::Buffer,
     atlas: glow::Texture,
     photos: glow::Texture,
+    art: glow::Texture,
+    thumbs: glow::Texture,
     glyphs: HashMap<(u32, char), Glyph>,
     has_font: bool,
     /// x, y, z, u, v, camada (-1 = atlas, -2 em diante = fotos do chat), r, g, b, a
@@ -67,10 +77,10 @@ void main(){ vUV = aUV; vLayer = aLayer; vColor = aColor; vWorld = aPos; gl_Posi
 const FS: &str = r#"
 in vec2 vUV; in float vLayer; in vec4 vColor; in vec3 vWorld;
 uniform int uFogOn;
-uniform sampler2D uAtlas; uniform sampler2DArray uBlocks; uniform sampler2DArray uPhotos;
+uniform sampler2D uAtlas; uniform sampler2DArray uBlocks; uniform sampler2DArray uPhotos; uniform sampler2D uArt; uniform sampler2DArray uThumbs;
 out vec4 frag;
 void main(){
-  vec4 t = vLayer < -1.5 ? texture(uPhotos, vec3(vUV, -2.0 - vLayer)) : vLayer < 0.0 ? texture(uAtlas, vUV) : texture(uBlocks, vec3(vUV, vLayer));
+  vec4 t = vLayer < -999.5 ? (vLayer > -1000.5 ? texture(uArt, vUV) : texture(uThumbs, vec3(vUV, -1001.0 - vLayer))) : vLayer < -1.5 ? texture(uPhotos, vec3(vUV, -2.0 - vLayer)) : vLayer < 0.0 ? texture(uAtlas, vUV) : texture(uBlocks, vec3(vUV, vLayer));
   frag = t * vColor;
   if (frag.a < 0.01) discard;
   if (uFogOn == 1) { vec3 d = vWorld - uCam; float dist = max(length(d), 0.001); frag.rgb = fog(frag.rgb, dist, d/dist); }
@@ -139,7 +149,9 @@ impl Ui {
             }
         }
         if let Ok(img) = image::load_from_memory(include_bytes!("../dados/itens.png")) {
-            let img = img.to_rgba8();
+            let mut img = img.to_rgba8();
+            // cada item pode ser redesenhado em textures/itens/<nome>.png
+            items::load_item_art(std::path::Path::new("textures/itens"), &mut img);
             for y in 0..img.height().min(ATLAS - ITEMS_Y) {
                 for x in 0..img.width().min(ATLAS) {
                     let i = (((ITEMS_Y + y) * ATLAS + x) * 4) as usize;
@@ -159,7 +171,31 @@ impl Ui {
         gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
         gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
         gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
-        Ui { prog, vao, vbo, atlas, photos, glyphs, has_font, verts: Vec::with_capacity(1 << 16), fog: None }
+        // arte do menu e as miniaturas de exemplo
+        let art = gl.create_texture().unwrap();
+        gl.bind_texture(glow::TEXTURE_2D, Some(art));
+        let img = image::load_from_memory(include_bytes!("../dados/menu_fundo.jpg")).map(|i| i.to_rgba8()).unwrap_or_else(|_| image::RgbaImage::new(1, 1));
+        gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
+        gl.tex_image_2d(glow::TEXTURE_2D, 0, glow::RGBA8 as i32, img.width() as i32, img.height() as i32, 0, glow::RGBA, glow::UNSIGNED_BYTE, Some(img.as_raw()));
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
+        let thumbs = gl.create_texture().unwrap();
+        gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(thumbs));
+        gl.tex_image_3d(glow::TEXTURE_2D_ARRAY, 0, glow::RGBA8 as i32, THUMB_W as i32, THUMB_H as i32, THUMB_SLOTS as i32, 0, glow::RGBA, glow::UNSIGNED_BYTE, None);
+        gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_MIN_FILTER, glow::LINEAR as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_MAG_FILTER, glow::LINEAR as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_WRAP_S, glow::CLAMP_TO_EDGE as i32);
+        gl.tex_parameter_i32(glow::TEXTURE_2D_ARRAY, glow::TEXTURE_WRAP_T, glow::CLAMP_TO_EDGE as i32);
+        let mut ui = Ui { prog, vao, vbo, atlas, photos, art, thumbs, glyphs, has_font, verts: Vec::with_capacity(1 << 16), fog: None };
+        for (slot, bytes) in [&include_bytes!("../dados/miniatura_1.png")[..], &include_bytes!("../dados/miniatura_2.png")[..], &include_bytes!("../dados/miniatura_3.png")[..]].into_iter().enumerate() {
+            if let Ok(i) = image::load_from_memory(bytes) {
+                let i = image::imageops::resize(&i.to_rgba8(), THUMB_W, THUMB_H, image::imageops::FilterType::Triangle);
+                ui.upload_thumb(gl, slot, i.as_raw());
+            }
+        }
+        ui
     }
 
     /// Põe uma foto (RGBA, no máximo PHOTO x PHOTO) na camada `slot`.
@@ -167,6 +203,75 @@ impl Ui {
         gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(self.photos));
         gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
         gl.tex_sub_image_3d(glow::TEXTURE_2D_ARRAY, 0, 0, 0, slot as i32, w.min(PHOTO) as i32, h.min(PHOTO) as i32, 1, glow::RGBA, glow::UNSIGNED_BYTE, glow::PixelUnpackData::Slice(rgba));
+    }
+
+    /// Põe a miniatura de um mundo (RGBA THUMB_W x THUMB_H) na camada `slot`.
+    pub unsafe fn upload_thumb(&mut self, gl: &glow::Context, slot: usize, rgba: &[u8]) {
+        if slot >= THUMB_SLOTS || rgba.len() < (THUMB_W * THUMB_H * 4) as usize {
+            return;
+        }
+        gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(self.thumbs));
+        gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
+        gl.tex_sub_image_3d(glow::TEXTURE_2D_ARRAY, 0, 0, 0, slot as i32, THUMB_W as i32, THUMB_H as i32, 1, glow::RGBA, glow::UNSIGNED_BYTE, glow::PixelUnpackData::Slice(rgba));
+    }
+
+    /// A arte de fundo do menu (uv: parte da imagem, de 0 a 1).
+    pub fn art(&mut self, x: f32, y: f32, w: f32, h: f32, uv: [f32; 4], alpha: f32) {
+        self.quad2(x, y, x + w, y + h, uv, ART_LAYER, [1.0, 1.0, 1.0, alpha]);
+    }
+
+    /// Uma miniatura de mundo, com os cantos arredondados.
+    pub fn thumb(&mut self, slot: usize, x: f32, y: f32, w: f32, h: f32, r: f32) {
+        let layer = ART_LAYER - 1.0 - slot as f32;
+        let pts = round_points(x, y, w, h, r);
+        let (cx, cy) = (x + w / 2.0, y + h / 2.0);
+        let uv = |p: [f32; 3]| [(p[0] - x) / w, (p[1] - y) / h];
+        for i in 0..pts.len() {
+            let (a, b) = (pts[i], pts[(i + 1) % pts.len()]);
+            let c = [cx, cy, 0.0];
+            self.quad([c, a, b, b], [uv(c), uv(a), uv(b), uv(b)], layer, [1.0; 4]);
+        }
+    }
+
+    /// Retângulo de cantos arredondados; com `bottom` diferente de `top`, degradê de cima para baixo.
+    pub fn round_rect(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, top: Color, bottom: Color) {
+        let pts = round_points(x, y, w, h, r);
+        let (cx, cy) = (x + w / 2.0, y + h / 2.0);
+        let col = |py: f32| -> Color {
+            let t = ((py - y) / h.max(1.0)).clamp(0.0, 1.0);
+            [top[0] + (bottom[0] - top[0]) * t, top[1] + (bottom[1] - top[1]) * t, top[2] + (bottom[2] - top[2]) * t, top[3] + (bottom[3] - top[3]) * t]
+        };
+        let t = 2.0 / ATLAS as f32;
+        for i in 0..pts.len() {
+            let (a, b) = (pts[i], pts[(i + 1) % pts.len()]);
+            for (p, c) in [([cx, cy, 0.0], col(cy)), (a, col(a[1])), (b, col(b[1]))] {
+                self.vert(p[0], p[1], p[2], t, t, -1.0, c);
+            }
+        }
+    }
+
+    /// Borda de um retângulo de cantos arredondados (espessura `t`, para dentro).
+    pub fn round_frame(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, t: f32, c: Color) {
+        let outer = round_points(x, y, w, h, r);
+        let inner = round_points(x + t, y + t, w - 2.0 * t, h - 2.0 * t, (r - t).max(0.0));
+        let u = 2.0 / ATLAS as f32;
+        for i in 0..outer.len() {
+            let j = (i + 1) % outer.len();
+            self.quad([outer[i], outer[j], inner[j], inner[i]], [[u, u]; 4], -1.0, c);
+        }
+    }
+
+    /// Triângulo de uma cor (ícones).
+    pub fn tri(&mut self, a: [f32; 2], b: [f32; 2], c: [f32; 2], col: Color) {
+        let t = 2.0 / ATLAS as f32;
+        for p in [a, b, c] {
+            self.vert(p[0], p[1], 0.0, t, t, -1.0, col);
+        }
+    }
+
+    /// Círculo cheio (ícones).
+    pub fn disc(&mut self, cx: f32, cy: f32, r: f32, c: Color) {
+        self.round_rect(cx - r, cy - r, 2.0 * r, 2.0 * r, r, c, c);
     }
 
     /// Desenha a foto da camada `slot` (de tamanho w x h) no retângulo dado.
@@ -363,6 +468,12 @@ impl Ui {
         gl.active_texture(glow::TEXTURE2);
         gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(self.photos));
         gl.uniform_1_i32(gl.get_uniform_location(self.prog, "uPhotos").as_ref(), 2);
+        gl.active_texture(glow::TEXTURE3);
+        gl.bind_texture(glow::TEXTURE_2D, Some(self.art));
+        gl.uniform_1_i32(gl.get_uniform_location(self.prog, "uArt").as_ref(), 3);
+        gl.active_texture(glow::TEXTURE4);
+        gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(self.thumbs));
+        gl.uniform_1_i32(gl.get_uniform_location(self.prog, "uThumbs").as_ref(), 4);
         gl.active_texture(glow::TEXTURE0);
         gl.bind_vertex_array(Some(self.vao));
         gl.bind_buffer(glow::ARRAY_BUFFER, Some(self.vbo));
@@ -370,6 +481,19 @@ impl Ui {
         gl.draw_arrays(glow::TRIANGLES, 0, (self.verts.len() / 10) as i32);
         self.verts.clear();
     }
+}
+
+/// Contorno de um retângulo de cantos arredondados (no sentido horário, 6 pontos por canto).
+fn round_points(x: f32, y: f32, w: f32, h: f32, r: f32) -> Vec<[f32; 3]> {
+    let r = r.min(w / 2.0).min(h / 2.0).max(0.0);
+    let mut v = Vec::with_capacity(28);
+    for (cx, cy, a0) in [(x + w - r, y + r, -90.0f32), (x + w - r, y + h - r, 0.0), (x + r, y + h - r, 90.0), (x + r, y + r, 180.0)] {
+        for s in 0..=6 {
+            let a = (a0 + s as f32 * 15.0).to_radians();
+            v.push([cx + a.cos() * r, cy + a.sin() * r, 0.0]);
+        }
+    }
+    v
 }
 
 /// Canto de cima à esquerda (u, v) do desenho do item no atlas.

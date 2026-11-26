@@ -41,6 +41,8 @@ pub struct Player {
     pub hit_wall: bool,
     /// nadando na horizontal (caixa baixa, segue a direção do olhar)
     pub crawl_swim: bool,
+    /// agachado: anda devagar e não cai das beiradas
+    pub sneaking: bool,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -75,7 +77,7 @@ impl Player {
 
     /// Altura dos olhos (baixa quando nada na horizontal).
     pub fn eye(&self) -> f64 {
-        if self.crawl_swim { 0.4 } else { EYE }
+        if self.crawl_swim { 0.4 } else if self.sneaking { EYE - 0.2 } else { EYE }
     }
 
     pub fn update<W: Blocks>(&mut self, dt: f64, i: Input, w: &W) {
@@ -106,9 +108,13 @@ impl Player {
         self.head_in_water = block::is_water(w.get(fl(self.x), fl(self.y + self.eye()), fl(self.z)));
         let swimming = self.in_water || block::is_water(w.get(fl(self.x), fl(self.y + 0.05), fl(self.z)));
 
-        let sprinting = i.sprint && i.fwd && len > 0.0;
+        self.sneaking = i.sneak && !self.flying && !self.in_water;
+        let sprinting = i.sprint && i.fwd && len > 0.0 && !self.sneaking;
         self.sprinting = sprinting;
         let mut speed = if self.flying { if i.sprint { 22.0 } else { 11.0 } } else if sprinting || self.crawl_swim { 5.8 } else { 4.3 };
+        if self.sneaking {
+            speed = 1.4;
+        }
         if (self.in_water || self.in_lava) && !self.flying {
             speed *= if self.in_lava { 0.35 } else if self.crawl_swim { 0.75 } else { 0.55 };
         }
@@ -150,6 +156,11 @@ impl Player {
             }
         }
 
+        // escada de mão: encostado nela, sobe andando para frente ou pulando; agachado, para; senão desce devagar
+        if !self.flying && self.on_ladder(w) {
+            self.vy = if i.jump || (self.hit_wall && len > 0.0) { 3.2 } else if i.sneak { 0.0 } else { self.vy.max(-2.2) };
+            self.fall_dist = 0.0;
+        }
         let flying = self.flying;
         self.do_move(dt, w, flying);
         let top = (crate::world::SY + 30) as f64;
@@ -157,6 +168,12 @@ impl Player {
             self.y = top;
             self.vy = self.vy.min(0.0);
         }
+    }
+
+    fn on_ladder<W: Blocks>(&self, w: &W) -> bool {
+        let e = 0.08;
+        (fl(self.x - self.hw - e)..=fl(self.x + self.hw + e))
+            .any(|x| (fl(self.z - self.hw - e)..=fl(self.z + self.hw + e)).any(|z| [0.05, 0.9].iter().any(|dy| block::info(w.get(x, fl(self.y + dy), z)).kind == block::K_LADDER)))
     }
 
     /// Há gelo logo abaixo dos pés?
@@ -187,8 +204,16 @@ impl Player {
         for _ in 0..steps {
             self.move_axis(1, ddy / steps as f64, w, false);
             let can_step = (was_on_ground || self.on_ground) && !flying;
-            self.move_axis(0, ddx / steps as f64, w, can_step);
-            self.move_axis(2, ddz / steps as f64, w, can_step);
+            for (axis, d) in [(0, ddx / steps as f64), (2, ddz / steps as f64)] {
+                // agachado no chão: não dá o passo que deixaria o corpo no ar
+                if self.sneaking && (was_on_ground || self.on_ground) {
+                    let (nx, nz) = (self.x + if axis == 0 { d } else { 0.0 }, self.z + if axis == 2 { d } else { 0.0 });
+                    if overlapping(nx, self.y - 0.56, nz, self.hw, self.h, w).is_empty() {
+                        continue;
+                    }
+                }
+                self.move_axis(axis, d, w, can_step);
+            }
         }
     }
 
@@ -390,5 +415,53 @@ mod tests {
         // parou de nadar: volta ao normal
         run(&w, &mut p, Input::default(), 0.5);
         assert!(!p.crawl_swim && p.h == H);
+    }
+}
+
+#[cfg(test)]
+mod testes_exploracao {
+    use super::*;
+
+    /// chão só até x = 2; uma parede em z = 3 com uma escada de mão encostada nela (célula z = 2)
+    struct Cenario;
+    impl Blocks for Cenario {
+        fn get(&self, x: i32, y: i32, z: i32) -> u8 {
+            if y == 9 && x <= 2 {
+                block::STONE
+            } else if y >= 10 && y < 16 && z == 3 {
+                block::STONE
+            } else if y >= 10 && y < 16 && z == 2 && x == 0 {
+                block::LADDER // face +Z: encostada na parede
+            } else {
+                block::AIR
+            }
+        }
+    }
+
+    fn andar(p: &mut Player, i: Input, secs: f64) {
+        for _ in 0..(secs * 60.0) as i32 {
+            p.update(1.0 / 60.0, i, &Cenario);
+        }
+    }
+
+    #[test]
+    fn agachado_nao_cai_da_beirada() {
+        let mut p = Player::new();
+        (p.x, p.y, p.z, p.yaw) = (1.5, 10.01, -4.5, std::f64::consts::FRAC_PI_2); // olhando para +X
+        andar(&mut p, Input { fwd: true, sneak: true, ..Default::default() }, 4.0);
+        assert!(p.y > 9.9 && p.x < 3.4 && p.x > 2.5, "caiu ou não chegou na beirada: {} {}", p.x, p.y);
+        andar(&mut p, Input { fwd: true, ..Default::default() }, 1.0);
+        assert!(p.y < 9.0, "em pé devia cair: {}", p.y);
+    }
+
+    #[test]
+    fn escada_de_mao_sobe_e_segura() {
+        let mut p = Player::new();
+        (p.x, p.y, p.z, p.yaw) = (0.5, 10.01, 1.0, 0.0); // olhando para a parede (+Z)
+        andar(&mut p, Input { fwd: true, ..Default::default() }, 1.6);
+        assert!(p.y > 13.0, "não subiu: {}", p.y);
+        let y = p.y;
+        andar(&mut p, Input { sneak: true, ..Default::default() }, 1.0);
+        assert!((p.y - y).abs() < 0.4, "agachado devia parar: {} -> {}", y, p.y);
     }
 }

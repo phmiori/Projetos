@@ -115,7 +115,7 @@ impl Game {
 
     pub fn daylight(&self) -> f64 {
         let a = self.time / crate::save::DAY_LENGTH * std::f64::consts::TAU;
-        ((a.sin() + 0.12) / 0.4).clamp(0.0, 1.0)
+        ((a.sin() + 0.12) / 0.4).clamp(0.0, 1.0) * (1.0 - self.ex.weather.gloom())
     }
 
     fn loaded_at(&self, x: f64, z: f64) -> bool {
@@ -212,6 +212,23 @@ impl Game {
             if mobs[i].t == mob::POLAR_BEAR && !mobs[i].calm {
                 choose_bear_target(&mut mobs, i);
             }
+            if matches!(mobs[i].t, mob::ZOMBIE | mob::IRON_GOLEM | mob::VILLAGER) {
+                choose_village_target(&mut mobs, i, tp);
+            }
+            if mobs[i].t == mob::ENDERMAN && mobs[i].angry <= 0.0 && who.is_none() && survival {
+                // encarar a cabeça do Enderman deixa ele bravo
+                let m = &mobs[i];
+                let head = [m.body.x, m.body.y + m.body.h - 0.3, m.body.z];
+                let e = self.eye();
+                let f = self.forward();
+                let d = [head[0] - e[0] as f64, head[1] - e[1] as f64, head[2] - e[2] as f64];
+                let len = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt().max(0.01);
+                let dot = (d[0] * f[0] as f64 + d[1] * f[1] as f64 + d[2] * f[2] as f64) / len;
+                if len < 32.0 && dot > 1.0 - 0.12 / (len * len).max(4.0) && self.line_of_sight([e[0] as f64, e[1] as f64, e[2] as f64], head) {
+                    mobs[i].angry = 30.0;
+                    self.sfx("rugido", head, 0.8);
+                }
+            }
             let target = mobs[i].target.and_then(|id| mobs.iter().find(|o| o.id == id && o.health > 0.0)).map(|t| ([t.body.x, t.body.y, t.body.z], t.body.hw, t.small_fish()));
             if target.is_none() {
                 mobs[i].target = None;
@@ -258,7 +275,7 @@ impl Game {
                         let kl = (kx * kx + kz * kz).sqrt().max(0.01);
                         t.body.vx += kx / kl * 6.0;
                         t.body.vz += kz / kl * 6.0;
-                        t.body.vy = 4.0;
+                        t.body.vy = if mt == mob::IRON_GOLEM { 10.0 } else { 4.0 }; // o golem joga para o alto
                         let at = [t.body.x, t.body.y + 0.8, t.body.z];
                         self.sfx("criatura_dano", at, 0.8);
                         if mt == mob::SHARK || mt == mob::POLAR_BEAR {
@@ -300,7 +317,7 @@ impl Game {
             let dist = (dx * dx + dz * dz).sqrt();
             // monstros queimam/somem sob o sol
             let mut gone = false;
-            if m.hostile() && m.t != mob::CREEPER && daylight > 0.75 && self.sky_light(m.body.x.floor() as i32, (m.body.y + 1.0).floor() as i32, m.body.z.floor() as i32) >= 14 {
+            if m.hostile() && m.t != mob::CREEPER && m.t != mob::ENDERMAN && daylight > 0.75 && self.sky_light(m.body.x.floor() as i32, (m.body.y + 1.0).floor() as i32, m.body.z.floor() as i32) >= 14 {
                 mobs[i].burn += dt;
                 gone = mobs[i].burn > 4.0;
             }
@@ -323,6 +340,7 @@ impl Game {
                 baby.health = mob::TAMED_HP;
             }
             self.sfx(mob::voice(t).unwrap_or("comer"), [at[0], at[1] + 0.5, at[2]], 0.9);
+            self.add_xp(2);
             mobs.push(baby);
         }
         self.mobs = mobs;
@@ -336,6 +354,13 @@ impl Game {
                 continue;
             }
             if self.creative || self.health <= 0.0 {
+                continue;
+            }
+            if self.shield_blocks(fx, fz) {
+                let (kx, kz) = (self.player.x - fx, self.player.z - fz);
+                let kl = (kx * kx + kz * kz).sqrt().max(0.01);
+                self.player.vx += kx / kl * 3.0;
+                self.player.vz += kz / kl * 3.0;
                 continue;
             }
             self.hit(dmg);
@@ -368,6 +393,8 @@ impl Game {
                 fish += 1;
             } else if m.t == mob::BIRD {
                 birds += 1;
+            } else if matches!(m.t, mob::VILLAGER | mob::IRON_GOLEM) {
+                continue; // os moradores não contam no limite dos animais
             } else if m.hostile() {
                 hostile += 1;
             } else {
@@ -569,6 +596,9 @@ impl Game {
                 if ok && !wet {
                     let light = (self.sky_light(x, y, z) as f64 / 15.0 * daylight).max(self.block_light(x, y, z) as f64 / 15.0);
                     if light <= 0.3 {
+                        if self.rng.next() < 0.07 && self.add_mob(mob::ENDERMAN, x as f64 + 0.5, y as f64 + 0.01, z as f64 + 0.5).is_some() {
+                            return;
+                        }
                         let roll = self.rng.next();
                         let t = if roll < 0.38 {
                             mob::ZOMBIE
@@ -713,6 +743,8 @@ impl Game {
             _ => Vec::new(),
         };
         let mut friend_hits: Vec<(usize, f64, f64, f64)> = Vec::new();
+        let shield = self.blocking();
+        let mut blocked: Vec<(f64, f64)> = Vec::new();
         let mut idx = 0usize;
         arrows.retain_mut(|a| {
             let my = idx;
@@ -799,7 +831,11 @@ impl Game {
                 let pl = &self.player;
                 let inside = (a.p[0] - pl.x).abs() < pl.hw + 0.1 && a.p[1] > pl.y && a.p[1] < pl.y + pl.h && (a.p[2] - pl.z).abs() < pl.hw + 0.1;
                 if a.owner != 0 && !client && inside && !self.creative && self.health > 0.0 {
-                    self.pending_damage += a.damage;
+                    if shield && -(a.d[0] * yaw.sin() + a.d[2] * yaw.cos()) > 0.2 {
+                        blocked.push((a.p[0] - a.d[0] * 2.0, a.p[2] - a.d[2] * 2.0));
+                    } else {
+                        self.pending_damage += a.damage;
+                    }
                     gone.push((a.id, 1, a.p));
                     crate::sound::play_at("flecha_criatura", a.p, ear, yaw, 0.9);
                     return false;
@@ -827,6 +863,9 @@ impl Game {
             }
         }
         let _ = stuck_now;
+        for (x, z) in blocked {
+            self.shield_blocks(x, z);
+        }
         for a in arrows.iter().filter(|a| a.stuck && a.stuck_time == 0.0) {
             if let Some(n) = &self.net {
                 if n.is_host() {
@@ -880,13 +919,18 @@ impl Game {
     /// Bater na criatura (dano da ferramenta, empurrão; se morrer, solta o que tinha).
     pub fn hit_mob(&mut self, i: usize) {
         let held = self.inv.s[self.slot].id;
-        let dmg = crate::items::damage(held);
+        let base = crate::items::damage(held);
         let (px, pz) = (self.player.x, self.player.z);
         if self.mobs[i].hurt > 0.0 {
             return;
         }
         let (kx, kz) = (self.mobs[i].body.x - px, self.mobs[i].body.z - pz);
         let kl = (kx * kx + kz * kz).sqrt().max(0.01);
+        let (dmg, critical) = self.swing_damage(base);
+        if critical {
+            let b = &self.mobs[i].body;
+            self.hit_bits([b.x, b.y + b.h * 0.8, b.z], 0xFFF2A0, 12);
+        }
         if self.is_client() {
             // no mundo de outro, quem calcula o golpe é o anfitrião
             let m = &mut self.mobs[i];
@@ -911,6 +955,14 @@ impl Game {
             return;
         }
         m.damage(dmg);
+        if m.t == mob::VILLAGER {
+            // bater num aldeão chama a atenção dos golems
+            let (x, z) = (m.body.x, m.body.z);
+            for g in self.mobs.iter_mut().filter(|g| g.t == mob::IRON_GOLEM && (g.body.x - x).abs() < 24.0 && (g.body.z - z).abs() < 24.0) {
+                g.angry = 20.0;
+            }
+        }
+        let m = &mut self.mobs[i];
         let (at, voice) = ([m.body.x, m.body.y + 0.8, m.body.z], mob::voice(m.t));
         self.sfx("criatura_dano", at, 0.9);
         if let Some(v) = voice {
@@ -922,7 +974,9 @@ impl Game {
         m.body.vy = 5.0;
         if m.health <= 0.0 {
             let pos = [m.body.x, m.body.y + 0.4, m.body.z];
+            let xp = if m.is_baby() || m.t == mob::VILLAGER { 0 } else if m.hostile() { 5 } else { 2 };
             let loot = m.drops(&mut self.rng);
+            self.add_xp(xp);
             for (id, n) in loot {
                 let (vx, vz) = ((self.rng.next() - 0.5) * 3.0, (self.rng.next() - 0.5) * 3.0);
                 self.spawn_drop(Stack::new(id, n, 0), pos, [vx, 3.5, vz], 0.5);
@@ -935,7 +989,14 @@ impl Game {
         let st = self.inv.s[self.slot];
         let held = if st.empty() { 0 } else { st.id };
         let m = &self.mobs[i];
-        if m.hostile() {
+        if m.t == mob::VILLAGER {
+            if !m.is_baby() {
+                let id = m.id;
+                self.open_trade(id);
+            }
+            return true;
+        }
+        if m.hostile() || m.t == mob::IRON_GOLEM {
             return false;
         }
         let eats = if m.t != mob::WOLF {
@@ -1160,6 +1221,30 @@ fn separate<W: Blocks>(mobs: &mut [Mob], dt: f64, w: &W) {
     }
 }
 
+/// Zumbis vão atrás de aldeões (se estiverem mais perto que o jogador), aldeões fogem de zumbis e o golem
+/// de ferro caça os monstros em volta.
+fn choose_village_target(mobs: &mut [Mob], i: usize, player: [f64; 3]) {
+    let me = &mobs[i];
+    let (x, y, z, t) = (me.body.x, me.body.y, me.body.z, me.t);
+    let d2 = |m: &Mob| (m.body.x - x).powi(2) + (m.body.z - z).powi(2);
+    let level = |m: &Mob| (m.body.y - y).abs() < 5.0 && m.health > 0.0;
+    if t == mob::VILLAGER {
+        let threat = mobs.iter().filter(|m| m.t == mob::ZOMBIE && level(m) && d2(m) < 64.0).min_by(|a, b| d2(a).total_cmp(&d2(b))).map(|m| [m.body.x, m.body.z]);
+        if let Some(from) = threat {
+            mobs[i].flee = mobs[i].flee.max(1.2);
+            mobs[i].scare = Some(from);
+        }
+        return;
+    }
+    let target = if t == mob::ZOMBIE {
+        let to_player = (player[0] - x).powi(2) + (player[2] - z).powi(2);
+        mobs.iter().filter(|m| m.t == mob::VILLAGER && level(m) && d2(m) < 196.0 && d2(m) < to_player).min_by(|a, b| d2(a).total_cmp(&d2(b))).map(|m| m.id)
+    } else {
+        mobs.iter().filter(|m| matches!(m.t, mob::ZOMBIE | mob::SPIDER | mob::SKELETON) && level(m) && d2(m) < 256.0).min_by(|a, b| d2(a).total_cmp(&d2(b))).map(|m| m.id)
+    };
+    mobs[i].target = target;
+}
+
 /// Urso-polar caça tudo o que vê pela frente (de até 16 blocos); os bichos por perto fogem dele.
 fn choose_bear_target(mobs: &mut [Mob], i: usize) {
     let (bx, by, bz) = (mobs[i].body.x, mobs[i].body.y, mobs[i].body.z);
@@ -1321,6 +1406,46 @@ mod tests {
         }
         assert_eq!(births, 1);
         assert!(mobs.iter().all(|m| m.sitting && !m.sit_after), "depois do filhote voltam a sentar");
+    }
+
+    #[test]
+    fn zumbi_ataca_aldeao_e_golem_caca_zumbi() {
+        let mut r = Rng::new();
+        let mut v = vec![Mob::new(mob::ZOMBIE, 0.0, 0.0, 0.0, 1, &mut r), Mob::new(mob::VILLAGER, 5.0, 0.0, 0.0, 2, &mut r), Mob::new(mob::IRON_GOLEM, -6.0, 0.0, 0.0, 3, &mut r)];
+        let far = [100.0, 0.0, 0.0];
+        for i in 0..3 {
+            choose_village_target(&mut v, i, far);
+        }
+        assert_eq!(v[0].target, Some(2));
+        assert_eq!(v[2].target, Some(1));
+        assert!(v[1].flee > 0.0 && v[1].scare.is_some(), "o aldeão devia fugir");
+        // com o jogador mais perto que o aldeão, o zumbi prefere o jogador
+        choose_village_target(&mut v, 0, [1.0, 0.0, 0.0]);
+        assert_eq!(v[0].target, None);
+        assert!(!v[2].attacks_player());
+        v[2].damage(1.0);
+        assert!(v[2].attacks_player(), "golem agredido revida");
+    }
+
+    #[test]
+    fn enderman_so_ataca_bravo_e_se_teleporta() {
+        let mut r = Rng::new();
+        let mut e = Mob::new(mob::ENDERMAN, 0.0, 0.0, 0.0, 1, &mut r);
+        assert!(!e.attacks_player());
+        e.angry = 10.0;
+        assert!(e.attacks_player());
+        assert!(e.teleport(&Flat, None, &mut r));
+        assert!(e.body.x.abs() + e.body.z.abs() > 0.4 && e.body.y.abs() < 0.2);
+    }
+
+    #[test]
+    fn morador_guarda_a_vila_ao_salvar() {
+        let mut r = Rng::new();
+        let mut m = Mob::new(mob::VILLAGER, 3.0, 90.0, 4.0, 12, &mut r);
+        m.home = Some([108.0, -170.0]);
+        let back = Mob::load(&m.save(), &mut r).unwrap();
+        assert_eq!((back.t, back.id, back.home), (mob::VILLAGER, 12, Some([108.0, -170.0])));
+        assert!(back.persistent() && !back.is_baby());
     }
 
     #[test]

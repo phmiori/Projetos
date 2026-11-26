@@ -205,6 +205,7 @@ impl Game {
             return;
         }
         if drops {
+            self.xp_for_block(broken);
             let before = self.drops.len();
             self.drop_loot(broken, x, y, z);
             if self.drops.len() > before {
@@ -236,7 +237,7 @@ impl Game {
         if b == block::LEAVES && self.rng.next() < 0.08 {
             self.drop_at_block(items::APPLE, x, y, z);
         }
-        if block::is_leaves(b) && self.rng.next() < 0.07 {
+        if (b == block::LEAVES || b == block::BIRCH_LEAVES) && self.rng.next() < 0.07 {
             self.drop_at_block(if b == block::LEAVES { 163 } else { 164 }, x, y, z);
         }
         if b == block::TALL_GRASS && self.rng.next() < 0.05 {
@@ -245,7 +246,13 @@ impl Game {
         if b == block::TALL_GRASS && self.rng.next() < 0.15 {
             self.drop_at_block(items::SEEDS, x, y, z);
         }
-        self.wheat_loot(b, x, y, z);
+        if b == block::CHERRY_LEAVES && self.rng.next() < 0.06 {
+            self.drop_at_block(crate::items::item_of(block::CHERRY_SAPLING), x, y, z);
+        }
+        if b == block::TALL_GRASS && self.rng.next() < 0.04 {
+            self.drop_at_block(301, x, y, z); // sementes de beterraba
+        }
+        self.crop_loot(b, x, y, z);
     }
 
     // ------------------------------------------------------------------ vida, fome e fôlego
@@ -345,6 +352,9 @@ impl Game {
                 self.inv.s[i] = Stack::default();
             }
         }
+        self.ex.xp = 0;
+        self.ex.riding = None;
+        self.ex.fishing = None;
         self.screen = crate::Screen::Dead;
         self.release_mouse = true;
     }

@@ -39,6 +39,28 @@ pub const FURNACE_LIT: u8 = 170;
 pub const PACKED_ICE: u8 = 216;
 pub const BLUE_ICE: u8 = 217;
 pub const ICICLE: u8 = 218;
+pub const GLASS: u8 = 18;
+pub const FARMLAND: u8 = 166;
+// blocos da atualização das vilas (só na versão Rust)
+pub const SUGAR_CANE: u8 = 228;
+pub const PUMPKIN: u8 = 229;
+pub const MELON: u8 = 230;
+pub const COPPER_ORE: u8 = 231;
+pub const EMERALD_ORE: u8 = 232;
+pub const DEEPSLATE: u8 = 233;
+pub const GRANITE: u8 = 234;
+pub const DIORITE: u8 = 235;
+pub const ANDESITE: u8 = 236;
+pub const CHERRY_LOG: u8 = 239;
+pub const CHERRY_LEAVES: u8 = 240;
+pub const CHERRY_PLANKS: u8 = 241;
+pub const CHERRY_SAPLING: u8 = 242;
+#[cfg(test)]
+pub const LADDER: u8 = 243;
+pub const PATH: u8 = 247;
+pub const BELL: u8 = 248;
+pub const HAY: u8 = 249;
+pub const K_LADDER: u8 = 8;
 
 pub const CUBE: u8 = 0;
 pub const CUTOUT: u8 = 1;
@@ -197,7 +219,7 @@ pub fn opaque_cube(b: u8) -> bool {
 }
 #[inline]
 pub fn is_leaves(b: u8) -> bool {
-    b == LEAVES || b == BIRCH_LEAVES
+    b == LEAVES || b == BIRCH_LEAVES || b == CHERRY_LEAVES
 }
 
 #[inline]

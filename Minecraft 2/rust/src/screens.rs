@@ -43,6 +43,166 @@ fn pixel_icon(ui: &mut Ui, art: &[&str; 7], x: f32, y: f32, px: f32, full: crate
     }
 }
 
+// ---------------------------------------------------------------------- tema de pedra (Ui.java)
+
+/// Chanfro de 2 px: para dentro (afundado) ou para fora (saltado).
+pub(crate) fn bevel(ui: &mut Ui, x: f32, y: f32, w: f32, h: f32, raised: bool, k: f32) {
+    let t = 2.0 * k.max(0.5);
+    let (light, dark) = (rgba(255, 245, 230, if raised { 60 } else { 38 }), rgba(0, 0, 0, 150));
+    let (a, b) = if raised { (light, dark) } else { (dark, light) };
+    ui.rect(x, y, w, t, a);
+    ui.rect(x, y, t, h, a);
+    ui.rect(x, y + h - t, w, t, b);
+    ui.rect(x + w - t, y, t, h, b);
+}
+
+/// Pedra com manchas (sem textura: quadradinhos de tons um pouco diferentes).
+fn stone_fill(ui: &mut Ui, x: f32, y: f32, w: f32, h: f32, base: u8, k: f32) {
+    ui.rect(x, y, w, h, rgba(base, base.saturating_sub(1), base.saturating_add(3), 255));
+    let cell = 16.0 * k;
+    let (nx, ny) = ((w / cell).ceil() as i32, (h / cell).ceil() as i32);
+    for j in 0..ny {
+        for i in 0..nx {
+            let v = crate::noise::hash(i, j, 77) as f32;
+            let d = ((v - 0.5) * 16.0) as i32;
+            if d.abs() < 2 {
+                continue;
+            }
+            let c = (base as i32 + d).clamp(0, 255) as u8;
+            let (cx, cy) = (x + i as f32 * cell, y + j as f32 * cell);
+            ui.rect(cx, cy, cell.min(x + w - cx), cell.min(y + h - cy), rgba(c, c.saturating_sub(1), c.saturating_add(3), 120));
+        }
+    }
+}
+
+/// Painel de pedra com moldura chanfrada, borda de ferro e rebites nos cantos (Ui.stonePanel).
+pub(crate) fn stone_panel(ui: &mut Ui, x: f32, y: f32, w: f32, h: f32, k: f32) {
+    ui.rect(x + 5.0 * k, y + 7.0 * k, w, h, rgba(0, 0, 0, 110));
+    ui.rect(x, y, w, h, rgba(24, 22, 24, 255));
+    stone_fill(ui, x + 2.0 * k, y + 2.0 * k, w - 4.0 * k, h - 4.0 * k, 30, k);
+    let m = 8.0 * k;
+    stone_fill(ui, x + m, y + m, w - 2.0 * m, h - 2.0 * m, 60, k);
+    bevel(ui, x + m, y + m, w - 2.0 * m, h - 2.0 * m, true, k);
+    ui.frame(x + k, y + k, w - 2.0 * k, h - 2.0 * k, k, rgba(110, 100, 92, 255));
+    ui.frame(x + 7.0 * k, y + 7.0 * k, w - 14.0 * k, h - 14.0 * k, k, rgba(0, 0, 0, 200));
+    for (cx, cy) in [(x + 4.0 * k, y + 4.0 * k), (x + w - 5.0 * k, y + 4.0 * k), (x + 4.0 * k, y + h - 5.0 * k), (x + w - 5.0 * k, y + h - 5.0 * k)] {
+        let r = 6.0 * k;
+        ui.disc(cx, cy, r, rgba(20, 18, 18, 255));
+        ui.disc(cx - 0.5 * k, cy - 0.5 * k, r - 1.5 * k, rgba(150, 140, 128, 255));
+        ui.disc(cx - 1.5 * k, cy - 1.5 * k, r * 0.45, rgba(220, 210, 196, 255));
+    }
+}
+
+/// Espaço de item afundado na pedra (Ui.slot).
+pub(crate) fn slot_box(ui: &mut Ui, x: f32, y: f32, s: f32, hover: bool, k: f32) {
+    ui.rect(x, y, s, s, rgba(16, 15, 18, 235));
+    ui.rect(x + 2.0 * k, y + 2.0 * k, s - 4.0 * k, s - 4.0 * k, rgba(42, 39, 44, 235));
+    bevel(ui, x, y, s, s, false, k);
+    if hover {
+        ui.rect(x + 2.0 * k, y + 2.0 * k, s - 4.0 * k, s - 4.0 * k, rgba(255, 240, 210, 46));
+    }
+}
+
+/// Título gravado, com traços e losangos dos dois lados (Ui.stoneTitle).
+pub(crate) fn stone_title(ui: &mut Ui, t: &str, cx: f32, y: f32, span: f32, k: f32) {
+    let px = 22.0 * k;
+    let tw = ui.text_width(px, t);
+    let x = cx - tw / 2.0;
+    ui.shadow(px, x, y, t, rgba(226, 212, 188, 255));
+    let ly = y - px * 0.36;
+    let len = ((span - tw) / 2.0 - 18.0 * k).max(0.0);
+    if len > 8.0 * k {
+        for side in [-1.0f32, 1.0] {
+            let x0 = if side < 0.0 { x - 12.0 * k - len } else { x + tw + 12.0 * k };
+            ui.rect(x0, ly + k, len, 3.0 * k, rgba(0, 0, 0, 160));
+            ui.rect(x0, ly, len, 2.0 * k, rgba(170, 158, 140, 255));
+            let dx = if side < 0.0 { x0 + len + 4.0 * k } else { x0 - 8.0 * k };
+            let c = rgba(170, 158, 140, 255);
+            ui.tri([dx, ly + k], [dx + 3.0 * k, ly - 2.0 * k], [dx + 6.0 * k, ly + k], c);
+            ui.tri([dx, ly + k], [dx + 6.0 * k, ly + k], [dx + 3.0 * k, ly + 4.0 * k], c);
+        }
+    }
+}
+
+/// Seta da criação e da fornalha; `progress` de 0 a 1 enche a seta da esquerda para a direita (Ui.arrow).
+fn arrow(ui: &mut Ui, x: f32, y: f32, w: f32, h: f32, progress: f32, k: f32) {
+    let shape = |ui: &mut Ui, x: f32, y: f32, upto: f32, c: crate::ui::Color| {
+        let neck = x + w * 0.6;
+        let end = x + upto.min(w);
+        // haste
+        ui.rect(x, y + h * 0.3, (end.min(neck) - x).max(0.0), h * 0.4, c);
+        // ponta (cortada em `end`)
+        if end > neck {
+            let half = |px: f32| h / 2.0 * (1.0 - (px - neck) / (w * 0.4));
+            let (a, b) = (half(neck), half(end));
+            let my = y + h / 2.0;
+            ui.tri([neck, my - a], [end, my - b], [end, my + b], c);
+            ui.tri([neck, my - a], [end, my + b], [neck, my + a], c);
+        }
+    };
+    shape(ui, x + 2.0 * k, y + 2.0 * k, w, rgba(0, 0, 0, 150));
+    shape(ui, x - k, y - k, w + 2.0 * k, rgba(40, 36, 34, 255));
+    shape(ui, x, y, w, rgba(150, 140, 128, 255));
+    if progress > 0.0 {
+        shape(ui, x, y, w * progress, rgba(240, 236, 226, 255));
+    }
+}
+
+/// O fogo da fornalha em pixel art: '.' vazio, 'r' borda vermelha, 'o' laranja, 'y' amarelo, 'w' miolo claro.
+const FIRE: [&str; 14] = [
+    "......r.......",
+    "......rr......",
+    ".....rorr.....",
+    ".....roor...r.",
+    "..r.rooor..rr.",
+    "..rrrooorr.ror",
+    ".roroooyorroor",
+    ".rooooyyooooor",
+    "rroooyyyyoooor",
+    "rooyyywyyyooor",
+    "rooyywwwyyoorr",
+    "rrooywwwyyoorr",
+    ".rrooywwyoorr.",
+    "..rrroooorrr..",
+];
+
+/// Chama da fornalha: `fill` de 0 a 1 (quanto do combustível ainda queima). A parte que já queimou fica apagada,
+/// de cima para baixo.
+fn flame(ui: &mut Ui, x: f32, y: f32, s: f32, fill: f32) {
+    let px = s / 14.0;
+    // primeiro o contorno escuro do desenho todo (por baixo de todas as linhas)
+    for (j, row) in FIRE.iter().enumerate() {
+        for (i, _) in row.chars().enumerate().filter(|c| c.1 != '.') {
+            ui.rect(x + (i as f32 - 0.5) * px, y + (j as f32 - 0.5) * px, px * 2.0, px * 2.0, rgba(24, 20, 18, 255));
+        }
+    }
+    for (j, row) in FIRE.iter().enumerate() {
+        // quanto desta linha de pixels está acesa (a última a apagar é a de baixo)
+        let lit = (fill * 14.0 - (13 - j) as f32).clamp(0.0, 1.0);
+        for (i, c) in row.chars().enumerate() {
+            if c == '.' {
+                continue;
+            }
+            let (cx, cy) = (x + i as f32 * px, y + j as f32 * px);
+            let gray = if c == 'r' { rgba(84, 76, 72, 255) } else { rgba(112, 102, 94, 255) };
+            ui.rect(cx, cy, px + 0.5, px + 0.5, gray);
+        }
+        if lit > 0.0 {
+            for (i, c) in row.chars().enumerate() {
+                let color = match c {
+                    'r' => rgba(214, 52, 18, 255),
+                    'o' => rgba(250, 120, 20, 255),
+                    'y' => rgba(255, 196, 40, 255),
+                    'w' => rgba(255, 244, 170, 255),
+                    _ => continue,
+                };
+                let (cx, cy) = (x + i as f32 * px, y + j as f32 * px);
+                ui.rect(cx, cy + px * (1.0 - lit), px + 0.5, px * lit + 0.5, color);
+            }
+        }
+    }
+}
+
 impl Game {
     pub fn ui_scale(h: u32) -> f32 {
         (h as f32 / 720.0).clamp(0.75, 2.5)
@@ -181,14 +341,15 @@ impl Game {
         let mut slots = Vec::new();
         let top_h = if self.open.is_some() {
             3.0 * pitch + 30.0 * k
-        } else if self.creative {
+        } else if self.creative && !self.at_table {
             PAL_ROWS as f32 * pitch + 30.0 * k
         } else {
             (self.craft_size().max(4)) as f32 * pitch + 30.0 * k
         };
         let ph = 30.0 * k + top_h + 30.0 * k + 3.0 * pitch + 10.0 * k + pitch + pad;
         // um pouco acima do meio, para não cobrir a barra
-        let (px, py) = ((w - pw) / 2.0, ((h - ph) / 2.0 - 40.0 * k).max(4.0 * k));
+        // com o livro de receitas aberto, o painel anda para a esquerda para os dois ficarem no meio
+        let (px, py) = ((w - pw) / 2.0 - self.book_shift(k), ((h - ph) / 2.0 - 40.0 * k).max(4.0 * k));
         let x0 = px + pad;
         let mut y = py + 44.0 * k;
         if let Some(open) = &self.open {
@@ -199,12 +360,18 @@ impl Game {
                     }
                 }
                 Open::Furnace(_) => {
-                    slots.push((SlotRef::Furnace(0), x0 + 2.5 * pitch, y));
-                    slots.push((SlotRef::Furnace(1), x0 + 2.5 * pitch, y + 2.0 * pitch));
-                    slots.push((SlotRef::Furnace(2), x0 + 5.5 * pitch, y + pitch));
+                    // como no Java: entrada em cima, combustível embaixo, chama no meio, seta e resultado à direita
+                    let s = 44.0 * k;
+                    let grid_w = 9.0 * pitch - 4.0 * k;
+                    let group = s + 34.0 * k + 50.0 * k + 34.0 * k + s;
+                    let fx = x0 + (grid_w - group) / 2.0;
+                    let (top, bottom) = (y + 6.0 * k, y + 3.0 * pitch - 4.0 * k);
+                    slots.push((SlotRef::Furnace(0), fx, top));
+                    slots.push((SlotRef::Furnace(1), fx, bottom - s));
+                    slots.push((SlotRef::Furnace(2), fx + s + 118.0 * k, (top + bottom) / 2.0 - s / 2.0));
                 }
             }
-        } else if self.creative {
+        } else if self.creative && !self.at_table {
             for r in 0..PAL_ROWS {
                 for c in 0..PAL_COLS {
                     slots.push((SlotRef::Palette(r * PAL_COLS + c), x0 + c as f32 * pitch, y + r as f32 * pitch));
@@ -222,7 +389,7 @@ impl Game {
                     slots.push((SlotRef::Craft(r * 3 + c), gx + c as f32 * pitch, y + r as f32 * pitch));
                 }
             }
-            slots.push((SlotRef::Result, gx + (n as f32 + 1.5) * pitch, y + (n as f32 - 1.0) / 2.0 * pitch));
+            slots.push((SlotRef::Result, gx + (n as f32 + 1.6) * pitch, y + (n as f32 - 1.0) / 2.0 * pitch));
         }
         y += top_h;
         for r in 0..3 {
@@ -290,7 +457,7 @@ impl Game {
 
     /// Botão "Limpar inventário" (só no criativo, em cima da mochila), como no Java.
     pub fn clear_rect(&self, w: f32, h: f32) -> Option<[f32; 4]> {
-        if !self.creative || self.open.is_some() {
+        if !self.creative || self.open.is_some() || self.at_table {
             return None;
         }
         let k = Self::ui_scale(h as u32);
@@ -305,6 +472,9 @@ impl Game {
     }
 
     pub fn inv_click(&mut self, w: f32, h: f32, mx: f32, my: f32, right: bool, shift: bool) {
+        if self.book_click(w, h, mx, my, shift) {
+            return;
+        }
         // limpar tudo: o primeiro clique pede confirmação (some em 3 s), o segundo apaga a mochila e a barra
         if let Some(c) = self.clear_rect(w, h) {
             if !right && mx >= c[0] && mx < c[0] + c[2] && my >= c[1] && my < c[1] + c[3] {
@@ -502,36 +672,46 @@ impl Game {
         let k = Self::ui_scale(h as u32);
         ui.rect(0.0, 0.0, w, h, rgba(0, 0, 0, 120));
         let (p, slots, s) = self.inv_layout(w, h);
-        ui.rect(p[0], p[1], p[2], p[3], rgba(38, 38, 44, 240));
-        ui.frame(p[0], p[1], p[2], p[3], 3.0 * k, rgba(90, 90, 100, 255));
+        stone_panel(ui, p[0], p[1], p[2], p[3], k);
+        let palette = self.creative && self.open.is_none() && !self.at_table;
         let title = match &self.open {
             Some(Open::Chest(_)) => "Baú",
             Some(Open::Furnace(_)) => "Fornalha",
-            None if self.creative => "Criativo",
             None if self.at_table => "Bancada",
+            None if self.creative => "Criativo",
             None => "Inventário",
         };
-        ui.shadow(20.0 * k, p[0] + 18.0 * k, p[1] + 30.0 * k, title, rgba(245, 232, 205, 255));
-        if self.creative && self.open.is_none() {
+        let grid_w = 9.0 * 48.0 * k - 4.0 * k;
+        // no criativo os traços do título encurtam para caber o "rodinha" à direita
+        stone_title(ui, title, p[0] + p[2] / 2.0, p[1] + 34.0 * k, if palette { grid_w - 240.0 * k } else { grid_w }, k);
+        if palette {
             let rows = self.palette.len().div_ceil(PAL_COLS);
-            ui.shadow(11.0 * k, p[0] + p[2] - 150.0 * k, p[1] + 30.0 * k, &format!("rodinha: {}/{}", self.palette_scroll + 1, rows.saturating_sub(PAL_ROWS) + 1), rgba(200, 200, 205, 200));
+            ui.shadow(11.0 * k, p[0] + p[2] - 106.0 * k, p[1] + 30.0 * k, &format!("rodinha: {}/{}", self.palette_scroll + 1, rows.saturating_sub(PAL_ROWS) + 1), rgba(170, 158, 140, 230));
         }
         let hover = self.slot_at(w, h, self.mouse.0, self.mouse.1);
-        let recipe = if self.creative || self.open.is_some() { None } else { items::match_recipe(&self.craft_grid(), self.craft_size()) };
-        // fornalha: chama (o calor que resta) entre a entrada e o combustível, e a seta com o progresso
+        let recipe = if palette || self.open.is_some() { None } else { items::match_recipe(&self.craft_grid(), self.craft_size()) };
+        // fornalha: chama (o calor que resta) entre a entrada e o combustível, a seta com o progresso e uma dica
         if let Some(Open::Furnace(key)) = &self.open {
-            if let Some(f) = self.furnaces.get(key) {
-                let pitch = 48.0 * k;
-                let (fx, fy) = (p[0] + 18.0 * k + 2.5 * pitch + s / 2.0, p[1] + 44.0 * k + pitch + s / 2.0);
-                let heat = if f.heat_max > 0.0 { (f.heat / f.heat_max).clamp(0.0, 1.0) as f32 } else { 0.0 };
-                let (fw, fh) = (18.0 * k, 22.0 * k);
-                ui.rect(fx - fw / 2.0, fy - fh / 2.0, fw, fh, rgba(40, 30, 24, 255));
-                ui.rect(fx - fw / 2.0, fy + fh / 2.0 - fh * heat, fw, fh * heat, rgba(255, 140, 30, 255));
-                let (ax, ay) = (p[0] + 18.0 * k + 3.8 * pitch, p[1] + 44.0 * k + pitch + s / 2.0 - 6.0 * k);
-                let aw = 1.4 * pitch;
-                ui.rect(ax, ay, aw, 12.0 * k, rgba(60, 60, 66, 255));
-                ui.rect(ax, ay, aw * f.progress.clamp(0.0, 1.0) as f32, 12.0 * k, rgba(240, 240, 245, 255));
-            }
+            let f = self.furnaces.get(key);
+            let at = |r: SlotRef| slots.iter().find(|q| q.0 == r).map(|q| (q.1, q.2)).unwrap_or((0.0, 0.0));
+            let ((ix, iy), (_, fy), (ox, oy)) = (at(SlotRef::Furnace(0)), at(SlotRef::Furnace(1)), at(SlotRef::Furnace(2)));
+            let mid = (iy + fy + s) / 2.0;
+            let fill = f.map_or(0.0, |f| if f.heat_max > 0.0 { ((f.heat - f.progress) / f.heat_max).clamp(0.0, 1.0) } else { 0.0 }) as f32;
+            flame(ui, ix + s / 2.0 - 14.0 * k, mid - 14.0 * k, 28.0 * k, fill);
+            arrow(ui, ix + s + 34.0 * k, mid - 14.0 * k, 50.0 * k, 28.0 * k, f.map_or(0.0, |f| f.progress.clamp(0.0, 1.0) as f32), k);
+            ui.frame(ox - 3.0 * k, oy - 3.0 * k, s + 6.0 * k, s + 6.0 * k, 2.0 * k, rgba(232, 190, 90, 255));
+            let inp = f.map_or(Stack::default(), |f| f.inv[0]);
+            let hint = if inp.empty() {
+                "Minério, areia, pedregulho, tronco ou carne crua em cima".to_string()
+            } else if items::smelt(inp.id) == 0 {
+                format!("{} não assa", items::name(inp.id))
+            } else if f.map_or(true, |f| f.inv[1].empty() && f.heat <= 0.0) {
+                "Falta combustível embaixo".to_string()
+            } else {
+                format!("Vira {}", items::name(items::smelt(inp.id)))
+            };
+            let tw = ui.text_width(12.0 * k, &hint);
+            ui.shadow(12.0 * k, p[0] + p[2] / 2.0 - tw / 2.0, fy + s + 20.0 * k, &hint, rgba(170, 158, 140, 255));
         }
         let mut last_y = 0.0;
         for &(r, x, y) in &slots {
@@ -543,8 +723,7 @@ impl Game {
             }
             last_y = y;
             let hot = hover == Some(r);
-            ui.rect(x, y, s, s, if hot { rgba(70, 70, 78, 255) } else { rgba(22, 22, 26, 255) });
-            ui.frame(x, y, s, s, k, rgba(0, 0, 0, 170));
+            slot_box(ui, x, y, s, hot, k);
             let st = match r {
                 SlotRef::Palette(i) => {
                     let id = self.palette_item(i);
@@ -562,18 +741,24 @@ impl Game {
                 }
             }
             if r == SlotRef::Result {
-                ui.shadow(22.0 * k, x - 34.0 * k, y + s / 2.0 + 8.0 * k, "→", rgba(220, 220, 225, 255));
+                arrow(ui, x - 50.0 * k, y + s / 2.0 - 12.0 * k, 38.0 * k, 24.0 * k, if recipe.is_some() { 1.0 } else { 0.0 }, k);
+                let c = if recipe.is_some() { rgba(232, 190, 90, 255) } else { rgba(90, 80, 70, 255) };
+                ui.frame(x - 3.0 * k, y - 3.0 * k, s + 6.0 * k, s + 6.0 * k, 2.0 * k, c);
             }
             ui.item(st, x + 4.0 * k, y + 4.0 * k, s - 8.0 * k, k);
         }
-        if !self.creative && self.open.is_none() {
-            ui.shadow(11.0 * k, p[0] + 18.0 * k + 2.5 * 48.0 * k, p[1] + 40.0 * k, "Criação", rgba(200, 200, 205, 200));
+
+        // o livro de receitas (e o desenho fantasma da receita embaixo do mouse)
+        let book_hover = self.draw_book(ui, w, h);
+        if let Some(r) = book_hover {
+            self.draw_ghost(ui, k, &slots, s, r);
+            self.draw_book_tooltip(ui, w, h, r);
         }
         if let Some(c) = self.clear_rect(w, h) {
             let confirming = self.clear_confirming();
             let hot = self.mouse.0 >= c[0] && self.mouse.0 < c[0] + c[2] && self.mouse.1 >= c[1] && self.mouse.1 < c[1] + c[3];
-            ui.rect(c[0], c[1], c[2], c[3], if confirming { rgba(150, 40, 34, 235) } else if hot { rgba(90, 60, 52, 235) } else { rgba(40, 36, 38, 220) });
-            ui.frame(c[0], c[1], c[2], c[3], k, rgba(0, 0, 0, 170));
+            ui.rect(c[0], c[1], c[2], c[3], if confirming { rgba(150, 40, 34, 235) } else if hot { rgba(84, 76, 70, 240) } else { rgba(48, 45, 48, 235) });
+            bevel(ui, c[0], c[1], c[2], c[3], true, k);
             let label = if confirming { "Clique de novo para apagar" } else { "Limpar inventário" };
             ui.centered(11.0 * k, c[0] + c[2] / 2.0, c[1] + 15.0 * k, label, if confirming || hot { rgba(255, 255, 255, 255) } else { rgba(200, 200, 205, 230) });
         }
@@ -646,7 +831,7 @@ impl Game {
             ("Rodinha  ·  1 a 9", "trocar o item da mão"),
             ("E", "inventário e criação"),
             ("Q  ·  Ctrl+Q", "jogar fora um item  ·  a pilha toda"),
-            ("T  ·  Enter", "chat (na LAN)"),
+            ("T  ·  Enter  ·  /", "chat e comandos (/ajuda)"),
             ("F2", "tirar foto (pasta fotos)"),
             ("F3", "ligar/desligar a sombra dos cantos"),
             ("F4 (segurando)", "passar as horas depressa"),

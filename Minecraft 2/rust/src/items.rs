@@ -192,9 +192,64 @@ pub fn mining(id: i32, b: u8) -> (f64, bool) {
     (speed, drops)
 }
 
-/// Tábuas de bétula valem como tábuas comuns nas receitas que não são peças de madeira.
+/// O item que coloca um bloco de id 200 ou mais.
+pub fn item_of(b: u8) -> i32 {
+    block::table().placers.iter().find(|p| p.1 == b).map_or(0, |p| p.0)
+}
+
+/// Tábuas de bétula e de cerejeira valem como tábuas comuns nas receitas que não são peças de madeira.
 fn same(id: i32) -> i32 {
-    if id == 171 { 8 } else { id }
+    if id == 171 || id == 425 { 8 } else { id }
+}
+
+/// Nome do arquivo do desenho do item: "Lingote de ferro" vira "lingote_de_ferro.png".
+pub fn icon_file(name: &str) -> String {
+    let mut s = String::new();
+    for c in name.to_lowercase().chars() {
+        let c = match c {
+            'á' | 'à' | 'â' | 'ã' => 'a',
+            'é' | 'ê' => 'e',
+            'í' => 'i',
+            'ó' | 'ô' | 'õ' => 'o',
+            'ú' => 'u',
+            'ç' => 'c',
+            c => c,
+        };
+        if c.is_ascii_alphanumeric() {
+            s.push(c);
+        } else if !s.is_empty() && !s.ends_with('_') {
+            s.push('_');
+        }
+    }
+    format!("{}.png", s.trim_end_matches('_'))
+}
+
+/// Os desenhos dos itens que o jogador pode trocar: um PNG de 16x16 por item na pasta `dir`. O que faltar é criado
+/// com o desenho padrão (da folha embutida, 32 por linha); depois a folha recebe o que está nos arquivos.
+pub fn load_item_art(dir: &std::path::Path, sheet: &mut image::RgbaImage) {
+    let _ = std::fs::create_dir_all(dir);
+    for id in &tables().order {
+        let info = &tables().items[id];
+        let (x0, y0) = ((info.icon % 32) as u32 * 16, (info.icon / 32) as u32 * 16);
+        if x0 + 16 > sheet.width() || y0 + 16 > sheet.height() {
+            continue;
+        }
+        let path = dir.join(icon_file(&info.name));
+        if !path.exists() {
+            let _ = image::imageops::crop_imm(sheet, x0, y0, 16, 16).to_image().save(&path);
+            continue;
+        }
+        match image::open(&path) {
+            Ok(img) => {
+                let mut img = img.to_rgba8();
+                if img.dimensions() != (16, 16) {
+                    img = image::imageops::resize(&img, 16, 16, image::imageops::FilterType::Nearest);
+                }
+                image::imageops::replace(sheet, &img, x0 as i64, y0 as i64);
+            }
+            Err(e) => println!("não consegui ler {}: {e}", path.display()),
+        }
+    }
 }
 
 /// A receita que a grade (size x size) monta, ou None (Items.match do Java: primeiro com os itens exatos,
@@ -269,6 +324,53 @@ pub fn palette() -> Vec<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn toda_receita_monta_o_proprio_resultado_com_itens_que_existem() {
+        for r in &tables().recipes {
+            assert!(exists(r.out), "resultado {} não existe", r.out);
+            assert!(r.cells.iter().all(|&c| c == 0 || exists(c)), "ingrediente inexistente na receita de {}", r.out);
+            let mut grid = [0i32; 9];
+            for (i, &c) in r.cells.iter().enumerate() {
+                let w = if r.shapeless { 3 } else { r.w };
+                grid[(i / w) * 3 + i % w] = c;
+            }
+            assert_eq!(match_recipe(&grid, 3).map(|m| m.out), Some(r.out), "a receita de {} está encoberta por outra", r.out);
+        }
+        for (from, (to, _)) in &tables().furnace {
+            assert!(exists(*from) && (*to == 0 || exists(*to)), "fornalha: {from} -> {to}");
+        }
+    }
+
+    #[test]
+    fn cada_item_tem_o_seu_arquivo_e_o_desenho_trocado_vale() {
+        let t = tables();
+        let mut names: Vec<String> = t.order.iter().map(|i| icon_file(&t.items[i].name)).collect();
+        let mut cells: Vec<i32> = t.order.iter().map(|i| t.items[i].icon).collect();
+        let n = names.len();
+        names.sort();
+        names.dedup();
+        cells.sort();
+        cells.dedup();
+        assert_eq!((names.len(), cells.len()), (n, n), "dois itens com o mesmo arquivo ou o mesmo lugar");
+        assert_eq!(icon_file("Maçã"), "maca.png");
+        assert_eq!(icon_file("Ovo de tigre-de-bengala"), "ovo_de_tigre_de_bengala.png");
+
+        let dir = std::env::temp_dir().join(format!("mb-itens-{}", std::process::id()));
+        let original = image::load_from_memory(include_bytes!("../dados/itens.png")).unwrap().to_rgba8();
+        // na primeira vez os arquivos são criados e a folha não muda
+        let mut sheet = original.clone();
+        load_item_art(&dir, &mut sheet);
+        assert!(sheet == original);
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), n);
+        // um desenho trocado (aqui maior, 32x32) entra no lugar dele e não é sobrescrito
+        image::RgbaImage::from_pixel(32, 32, image::Rgba([1, 2, 3, 255])).save(dir.join("graveto.png")).unwrap();
+        load_item_art(&dir, &mut sheet);
+        let cell = t.items[&STICK].icon;
+        assert_eq!(sheet.get_pixel((cell % 32) as u32 * 16 + 5, (cell / 32) as u32 * 16 + 5).0, [1, 2, 3, 255]);
+        assert_eq!(image::open(dir.join("graveto.png")).unwrap().to_rgba8().dimensions(), (32, 32));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     #[test]
     fn tronco_vira_tabuas() {

@@ -37,8 +37,19 @@ pub fn food_of(t: usize) -> Option<i32> {
         FOX | SCORPION | EMPEROR => RAW_CHICKEN,
         BEAR | POLAR_BEAR | PENGUIN | SEAL | NARWHAL | CAT => RAW_FISH,
         TIGER | WHITE_TIGER | SHARK => RAW_BEEF,
-        _ => return None,
+        _ => return None, // monstros, aldeões, golem (e o lobo, que come qualquer carne)
     })
+}
+
+/// Comidas a mais, das plantações: cenoura (297), batata (298), beterraba (300), sementes dela (301) e a dourada (307).
+fn also_eats(t: usize, item: i32) -> bool {
+    match t {
+        PIG => matches!(item, 297 | 298 | 300),
+        RABBIT => matches!(item, 297 | 307),
+        DEER => item == 297,
+        CHICKEN | BIRD => item == 301,
+        _ => false,
+    }
 }
 
 impl Mob {
@@ -51,7 +62,7 @@ impl Mob {
         if self.t == WOLF {
             self.tamed && is_meat(item)
         } else {
-            food_of(self.t) == Some(item)
+            food_of(self.t) == Some(item) || also_eats(self.t, item)
         }
     }
 
@@ -208,7 +219,7 @@ mod tests {
         let mut r = Rng::new();
         for t in 0..TYPES {
             let m = Mob::new(t, 0.0, 0.0, 0.0, 1, &mut r);
-            assert_eq!(food_of(t).is_some(), !m.hostile() && t != WOLF, "tipo {t}");
+            assert_eq!(food_of(t).is_some(), !m.hostile() && !matches!(t, WOLF | VILLAGER | IRON_GOLEM), "tipo {t}");
         }
     }
 

@@ -35,7 +35,10 @@ pub const PENGUIN: usize = 24;
 pub const MUSKOX: usize = 25;
 pub const NARWHAL: usize = 26;
 pub const SEAL: usize = 27;
-pub const TYPES: usize = 28;
+pub const VILLAGER: usize = 28;
+pub const IRON_GOLEM: usize = 29;
+pub const ENDERMAN: usize = 30;
+pub const TYPES: usize = 31;
 
 pub const TAMED_HP: f64 = 20.0;
 pub const FUSE_TIME: f64 = 1.5;
@@ -131,11 +134,12 @@ pub fn data() -> &'static Data {
 }
 
 /// A voz de cada criatura (Mob.SOUNDS), na ordem dos tipos.
-const SOUNDS: [Option<&str>; 28] = [
+const SOUNDS: [Option<&str>; 31] = [
     Some("porco"), Some("ovelha"), Some("galinha"), Some("morto_vivo"), Some("aranha"), None, Some("vaca"), None,
     Some("esqueleto"), Some("lobo"), Some("raposa"), None, None, Some("urso"), Some("passaro"), None, None, None,
     Some("rugido"), Some("rugido"), Some("miau"), Some("aranha"), Some("aranha"), Some("urso"), Some("pinguim"),
     Some("boi"), None, None,
+    None, None, None,
 ];
 
 pub fn voice(t: usize) -> Option<&'static str> {
@@ -201,6 +205,10 @@ pub struct Mob {
     pub goal: Option<([f64; 3], f64)>,
     /// filhote, apaixonado ou atrás de comida: não ataca nem foge do jogador
     pub calm: bool,
+    /// aldeões e golem: o centro da vila, para onde voltam quando se afastam
+    pub home: Option<[f64; 2]>,
+    /// Enderman: espera até o próximo teleporte
+    tp_cd: f64,
 }
 
 /// O que a criatura enxerga do mundo e dos outros a cada passo.
@@ -267,6 +275,8 @@ impl Mob {
             sit_after: false,
             goal: None,
             calm: false,
+            home: None,
+            tp_cd: 0.0,
         }
     }
 
@@ -284,7 +294,7 @@ impl Mob {
     }
     /// Presa do urso-polar: qualquer bicho de terra (menos outro urso-polar). Peixes e pássaros no ar ele não alcança.
     pub fn polar_prey(&self) -> bool {
-        self.t != POLAR_BEAR && !self.swimmer() && !(self.t == BIRD && self.flying)
+        self.t != POLAR_BEAR && self.t != IRON_GOLEM && !self.swimmer() && !(self.t == BIRD && self.flying)
     }
     /// O ponto (dx, dz), relativo a esta criatura, está no campo de visão dela (70 graus para cada lado)?
     pub fn sees(&self, dx: f64, dz: f64) -> bool {
@@ -295,16 +305,20 @@ impl Mob {
         self.t == SCORPION || self.t == EMPEROR
     }
     pub fn fighter(&self) -> bool {
-        self.t == WOLF || self.bear() || self.tiger() || self.t == MUSKOX
+        self.t == WOLF || self.bear() || self.tiger() || self.t == MUSKOX || self.t == IRON_GOLEM
     }
     pub fn hostile(&self) -> bool {
-        matches!(self.t, ZOMBIE | SPIDER | CREEPER | SKELETON)
+        matches!(self.t, ZOMBIE | SPIDER | CREEPER | SKELETON | ENDERMAN)
     }
     pub fn attacks_player(&self) -> bool {
-        self.hostile() || (!self.calm && (self.t == SHARK || self.scorpion() || (self.fighter() && self.angry > 0.0 && !self.tamed)))
+        (self.hostile() && (self.t != ENDERMAN || self.angry > 0.0)) || (!self.calm && (self.t == SHARK || self.scorpion() || (self.fighter() && self.angry > 0.0 && !self.tamed)))
     }
     pub fn attack_damage(&self) -> f64 {
-        if self.t == ZOMBIE || self.t == WOLF {
+        if self.t == IRON_GOLEM {
+            8.0
+        } else if self.t == ENDERMAN {
+            4.0
+        } else if self.t == ZOMBIE || self.t == WOLF {
             3.0
         } else if self.bear() {
             5.0
@@ -443,7 +457,7 @@ impl Mob {
             } else {
                 self.aim = (self.aim - dt * 2.0).max(0.0);
             }
-        } else if self.t == POLAR_BEAR && s.target.is_some() && !(self.attacks_player() && s.can_target && dist < 18.0 && py.abs() < 8.0) {
+        } else if matches!(self.t, POLAR_BEAR | ZOMBIE | IRON_GOLEM) && s.target.is_some() && !(self.attacks_player() && s.can_target && dist < 18.0 && py.abs() < 8.0) {
             // urso-polar caçando pinguim ou foca: persegue e morde
             if let Some((tp, thw, _)) = s.target {
                 let (ddx, ddz) = (tp[0] - self.body.x, tp[2] - self.body.z);
@@ -451,7 +465,7 @@ impl Mob {
                 tx = ddx / dd;
                 tz = ddz / dd;
                 speed *= 1.5;
-                if dd < 1.5 + thw && (tp[1] - self.body.y).abs() < 1.6 {
+                if dd < if self.t == IRON_GOLEM { 1.9 } else { 1.5 } + thw && (tp[1] - self.body.y).abs() < 1.6 {
                     tx = 0.0;
                     tz = 0.0;
                     if self.attack_cd <= 0.0 {
@@ -525,6 +539,25 @@ impl Mob {
             tx = self.dir_x;
             tz = self.dir_z;
             speed *= 0.6;
+            if let Some(h) = self.home {
+                // moradores não se afastam da vila
+                let (dx, dz) = (h[0] - self.body.x, h[1] - self.body.z);
+                let d = (dx * dx + dz * dz).sqrt();
+                if d > 22.0 {
+                    (tx, tz) = (dx / d, dz / d);
+                }
+            }
+        }
+        if self.t == ENDERMAN {
+            self.tp_cd -= dt;
+            let hit = self.hurt > 0.33 && r.next() < 0.7;
+            let chase = self.angry > 0.0 && dist > 9.0;
+            if hit || self.body.in_water || (chase && self.tp_cd <= 0.0) {
+                let near = if chase && !hit && !self.body.in_water { Some(s.p) } else { None };
+                if self.teleport(w, near, r) {
+                    self.tp_cd = 3.0;
+                }
+            }
         }
 
         if face || tx != 0.0 || tz != 0.0 {
@@ -558,6 +591,34 @@ impl Mob {
         if self.body.in_lava {
             self.damage(4.0 * dt);
         }
+    }
+
+    /// Enderman: some e aparece em outro lugar firme (perto do alvo, se estiver perseguindo).
+    pub fn teleport<W: Blocks>(&mut self, w: &W, near: Option<[f64; 3]>, r: &mut Rng) -> bool {
+        for _ in 0..12 {
+            let (cx, cy, cz, reach) = match near {
+                Some(p) => (p[0], p[1], p[2], 4.0),
+                None => (self.body.x, self.body.y, self.body.z, 12.0),
+            };
+            let (x, z) = ((cx + (r.next() - 0.5) * 2.0 * reach).floor() + 0.5, (cz + (r.next() - 0.5) * 2.0 * reach).floor() + 0.5);
+            for dy in (-5..=4).rev() {
+                let y = cy.floor() as i32 + dy;
+                let ground = w.get(x as i32 - (x < 0.0) as i32, y - 1, z as i32 - (z < 0.0) as i32);
+                if !block::solid(ground) {
+                    continue;
+                }
+                let mut test = self.body.clone();
+                (test.x, test.y, test.z) = (x, y as f64 + 0.01, z);
+                let dry = !block::is_water(w.get(x.floor() as i32, y, z.floor() as i32));
+                if dry && !test.collides(w) {
+                    (test.vx, test.vy, test.vz, test.fall_dist) = (0.0, 0.0, 0.0, 0.0);
+                    self.body = test;
+                    return true;
+                }
+                break;
+            }
+        }
+        false
     }
 
     /// Peixes, tubarão e narval: nadam em 3D só dentro da água; fora dela caem, se debatem e perdem vida.
@@ -802,6 +863,9 @@ impl Mob {
             return Vec::new(); // filhote não solta nada
         }
         let v: Vec<(i32, i32)> = match self.t {
+            VILLAGER => vec![],
+            IRON_GOLEM => vec![(IRON_INGOT, 3 + n(r, 3))],
+            ENDERMAN => vec![(crate::combat::ENDER_PEARL, n(r, 2))],
             PIG => vec![(RAW_PORK, 1 + n(r, 2))],
             SHEEP => vec![(block::WOOL as i32, 1), (RAW_MUTTON, 1 + n(r, 2))],
             CHICKEN => vec![(RAW_CHICKEN, 1), (FEATHER, n(r, 3))],
@@ -844,7 +908,9 @@ impl Mob {
             EMPEROR => vec![(STRING, 1 + n(r, 2)), (BONE, n(r, 2)), (GUNPOWDER, n(r, 2))],
             _ => {
                 // morto-vivo
-                if r.next() < 0.06 {
+                if r.next() < 0.03 {
+                    vec![(if r.next() < 0.5 { 297 } else { 298 }, 1)]
+                } else if r.next() < 0.06 {
                     vec![(IRON_INGOT, 1)]
                 } else if r.next() < 0.4 {
                     vec![(COAL, 1 + n(r, 2))]
@@ -887,6 +953,7 @@ impl Mob {
             BIRD => pick("BIRD_COLORS", self.variant()),
             TROPICAL => pick("TROPICAL_COLORS", self.variant()),
             CAT => pick("CAT_COLORS", self.variant()),
+            VILLAGER => pick("VILLAGER_COLORS", self.id.rem_euclid(5) as usize),
             TIGER => pick("TIGER_COLORS", 0),
             WHITE_TIGER => pick("WHITE_TIGER_COLORS", 0),
             SCORPION => pick("SCORPION_COLORS", 0),
@@ -1033,6 +1100,11 @@ impl Mob {
         let mut s = format!("{};{:.2};{:.2};{:.2};{:.2};{:.1};{}", self.t, self.body.x, self.body.y, self.body.z, self.yaw, self.health, self.id);
         if self.bred || self.is_baby() || self.rest > 0.0 {
             s += &format!(";{};{};{}", self.baby.ceil(), self.rest.ceil(), self.bred as i32);
+        } else if self.home.is_some() {
+            s += ";0;0;0";
+        }
+        if let Some(h) = self.home {
+            s += &format!(";{:.0};{:.0}", h[0], h[1]);
         }
         s
     }
@@ -1054,6 +1126,9 @@ impl Mob {
             m.set_baby(f(7)?.max(0.0));
             m.rest = f(8)?.max(0.0);
             m.bred = p[9].trim() == "1";
+        }
+        if p.len() >= 12 {
+            m.home = Some([f(10)?, f(11)?]);
         }
         Some(m)
     }

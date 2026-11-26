@@ -1,4 +1,4 @@
-//! Chat da LAN (como o do Java): T ou Enter abre a caixa, Enter envia, Esc cancela. As mensagens ficam no
+//! Chat da LAN e comandos (como o do Java): T ou Enter abre a caixa ("/" já começa um comando), Enter envia, Esc cancela. As mensagens ficam no
 //! canto de baixo à esquerda e somem depois de 10 s (com a caixa aberta, as últimas 12 continuam visíveis).
 //! Fotos (como o ChatImage.java): arraste um arquivo de imagem para a janela; ela é reduzida (maior lado 640)
 //! e comprimida em JPEG, aparece aqui e vai para todos. As que chegam são conferidas antes de abrir.
@@ -313,6 +313,9 @@ impl Game {
         if text.is_empty() {
             return;
         }
+        if text.starts_with('/') {
+            return self.run_command(&text); // comando: não vai para o chat dos outros
+        }
         let me = if self.player_name.is_empty() { "Eu".to_string() } else { self.player_name.clone() };
         self.add_chat(format!("<{me}> {text}"), MINE);
         match &self.net {
@@ -336,7 +339,7 @@ impl Game {
             let caret = (self.start.elapsed().as_millis() / 500) % 2 == 0;
             ui.text(px, x + 6.0 * k, y + 17.0 * k, &format!("{s}{}", if caret { "_" } else { "" }), WHITE);
             if self.chat.input.is_empty() {
-                ui.text(px, x + 6.0 * k, y + 17.0 * k, "   Enter envia   Ctrl+O escolhe uma foto (ou arraste o arquivo para a janela)   Esc cancela", [1.0, 1.0, 1.0, 0.43]);
+                ui.text(px, x + 6.0 * k, y + 17.0 * k, "   Enter envia   /ajuda mostra os comandos   Ctrl+O escolhe uma foto (ou arraste o arquivo para a janela)   Esc cancela", [1.0, 1.0, 1.0, 0.43]);
             }
         }
         let top = 175.0 * k; // não invade a caixa de informações lá em cima

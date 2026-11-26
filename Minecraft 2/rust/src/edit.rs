@@ -186,7 +186,9 @@ impl Game {
     /// Botão direito: abre/fecha porta, ou coloca o bloco da mão (mesmas regras do placeBlock do Java).
     pub fn use_aimed(&mut self) {
         let Some(h) = self.aim else {
-            self.use_item();
+            if !self.use_pearl() && !self.use_tool_item() {
+                self.use_item();
+            }
             return;
         };
         let [hx, hy, hz] = h.b;
@@ -213,16 +215,25 @@ impl Game {
             self.open_container(hx, hy, hz, target);
             return;
         }
+        if target == block::BELL {
+            self.sfx("coletar", [hx as f64 + 0.5, hy as f64 + 0.5, hz as f64 + 0.5], 1.0);
+            self.notice("Blém! Blém!".into());
+            return;
+        }
         // cama, dinamite com pederneira
         if self.use_farm(target, hx, hy, hz) {
             return;
         }
-        // comida e armadura na mão: come ou veste; ovo: nasce a criatura
-        if self.use_item() || self.use_egg() {
+        // pérola, balde, vara de pescar e barco
+        if self.use_pearl() || self.use_tool_item() {
             return;
         }
-        // osso no trigo, enxada na terra, sementes na terra arada
+        // enxada, sementes e adubo vêm antes de comer (cenoura e batata se plantam)
         if self.use_on_soil(target, hx, hy, hz) {
+            return;
+        }
+        // comida e armadura na mão: come ou veste; ovo: nasce a criatura
+        if self.use_item() || self.use_egg() {
             return;
         }
         let held = block::block_of_item(self.inv.s[self.slot].id);
@@ -270,6 +281,14 @@ impl Game {
             self.pay();
             return;
         }
+        if hi.kind == block::K_LADDER {
+            // escada de mão: só na parede de um bloco inteiro
+            if side_click && block::opaque_cube(target) {
+                self.set(bx, by, bz, block::variant(block::K_LADDER, 0, toward_hit, 0, 0), 0);
+                self.pay();
+            }
+            return;
+        }
         let place = match hi.kind {
             K_VSLAB => block::variant(K_VSLAB, hi.mat, if side_click { toward_hit } else { facing }, 0, 0),
             K_SLAB => block::variant(K_SLAB, hi.mat, 0, upper_half as u8, 0),
@@ -291,7 +310,9 @@ impl Game {
         if place == AIR {
             return;
         }
-        let supported = if place == ICICLE {
+        let supported = if place == block::SUGAR_CANE {
+            self.cane_can_grow(bx, by, bz)
+        } else if place == ICICLE {
             by + 1 < SY && block::solid(self.get(bx, by + 1, bz)) // o pingente fica pendurado
         } else {
             !block::info(place).needs_support || block::solid(self.get(bx, by - 1, bz))

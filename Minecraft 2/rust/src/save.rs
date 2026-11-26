@@ -11,8 +11,16 @@ pub struct WorldInfo {
     pub biome_scale: f64,
     /// blocos a mais embaixo da terra ("alturaExtra"): 0 nos mundos clássicos
     pub lift: i32,
+    /// gerado com a atualização das vilas ("geracao=2")
+    pub modern: bool,
+    pub xp: i32,
+    pub weather: String,
+    pub villages: Vec<String>,
+    pub boats: Vec<String>,
     pub player: Option<[f64; 5]>, // x, y, z, yaw, pitch
     pub last_played: i64,
+    /// quando o mundo foi criado (ms desde 1970; 0 se não souber)
+    pub created: i64,
     pub creative: bool,
     pub flying: bool,
     /// hora do dia em segundos (0 = nascer do sol; o dia inteiro dura DAY_LENGTH)
@@ -92,7 +100,13 @@ pub fn read_world(dir: &Path) -> Option<WorldInfo> {
         seed: p.get("semente").and_then(|v| v.trim().parse().ok()).unwrap_or(0),
         biome_scale: num("tamanhoBiomas").unwrap_or(1.0),
         lift: if num("alturaExtra").unwrap_or(0.0) > 0.0 { crate::world::DEEP } else { 0 },
+        modern: num("geracao").unwrap_or(0.0) >= 2.0,
+        xp: num("jogador.xp").unwrap_or(0.0) as i32,
+        weather: p.get("clima").cloned().unwrap_or_default(),
+        villages: p.iter().filter(|(k, _)| k.starts_with("vila.")).map(|(_, v)| v.clone()).collect(),
+        boats: p.iter().filter(|(k, _)| k.starts_with("barco.")).map(|(_, v)| v.clone()).collect(),
         player,
+        created: p.get("criado").and_then(|v| v.trim().parse().ok()).unwrap_or(0),
         last_played: p.get("ultimoJogo").and_then(|v| v.trim().parse().ok()).unwrap_or(0),
         creative: p.get("modo").map_or(false, |m| m.trim() == "criativo"),
         flying: p.get("jogador.voando").map_or(false, |v| v.trim() == "true"),

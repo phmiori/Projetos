@@ -20,23 +20,31 @@ namespace MundoDeBlocos
     static class Program
     {
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            if (args.Length >= 2 && args[0] == "--foto")
+            {
+                using (LauncherForm f = new LauncherForm()) f.Snapshot(args[1], args);
+                return;
+            }
             Application.Run(new LauncherForm());
         }
     }
 
-    /** Um botão desenhado à mão (para combinar com o visual de pedra do jogo). */
+    /** Uma área clicável da janela, nas coordenadas da arte original (1681 x 936). */
     class Btn
     {
-        public Rectangle Rect;
+        public RectangleF Ref;
         public string Text;
         public bool Primary;
         public bool Enabled = true;
         public Action Click;
-        public Btn(Rectangle r, string text, bool primary, Action click) { Rect = r; Text = text; Primary = primary; Click = click; }
+        public Btn(float x0, float y0, float x1, float y1, string text, bool primary, Action click)
+        {
+            Ref = new RectangleF(x0, y0, x1 - x0, y1 - y0); Text = text; Primary = primary; Click = click;
+        }
     }
 
     class LauncherForm : Form
@@ -44,122 +52,262 @@ namespace MundoDeBlocos
         [DllImport("user32.dll")] static extern bool ReleaseCapture();
         [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, int msg, int w, int l);
 
+        // a arte (fundo.jpg) foi desenhada em 1681 x 936; tudo abaixo está nessa escala
+        const float ART_W = 1681f, ART_H = 936f;
         readonly string baseDir = Path.GetDirectoryName(typeof(LauncherForm).Assembly.Location); // a pasta do .exe
         readonly Image background;
         readonly List<Btn> buttons = new List<Btn>();
-        readonly Btn playBtn, javaBtn;
-        Rectangle closeRect, minRect, checkRect;
+        readonly Btn playBtn, javaBtn, versionBtn, checkBtn, minBtn, closeBtn;
+        readonly bool hasJava;
         Btn hover;
-        bool hoverClose, hoverMin, hoverCheck, showMessages, busy;
+        bool showMessages, busy, useJava, menuOpen;
+        float spin;
+        readonly System.Windows.Forms.Timer anim = new System.Windows.Forms.Timer();
         string status = "";
-        Color statusColor = Color.FromArgb(220, 230, 220);
-        readonly Font titleFont = new Font("Segoe UI", 34f, FontStyle.Bold);
-        readonly Font subFont = new Font("Segoe UI", 11f);
-        readonly Font playFont = new Font("Segoe UI", 20f, FontStyle.Bold);
-        readonly Font btnFont = new Font("Segoe UI", 10f, FontStyle.Bold);
-        readonly Font smallFont = new Font("Segoe UI", 9f);
+        int statusKind; // 0 pronto, 1 trabalhando, 2 erro
+        float k; // escala da janela em relação à arte
 
         public LauncherForm()
         {
             Text = "Mundo de Blocos";
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
-            ClientSize = new Size(960, 540);
+            // o maior tamanho que cabe com folga na tela, sem passar do tamanho da arte
+            Rectangle wa = Screen.PrimaryScreen.WorkingArea;
+            float fit = Math.Min(1f, Math.Min((wa.Width - 60) / ART_W, (wa.Height - 60) / ART_H));
+            fit = Math.Min(fit, 0.72f);
+            ClientSize = new Size((int)(ART_W * fit), (int)(ART_H * fit));
+            k = ClientSize.Width / ART_W;
             DoubleBuffered = true;
-            BackColor = Color.FromArgb(20, 22, 26);
+            BackColor = Color.FromArgb(9, 12, 23);
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
             using (Stream s = typeof(LauncherForm).Assembly.GetManifestResourceStream("fundo.jpg"))
                 background = s != null ? Image.FromStream(s) : null;
 
-            // o jogo principal agora é a versão Rust; a Java continua aqui embaixo para quem quiser
-            playBtn = new Btn(new Rectangle(48, 262, 300, 66), "JOGAR", true, PlayRust);
+            hasJava = IsDist() || Directory.Exists(Path.Combine(baseDir, "src"));
+            playBtn = new Btn(256, 445, 886, 547, "Jogar", true, delegate { if (useJava) Play(); else PlayRust(); });
             buttons.Add(playBtn);
-            buttons.Add(new Btn(new Rectangle(48, 342, 145, 40), "Pasta do jogo", false, delegate { OpenFolder(baseDir); }));
-            buttons.Add(new Btn(new Rectangle(203, 342, 145, 40), "Texturas", false, delegate { OpenFolder(Path.Combine(baseDir, "textures")); }));
-            javaBtn = new Btn(new Rectangle(48, 428, 300, 38), "Versão Java (antiga)", false, Play);
-            if (IsDist() || Directory.Exists(Path.Combine(baseDir, "src"))) buttons.Add(javaBtn);
-            closeRect = new Rectangle(ClientSize.Width - 46, 0, 46, 34);
-            minRect = new Rectangle(ClientSize.Width - 92, 0, 46, 34);
-            checkRect = new Rectangle(48, 400, 300, 22);
+            buttons.Add(new Btn(256, 575, 580, 651, "Pasta do Jogo", false, delegate { OpenFolder(baseDir); }));
+            buttons.Add(new Btn(606, 575, 886, 651, "Texturas", false, delegate { OpenFolder(Path.Combine(baseDir, "textures")); }));
+            checkBtn = new Btn(256, 678, 760, 713, "", false, delegate { showMessages = !showMessages; Invalidate(); });
+            buttons.Add(checkBtn);
+            versionBtn = new Btn(256, 737, 886, 807, "", false, delegate { menuOpen = hasJava && !menuOpen; Invalidate(); });
+            buttons.Add(versionBtn);
+            javaBtn = new Btn(0, 0, 0, 0, "", false, Play); // só para a lógica de "ocupado"
+            // menu lateral
+            buttons.Add(new Btn(18, 248, 180, 311, "", false, delegate { menuOpen = false; SetStatus(ReadyText(), false); }));
+            buttons.Add(new Btn(18, 322, 180, 380, "", false, delegate { SetStatus("As configurações (visão, som, sombras...) ficam no jogo: Pausa > Configurações.", false); }));
+            buttons.Add(new Btn(18, 386, 180, 444, "", false, delegate { OpenFolder(Path.Combine(baseDir, "textures")); }));
+            buttons.Add(new Btn(18, 451, 180, 509, "", false, delegate { SetStatus("Mundo de Blocos v1.0.0  ·  feito em Rust (o jogo) e Java (a versão antiga).", false); }));
+            minBtn = new Btn(1526, 0, 1603, 56, "", false, delegate { WindowState = FormWindowState.Minimized; });
+            closeBtn = new Btn(1603, 0, 1681, 56, "", false, Close);
+            buttons.Add(minBtn);
+            buttons.Add(closeBtn);
 
             if (RustExeToRun() == null && FindCargo() == null)
                 SetStatus(@"Não encontrei o jogo (rust\bin\mundo-de-blocos.exe). Baixe de novo do GitHub.", true);
-            else SetStatus("Pronto para jogar", false);
+            else SetStatus(ReadyText(), false);
 
+            anim.Interval = 30;
+            anim.Tick += delegate { spin = (spin + 9f) % 360f; if (busy) Invalidate(); };
+            anim.Start();
             MouseMove += OnMove;
             MouseDown += OnDown;
-            MouseLeave += delegate { hover = null; hoverClose = hoverMin = hoverCheck = false; Invalidate(); };
+            MouseLeave += delegate { hover = null; Invalidate(); };
             KeyPreview = true;
-            KeyDown += delegate (object o, KeyEventArgs e) { if (e.KeyCode == Keys.Enter && !busy) PlayRust(); if (e.KeyCode == Keys.Escape) Close(); };
+            KeyDown += delegate (object o, KeyEventArgs e) { if (e.KeyCode == Keys.Enter && !busy) playBtn.Click(); if (e.KeyCode == Keys.Escape) { if (menuOpen) { menuOpen = false; Invalidate(); } else Close(); } };
         }
 
+        string ReadyText()
+        {
+            return FindCargo() != null && Directory.Exists(Path.Combine(RustDir(), "src")) ? "Pronto para jogar!  (o jogo é compilado antes de abrir quando o código muda)" : "Pronto para jogar!";
+        }
+
+        RectangleF R(RectangleF r) { return new RectangleF(r.X * k, r.Y * k, r.Width * k, r.Height * k); }
+        RectangleF R(float x0, float y0, float x1, float y1) { return new RectangleF(x0 * k, y0 * k, (x1 - x0) * k, (y1 - y0) * k); }
+
+        /** As duas opções do menu de versão (abre para cima, por cima dos botões). */
+        RectangleF MenuItem(int i) { return R(256, 737 - 70 * (2 - i) - 8, 886, 737 - 70 * (1 - i) - 8); }
+
         // ------------------------------------------------------------ desenho
+        static GraphicsPath Round(RectangleF r, float rad)
+        {
+            GraphicsPath p = new GraphicsPath();
+            float d = rad * 2;
+            p.AddArc(r.X, r.Y, d, d, 180, 90);
+            p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
+            p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
+            p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
+            p.CloseFigure();
+            return p;
+        }
+
+        static void Fill(Graphics g, RectangleF r, float rad, Color c)
+        {
+            using (GraphicsPath p = Round(r, rad)) using (SolidBrush b = new SolidBrush(c)) g.FillPath(b, p);
+        }
+
+        static void Outline(Graphics g, RectangleF r, float rad, Color c, float w)
+        {
+            using (GraphicsPath p = Round(r, rad)) using (Pen pen = new Pen(c, w)) g.DrawPath(pen, p);
+        }
+
+        static void Centered(Graphics g, string s, Font f, Color c, float cx, float cy)
+        {
+            SizeF sz = g.MeasureString(s, f);
+            using (SolidBrush b = new SolidBrush(c)) g.DrawString(s, f, b, cx - sz.Width / 2, cy - sz.Height / 2);
+        }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
             int W = ClientSize.Width, H = ClientSize.Height;
             if (background != null) g.DrawImage(background, 0, 0, W, H);
 
-            // painel escuro à esquerda, que some aos poucos para a direita
-            using (LinearGradientBrush lb = new LinearGradientBrush(new Rectangle(0, 0, 560, H), Color.FromArgb(225, 14, 16, 20), Color.FromArgb(0, 14, 16, 20), 0f))
-            {
-                ColorBlend cb = new ColorBlend();
-                cb.Colors = new Color[] { Color.FromArgb(230, 14, 16, 20), Color.FromArgb(200, 14, 16, 20), Color.FromArgb(0, 14, 16, 20) };
-                cb.Positions = new float[] { 0f, 0.55f, 1f };
-                lb.InterpolationColors = cb;
-                g.FillRectangle(lb, 0, 0, 560, H);
-            }
-            // faixa escura no topo (onde ficam os botões da janela)
-            using (LinearGradientBrush tb = new LinearGradientBrush(new Rectangle(0, 0, W, 60), Color.FromArgb(120, 0, 0, 0), Color.FromArgb(0, 0, 0, 0), 90f))
-                g.FillRectangle(tb, 0, 0, W, 60);
+            // menu lateral, botões menores e da janela: a arte já os traz; aqui só o realce do mouse
+            if (hover != null && !hover.Primary && hover != versionBtn && hover != checkBtn && hover != closeBtn && hover != minBtn)
+                Fill(g, R(hover.Ref), 10 * k, Color.FromArgb(28, 255, 255, 255));
+            if (hover == minBtn) g.FillRectangle(new SolidBrush(Color.FromArgb(40, 255, 255, 255)), R(minBtn.Ref));
+            if (hover == closeBtn) g.FillRectangle(new SolidBrush(Color.FromArgb(200, 196, 43, 28)), R(closeBtn.Ref));
+            if (hover == closeBtn)
+                using (Pen wp = new Pen(Color.White, 2f))
+                {
+                    RectangleF c = R(closeBtn.Ref);
+                    float cx = c.X + c.Width / 2, cy = c.Y + c.Height / 2, s = 9 * k;
+                    g.DrawLine(wp, cx - s, cy - s, cx + s, cy + s);
+                    g.DrawLine(wp, cx - s, cy + s, cx + s, cy - s);
+                }
 
-            // bloco de grama como logo
-            DrawGrassBlock(g, 50, 70, 46);
-            Shadowed(g, "Mundo de Blocos", titleFont, Color.White, 106, 62);
-            Shadowed(g, "Um mundo infinito para explorar, construir e jogar com amigos", subFont, Color.FromArgb(215, 225, 215), 52, 138);
+            DrawPlay(g);
 
-            foreach (Btn b in buttons) DrawButton(g, b, b == hover);
-
-            // caixinha "mostrar mensagens"
-            Rectangle box = new Rectangle(checkRect.X, checkRect.Y + 2, 18, 18);
-            using (SolidBrush bb = new SolidBrush(Color.FromArgb(hoverCheck ? 90 : 60, 255, 255, 255))) g.FillRectangle(bb, box);
-            using (Pen bp = new Pen(Color.FromArgb(180, 255, 255, 255))) g.DrawRectangle(bp, box);
+            // caixinha "janela de mensagens"
             if (showMessages)
-                using (Pen cp = new Pen(Color.FromArgb(120, 220, 90), 3f))
-                    g.DrawLines(cp, new Point[] { new Point(box.X + 4, box.Y + 9), new Point(box.X + 8, box.Y + 13), new Point(box.X + 15, box.Y + 4) });
-            Shadowed(g, "Abrir com janela de mensagens (para achar erros)", smallFont, Color.FromArgb(225, 230, 225), box.Right + 8, checkRect.Y + 1);
-
-            // situação
-            Shadowed(g, status, subFont, statusColor, 50, H - 64);
-            Shadowed(g, FindCargo() == null ? "" : "Pasta do código: o jogo é compilado antes de abrir quando o código muda", smallFont,
-                Color.FromArgb(150, 165, 155), 50, H - 38);
-
-            // minimizar e fechar
-            if (hoverMin) using (SolidBrush hb = new SolidBrush(Color.FromArgb(60, 255, 255, 255))) g.FillRectangle(hb, minRect);
-            if (hoverClose) using (SolidBrush hb = new SolidBrush(Color.FromArgb(200, 196, 43, 28))) g.FillRectangle(hb, closeRect);
-            using (Pen wp = new Pen(Color.White, 1.4f))
             {
-                int cx = minRect.X + minRect.Width / 2, cy = minRect.Y + minRect.Height / 2;
-                g.DrawLine(wp, cx - 6, cy, cx + 6, cy);
-                cx = closeRect.X + closeRect.Width / 2;
-                g.DrawLine(wp, cx - 6, cy - 6, cx + 6, cy + 6);
-                g.DrawLine(wp, cx - 6, cy + 6, cx + 6, cy - 6);
+                RectangleF box = R(257, 680, 288, 711);
+                Fill(g, box, 6 * k, Color.FromArgb(124, 70, 240));
+                using (Pen cp = new Pen(Color.White, 3.2f * k))
+                    g.DrawLines(cp, new PointF[] { new PointF(box.X + 7 * k, box.Y + 16 * k), new PointF(box.X + 13 * k, box.Y + 22 * k), new PointF(box.X + 24 * k, box.Y + 9 * k) });
+            }
+            else if (hover == checkBtn) Outline(g, R(257, 680, 288, 711), 6 * k, Color.FromArgb(150, 180, 150, 255), 2f);
+
+            DrawVersion(g);
+            DrawStatus(g);
+            if (menuOpen) DrawMenu(g);
+        }
+
+        void DrawPlay(Graphics g)
+        {
+            RectangleF r = R(playBtn.Ref);
+            float rad = 12 * k;
+            bool hot = hover == playBtn && !busy;
+            // brilho roxo em volta
+            for (int i = 6; i >= 1; i--)
+            {
+                RectangleF gr = RectangleF.Inflate(r, i * 2.2f * k, i * 2.2f * k);
+                Fill(g, gr, rad + i * 2 * k, Color.FromArgb(hot ? 16 : 11, 150, 80, 255));
+            }
+            Color top = hot ? Color.FromArgb(138, 82, 250) : Color.FromArgb(120, 62, 236);
+            Color bottom = hot ? Color.FromArgb(112, 66, 222) : Color.FromArgb(96, 52, 196);
+            using (GraphicsPath p = Round(r, rad))
+            using (LinearGradientBrush lb = new LinearGradientBrush(new RectangleF(r.X, r.Y - 1, r.Width, r.Height + 2), top, bottom, 90f))
+                g.FillPath(lb, p);
+            Outline(g, r, rad, Color.FromArgb(205, 140, 255), 2.4f * k);
+
+            // triângulo de "play"
+            float tx = 430 * k, ty = 474 * k, th = 44 * k;
+            using (SolidBrush w = new SolidBrush(Color.White))
+                g.FillPolygon(w, new PointF[] { new PointF(tx, ty), new PointF(tx + th * 0.86f, ty + th / 2), new PointF(tx, ty + th) });
+            using (Font f = new Font("Segoe UI", 30f * k * 96f / GDpi(g), FontStyle.Bold))
+            {
+                string t = busy ? "Abrindo..." : playBtn.Text;
+                SizeF sz = g.MeasureString(t, f);
+                using (SolidBrush w = new SolidBrush(Color.White)) g.DrawString(t, f, w, 601 * k - sz.Width / 2, 496 * k - sz.Height / 2);
+            }
+            if (busy)
+            {
+                RectangleF c = R(814, 474, 858, 518);
+                using (Pen ring = new Pen(Color.FromArgb(70, 255, 255, 255), 3f * k)) g.DrawEllipse(ring, c);
+                using (Pen arc = new Pen(Color.FromArgb(235, 255, 255, 255), 3f * k)) g.DrawArc(arc, c, spin, 100);
             }
         }
 
-        static void Shadowed(Graphics g, string s, Font f, Color c, int x, int y)
+        static float GDpi(Graphics g) { return g.DpiY > 0 ? g.DpiY : 96f; }
+
+        void DrawVersion(Graphics g)
         {
-            using (SolidBrush sh = new SolidBrush(Color.FromArgb(170, 0, 0, 0))) g.DrawString(s, f, sh, x + 2, y + 2);
-            using (SolidBrush b = new SolidBrush(c)) g.DrawString(s, f, b, x, y);
+            RectangleF r = R(versionBtn.Ref);
+            bool hot = hover == versionBtn && hasJava;
+            if (useJava)
+            {
+                // a arte já mostra "Versão Java (antiga)"
+                if (hot) Fill(g, r, 10 * k, Color.FromArgb(22, 255, 255, 255));
+                return;
+            }
+            Fill(g, RectangleF.Inflate(r, -1, -1), 10 * k, Color.FromArgb(hot ? 28 : 20, hot ? 27 : 19, hot ? 40 : 30));
+            Outline(g, r, 10 * k, Color.FromArgb(58, 60, 78), 1.6f * k);
+            DrawGrassBlock(g, 442 * k, 752 * k, 38 * k);
+            using (Font f = new Font("Segoe UI", 18.5f * k * 96f / GDpi(g)))
+            using (SolidBrush w = new SolidBrush(Color.FromArgb(232, 232, 240)))
+            {
+                string t = "Versão Rust (atual)";
+                SizeF sz = g.MeasureString(t, f);
+                g.DrawString(t, f, w, 498 * k, 772 * k - sz.Height / 2);
+            }
+            if (hasJava)
+                using (Pen p = new Pen(Color.FromArgb(200, 200, 210), 2.4f * k))
+                    g.DrawLines(p, new PointF[] { new PointF(839 * k, 766 * k), new PointF(848 * k, 775 * k), new PointF(857 * k, 766 * k) });
         }
 
-        /** Um bloco de grama em pixel art (16x16), como no jogo. */
-        static void DrawGrassBlock(Graphics g, int x, int y, int size)
+        void DrawMenu(Graphics g)
+        {
+            RectangleF all = RectangleF.Union(MenuItem(0), MenuItem(1));
+            Fill(g, RectangleF.Inflate(all, 4 * k, 4 * k), 12 * k, Color.FromArgb(245, 16, 16, 28));
+            Outline(g, RectangleF.Inflate(all, 4 * k, 4 * k), 12 * k, Color.FromArgb(124, 70, 240), 2f * k);
+            string[] names = { "Versão Rust (atual)", "Versão Java (antiga)" };
+            Point m = PointToClient(Cursor.Position);
+            using (Font f = new Font("Segoe UI", 16f * k * 96f / GDpi(g)))
+                for (int i = 0; i < 2; i++)
+                {
+                    RectangleF it = MenuItem(i);
+                    bool sel = (i == 1) == useJava;
+                    if (it.Contains(m)) Fill(g, it, 8 * k, Color.FromArgb(70, 124, 70, 240));
+                    Centered(g, (sel ? "✓  " : "") + names[i], f, sel ? Color.FromArgb(205, 170, 255) : Color.FromArgb(225, 225, 235), it.X + it.Width / 2, it.Y + it.Height / 2);
+                }
+        }
+
+        void DrawStatus(Graphics g)
+        {
+            // apaga o texto da arte e escreve a situação atual
+            using (Font f = new Font("Segoe UI", 15f * k * 96f / GDpi(g)))
+            {
+                // cobre só até um pouco depois do texto, sumindo aos poucos (a barra não é de uma cor só)
+                float end = Math.Max(330 * k, 76 * k + g.MeasureString(status, f).Width + 20 * k);
+                RectangleF solid = new RectangleF(20 * k, 868 * k, end - 20 * k, 60 * k);
+                using (SolidBrush bg = new SolidBrush(Color.FromArgb(9, 9, 19))) g.FillRectangle(bg, solid);
+                RectangleF fade = new RectangleF(end - 1, solid.Y, 40 * k, solid.Height);
+                using (LinearGradientBrush lb = new LinearGradientBrush(new RectangleF(fade.X - 1, fade.Y, fade.Width + 2, fade.Height), Color.FromArgb(255, 9, 9, 19), Color.FromArgb(0, 9, 9, 19), 0f))
+                    g.FillRectangle(lb, fade);
+            }
+            Color dot = statusKind == 2 ? Color.FromArgb(235, 80, 70) : statusKind == 1 ? Color.FromArgb(240, 190, 60) : Color.FromArgb(72, 196, 79);
+            using (SolidBrush b = new SolidBrush(dot)) g.FillEllipse(b, R(38, 888, 56, 906));
+            using (Font f = new Font("Segoe UI", 15f * k * 96f / GDpi(g)))
+            using (SolidBrush b = new SolidBrush(statusKind == 2 ? Color.FromArgb(255, 170, 150) : Color.FromArgb(215, 215, 225)))
+            {
+                SizeF sz = g.MeasureString(status, f);
+                g.DrawString(status, f, b, 76 * k, 897 * k - sz.Height / 2);
+            }
+        }
+
+        /** Um bloco de grama em pixel art (8x8), como no jogo. */
+        static void DrawGrassBlock(Graphics g, float x, float y, float size)
         {
             Random r = new Random(7);
             float p = size / 8f;
+            SmoothingMode old = g.SmoothingMode;
+            g.SmoothingMode = SmoothingMode.None;
             for (int py = 0; py < 8; py++)
                 for (int px = 0; px < 8; px++)
                 {
@@ -168,42 +316,24 @@ namespace MundoDeBlocos
                     Color c = grass ? Color.FromArgb(70 + v, 150 + v, 50 + v / 2) : Color.FromArgb(120 + v, 82 + v / 2, 52 + v / 3);
                     using (SolidBrush b = new SolidBrush(c)) g.FillRectangle(b, x + px * p, y + py * p, p + 0.5f, p + 0.5f);
                 }
-            using (Pen o = new Pen(Color.FromArgb(160, 0, 0, 0), 2f)) g.DrawRectangle(o, x, y, size, size);
-        }
-
-        void DrawButton(Graphics g, Btn b, bool hot)
-        {
-            Rectangle r = b.Rect;
-            Color top, bottom;
-            if (!b.Enabled) { top = Color.FromArgb(90, 96, 92); bottom = Color.FromArgb(70, 74, 72); }
-            else if (b.Primary) { top = hot ? Color.FromArgb(110, 200, 80) : Color.FromArgb(88, 176, 62); bottom = hot ? Color.FromArgb(62, 140, 44) : Color.FromArgb(52, 120, 36); }
-            else { top = hot ? Color.FromArgb(120, 124, 128) : Color.FromArgb(98, 102, 106); bottom = hot ? Color.FromArgb(84, 86, 90) : Color.FromArgb(70, 72, 76); }
-            g.SmoothingMode = SmoothingMode.None;
-            using (SolidBrush sh = new SolidBrush(Color.FromArgb(140, 0, 0, 0))) g.FillRectangle(sh, r.X + 3, r.Y + 4, r.Width, r.Height);
-            using (LinearGradientBrush lb = new LinearGradientBrush(r, top, bottom, 90f)) g.FillRectangle(lb, r);
-            // borda em relevo, como os blocos
-            using (SolidBrush hi = new SolidBrush(Color.FromArgb(90, 255, 255, 255))) { g.FillRectangle(hi, r.X, r.Y, r.Width, 3); g.FillRectangle(hi, r.X, r.Y, 3, r.Height); }
-            using (SolidBrush lo = new SolidBrush(Color.FromArgb(110, 0, 0, 0))) { g.FillRectangle(lo, r.X, r.Bottom - 4, r.Width, 4); g.FillRectangle(lo, r.Right - 3, r.Y, 3, r.Height); }
-            using (Pen o = new Pen(Color.FromArgb(200, 10, 10, 10), 2f)) g.DrawRectangle(o, r);
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            Font f = b.Primary ? playFont : btnFont;
-            string t = b.Primary && busy ? "ABRINDO..." : b.Text;
-            SizeF sz = g.MeasureString(t, f);
-            float tx = r.X + (r.Width - sz.Width) / 2, ty = r.Y + (r.Height - sz.Height) / 2 - 1;
-            using (SolidBrush sh = new SolidBrush(Color.FromArgb(150, 0, 0, 0))) g.DrawString(t, f, sh, tx + 2, ty + 2);
-            using (SolidBrush w = new SolidBrush(b.Enabled ? Color.White : Color.FromArgb(200, 200, 200))) g.DrawString(t, f, w, tx, ty);
+            g.SmoothingMode = old;
         }
 
         // ------------------------------------------------------------ mouse
+        Btn At(Point pt)
+        {
+            foreach (Btn b in buttons) if (b.Enabled && R(b.Ref).Contains(pt)) return b;
+            return null;
+        }
+
         void OnMove(object o, MouseEventArgs e)
         {
-            Btn h = null;
-            foreach (Btn b in buttons) if (b.Enabled && b.Rect.Contains(e.Location)) h = b;
-            bool hc = closeRect.Contains(e.Location), hm = minRect.Contains(e.Location), hk = checkRect.Contains(e.Location);
-            if (h != hover || hc != hoverClose || hm != hoverMin || hk != hoverCheck)
+            Btn h = menuOpen ? null : At(e.Location);
+            if (menuOpen || h != hover)
             {
-                hover = h; hoverClose = hc; hoverMin = hm; hoverCheck = hk;
-                Cursor = h != null || hk ? Cursors.Hand : Cursors.Default;
+                hover = h;
+                bool overMenu = menuOpen && (MenuItem(0).Contains(e.Location) || MenuItem(1).Contains(e.Location));
+                Cursor = h != null || overMenu ? Cursors.Hand : Cursors.Default;
                 Invalidate();
             }
         }
@@ -211,19 +341,71 @@ namespace MundoDeBlocos
         void OnDown(object o, MouseEventArgs e)
         {
             if (e.Button != MouseButtons.Left) return;
-            if (closeRect.Contains(e.Location)) { Close(); return; }
-            if (minRect.Contains(e.Location)) { WindowState = FormWindowState.Minimized; return; }
-            if (checkRect.Contains(e.Location)) { showMessages = !showMessages; Invalidate(); return; }
-            foreach (Btn b in buttons) if (b.Enabled && b.Rect.Contains(e.Location)) { b.Click(); return; }
+            if (menuOpen)
+            {
+                for (int i = 0; i < 2; i++)
+                    if (MenuItem(i).Contains(e.Location)) { useJava = i == 1; SaveChoice(); }
+                menuOpen = false;
+                Invalidate();
+                return;
+            }
+            Btn b = At(e.Location);
+            if (b != null) { if (!(busy && b.Primary)) b.Click(); return; }
             // arrastar a janela por qualquer lugar vazio
             ReleaseCapture();
             SendMessage(Handle, 0xA1, 2, 0);
         }
 
+        /** Lembra a versão escolhida no settings.properties (launcherVersao=java). */
+        void SaveChoice()
+        {
+            try
+            {
+                string f = Path.Combine(baseDir, "settings.properties");
+                List<string> lines = new List<string>(File.Exists(f) ? File.ReadAllLines(f) : new string[0]);
+                lines.RemoveAll(delegate (string l) { return l.StartsWith("launcherVersao="); });
+                lines.Add("launcherVersao=" + (useJava ? "java" : "rust"));
+                File.WriteAllLines(f, lines.ToArray());
+            }
+            catch { }
+        }
+
+        void LoadChoice()
+        {
+            try
+            {
+                string f = Path.Combine(baseDir, "settings.properties");
+                if (hasJava && File.Exists(f))
+                    foreach (string l in File.ReadAllLines(f)) if (l.Trim() == "launcherVersao=java") useJava = true;
+            }
+            catch { }
+        }
+
+        protected override void OnLoad(EventArgs e) { base.OnLoad(e); LoadChoice(); }
+
+        /** Desenha a janela num arquivo e fecha (para testes: --foto arquivo.png [ocupado] [java] [menu]). */
+        public void Snapshot(string file, string[] flags)
+        {
+            LoadChoice();
+            foreach (string fl in flags)
+            {
+                if (fl == "ocupado") { busy = true; spin = 40; SetStatus("Abrindo o jogo...", false); statusKind = 1; }
+                if (fl == "java") useJava = true;
+                if (fl == "menu") menuOpen = true;
+                if (fl == "marcado") showMessages = true;
+                if (fl == "mouse") hover = playBtn;
+            }
+            using (Bitmap bmp = new Bitmap(ClientSize.Width, ClientSize.Height))
+            {
+                using (Graphics g = Graphics.FromImage(bmp)) OnPaint(new PaintEventArgs(g, ClientRectangle));
+                bmp.Save(file, System.Drawing.Imaging.ImageFormat.Png);
+            }
+        }
+
         void SetStatus(string s, bool error)
         {
             status = s;
-            statusColor = error ? Color.FromArgb(255, 150, 130) : Color.FromArgb(220, 230, 220);
+            statusKind = error ? 2 : busy ? 1 : 0;
             Invalidate();
         }
 

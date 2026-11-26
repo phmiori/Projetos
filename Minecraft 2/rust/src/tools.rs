@@ -1,18 +1,15 @@
 //! Arco do jogador, dinamite, cama, enxada e trigo, e a vida do mundo (folhas sem tronco somem, mudas viram
 //! árvores, o trigo cresce, a grama se espalha): traduzidos do BlockGame.java e do World.tickGrowth.
 
-use crate::block::{self, AIR, DIRT, GRASS, STONE};
+use crate::block::{self, AIR, DIRT, FARMLAND, GRASS, STONE};
 use crate::items;
 use crate::mobs::Arrow;
 use crate::world::SY;
 use crate::Game;
 
 pub const TNT: u8 = 161;
-pub const FARMLAND: u8 = 166;
-pub const WHEAT: u8 = 167;
 const SAPLING: u8 = 163;
 const BIRCH_SAPLING: u8 = 164;
-pub const WHEAT_ITEM: i32 = 238;
 pub const FLINT_STEEL: i32 = 250;
 pub const ARROW: i32 = 251;
 pub const BOW: i32 = 264;
@@ -21,10 +18,6 @@ const HOE: i32 = 4;
 /// força da dinamite (BlockGame.TNT_POWER) e tempo para puxar o arco todo (BOW_FULL)
 const TNT_POWER: f64 = 4.2;
 const BOW_FULL: f64 = 1.0;
-
-pub fn is_wheat(b: u8) -> bool {
-    (WHEAT..WHEAT + 3).contains(&b)
-}
 
 impl Game {
     // ------------------------------------------------------------------ arco
@@ -163,21 +156,21 @@ impl Game {
     /// Osso como adubo, enxada e sementes (depois de comer/vestir, como no Java).
     pub fn use_on_soil(&mut self, b: u8, x: i32, y: i32, z: i32) -> bool {
         let held = self.inv.s[self.slot].id;
-        if held == BONE && is_wheat(b) && b < WHEAT + 2 {
-            self.set(x, y, z, b + 1, 0); // o trigo cresce uma fase
-            self.hit_bits([x as f64 + 0.5, y as f64 + 0.4, z as f64 + 0.5], 0xE8F0D8, 8);
-            if !self.creative {
-                self.inv.take_one(self.slot);
-            }
-            return true;
+        if held == crate::farm::BONE_MEAL {
+            return self.use_bone_meal(b, x, y, z);
         }
-        if items::info(held).map_or(false, |i| i.tool_kind == HOE) && (b == GRASS || b == DIRT) {
+        if held == BONE && crate::farm::crop(b).map_or(false, |c| c.1 < 2) {
+            return self.use_bone_meal(b, x, y, z);
+        }
+        if items::info(held).map_or(false, |i| i.tool_kind == HOE) && (b == GRASS || b == DIRT || b == block::PATH) {
             self.till(x, y, z);
             return true;
         }
-        if held == items::SEEDS {
+        let crop = crate::farm::crop_of_item(held);
+        // cenoura e batata também se comem: só plantam quando o clique é na terra arada
+        if crop != AIR && (b == FARMLAND || held == items::SEEDS || held == 301) {
             if b == FARMLAND && self.get(x, y + 1, z) == AIR {
-                self.set(x, y + 1, z, WHEAT, 0);
+                self.set(x, y + 1, z, crop, 0);
                 self.sfx("colocar", [x as f64 + 0.5, y as f64 + 1.2, z as f64 + 0.5], 0.6);
                 if !self.creative {
                     self.inv.take_one(self.slot);
@@ -228,6 +221,8 @@ impl Game {
             self.day += 1;
         }
         self.time = crate::DAY_LENGTH * 0.27;
+        let roll = self.rng.next();
+        self.ex.weather.start(crate::weather::Sky::Clear, roll);
         self.mobs.retain(|m| !m.hostile());
         if let Some(n) = &self.net {
             n.send(crate::net::Out::new(crate::net::TIME).dbl(self.time).i(self.day), None);
@@ -235,16 +230,6 @@ impl Game {
         let d = self.day;
         self.notice(format!("Você dormiu. Bom dia!  (dia {d})"));
         self.save_all();
-    }
-
-    /// Trigo maduro: além da semente, dá o trigo e às vezes mais sementes.
-    pub fn wheat_loot(&mut self, b: u8, x: i32, y: i32, z: i32) {
-        if b == WHEAT + 2 {
-            self.drop_at_block(WHEAT_ITEM, x, y, z);
-            for _ in 0..self.int(3) {
-                self.drop_at_block(items::SEEDS, x, y, z);
-            }
-        }
     }
 
     // ------------------------------------------------------------------ vida do mundo
@@ -271,23 +256,25 @@ impl Game {
                 continue;
             }
             if block::is_leaves(b) {
-                if !self.near(x, y, z, 4, 4, |b| b == block::LOG || b == block::BIRCH_LOG) {
+                if !self.near(x, y, z, 4, 4, |b| b == block::LOG || b == block::BIRCH_LOG || b == block::CHERRY_LOG) {
                     self.set(x, y, z, AIR, 0);
                 }
-            } else if b == SAPLING || b == BIRCH_SAPLING {
+            } else if b == SAPLING || b == BIRCH_SAPLING || b == block::CHERRY_SAPLING {
                 if self.int(3) == 0 && self.sky_light(x, y, z).max(self.block_light(x, y, z)) >= 9 {
-                    self.grow_tree(x, y, z, b == BIRCH_SAPLING);
+                    self.grow_any_sapling(b, x, y, z);
                 }
-            } else if is_wheat(b) {
-                if b < WHEAT + 2 && self.sky_light(x, y, z).max(self.block_light(x, y, z)) >= 9 {
-                    let wet = self.water_near(x, y - 1, z);
+            } else if b == block::SUGAR_CANE {
+                self.grow_cane(x, y, z);
+            } else if let Some((_, stage)) = crate::farm::crop(b) {
+                if stage < 2 && self.sky_light(x, y, z).max(self.block_light(x, y, z)) >= 9 {
+                    let wet = self.ex.weather.raining() || self.water_near(x, y - 1, z);
                     if self.int(if wet { 2 } else { 4 }) == 0 {
                         self.set(x, y, z, b + 1, 0);
                     }
                 }
             } else if b == FARMLAND {
                 let above = if y + 1 < SY { self.get(x, y + 1, z) } else { AIR };
-                if block::solid(above) || (!is_wheat(above) && self.int(8) == 0 && !self.water_near(x, y, z)) {
+                if block::solid(above) || (crate::farm::crop(above).is_none() && self.int(8) == 0 && !self.water_near(x, y, z)) {
                     self.set(x, y, z, DIRT, 0);
                 }
             } else if b == DIRT {
@@ -327,9 +314,26 @@ impl Game {
         false
     }
 
+    /// Se o bloco é uma muda, tenta virar árvore.
+    pub fn grow_any_sapling(&mut self, b: u8, x: i32, y: i32, z: i32) -> bool {
+        let kind = match b {
+            SAPLING => 0,
+            BIRCH_SAPLING => 1,
+            block::CHERRY_SAPLING => 2,
+            _ => return false,
+        };
+        self.grow_tree(x, y, z, kind);
+        true
+    }
+
     /// A muda vira uma árvore, se houver espaço para o tronco (World.growTree).
-    fn grow_tree(&mut self, x: i32, y: i32, z: i32, birch: bool) {
-        let (log, leaf) = if birch { (block::BIRCH_LOG, block::BIRCH_LEAVES) } else { (block::LOG, block::LEAVES) };
+    fn grow_tree(&mut self, x: i32, y: i32, z: i32, kind: u8) {
+        let birch = kind == 1;
+        let (log, leaf) = match kind {
+            1 => (block::BIRCH_LOG, block::BIRCH_LEAVES),
+            2 => (block::CHERRY_LOG, block::CHERRY_LEAVES),
+            _ => (block::LOG, block::LEAVES),
+        };
         let h = if birch { 5 } else { 4 } + self.int(3);
         if y + h + 2 >= self.gen.build_top() {
             return;
@@ -342,7 +346,7 @@ impl Game {
         }
         let top = y + h;
         for dy in -2..=1 {
-            let rad: i32 = if dy < 0 { 2 } else { 1 };
+            let rad: i32 = if dy < 0 { 2 } else { 1 } + (kind == 2) as i32;
             for dx in -rad..=rad {
                 for dz in -rad..=rad {
                     let corner = dx.abs() == rad && dz.abs() == rad;

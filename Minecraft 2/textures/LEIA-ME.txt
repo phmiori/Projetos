@@ -28,3 +28,10 @@ Em folhas, vidro, plantas e tocha, pixels transparentes viram buracos
 Depois de editar, use Configurações > Recarregar texturas (não precisa fechar o jogo).
 Apague um arquivo para ele voltar ao padrão; apague a pasta para voltar tudo.
 Texturas no formato antigo (uma face por arquivo) ficam guardadas em antigo\.
+
+Desenhos dos itens (só na versão Rust)
+--------------------------------------
+Na pasta itens há um PNG por item (graveto.png, maca.png, ovo_de_foca.png...), de 16x16 e com fundo transparente.
+Desenhe por cima, salve com o mesmo nome e feche e abra o jogo.
+Uma imagem de outro tamanho é reduzida para 16x16.
+Apague um arquivo para o desenho original voltar na próxima vez que o jogo abrir.

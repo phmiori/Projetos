@@ -18,6 +18,8 @@ use std::sync::{Arc, Mutex};
 pub const PORT: u16 = 25600;
 /// Tem que ser igual ao Net.VERSION do Java (os dois jogos só se conectam na mesma versão).
 pub const VERSION: i32 = 21;
+/// Novidades que só o jogo Rust tem (2: atualização das vilas, com blocos e criaturas novos).
+pub const FEATURES: i32 = 2;
 
 pub const HELLO: u8 = 1;
 pub const WELCOME: u8 = 2;
@@ -366,6 +368,7 @@ pub struct Welcome {
     pub state: String,
     pub biome_scale: f64,
     pub lift: i32,
+    pub modern: bool,
     pub chunks: HashMap<(i32, i32), Vec<u8>>,
 }
 
@@ -381,7 +384,7 @@ pub fn connect(ip: &str, name: &str, persona: [usize; 4]) -> Result<(Net, Welcom
     let conn = Conn::new(s.try_clone().map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
     let p = persona.map(|v| v as i32);
     // o último número (que o Java ignora) diz até que profundidade de mundo este jogo entende
-    conn.send(&Out::new(HELLO).i(VERSION).s(name).i(p[0]).i(p[1]).i(p[2]).i(p[3]).i(crate::world::DEEP));
+    conn.send(&Out::new(HELLO).i(VERSION).s(name).i(p[0]).i(p[1]).i(p[2]).i(p[3]).i(crate::world::DEEP).i(FEATURES));
     conn.flush();
     let mut r = BufReader::new(s.try_clone().map_err(|e| e.to_string())?);
     let (t, d) = read_packet(&mut r).map_err(|e| format!("conexão interrompida: {e}"))?;
@@ -400,6 +403,7 @@ pub fn connect(ip: &str, name: &str, persona: [usize; 4]) -> Result<(Net, Welcom
     let biome_scale = d.dbl();
     let raw = d.raw();
     let lift = d.i().clamp(0, crate::world::DEEP); // só vem nos mundos fundos
+    let modern = d.i() != 0;
     let mut chunks = HashMap::new();
     let mut m = In::new(&raw);
     for _ in 0..m.i() {
@@ -424,7 +428,7 @@ pub fn connect(ip: &str, name: &str, persona: [usize; 4]) -> Result<(Net, Welcom
         })
         .ok();
     let net = Net::new(Role::Client(conn), rx, my_id);
-    Ok((net, Welcome { name: format!("LAN: {w_name}"), seed, creative, time, day, spawn, state, biome_scale, lift, chunks }))
+    Ok((net, Welcome { name: format!("LAN: {w_name}"), seed, creative, time, day, spawn, state, biome_scale, lift, modern, chunks }))
 }
 
 impl Net {
@@ -1032,9 +1036,11 @@ impl Game {
                 let name = d.s();
                 let p = persona_from([d.i(), d.i(), d.i(), d.i()]);
                 let deep = d.i();
+                let features = d.i();
+                let modern = self.gen.modern;
                 let lift = self.gen.lift;
                 let n = self.net.as_mut().unwrap();
-                if version == VERSION && deep < lift {
+                if version == VERSION && (deep < lift || (modern && features < FEATURES)) {
                     n.send_to(conn, Out::new(BYE).s("Este mundo tem cavernas profundas e só abre na versão nova do jogo (não no Java)."));
                     n.flush();
                     return;
@@ -1070,7 +1076,7 @@ impl Game {
                     .dbl(self.gen.biome_scale);
                 o = o.raw(&modified);
                 if self.gen.lift > 0 {
-                    o = o.i(self.gen.lift);
+                    o = o.i(self.gen.lift).i(self.gen.modern as i32);
                 }
                 let me = (self.player_name.clone(), self.persona);
                 let drops: Vec<Out> = self.drops.iter().map(drop_packet).collect();
