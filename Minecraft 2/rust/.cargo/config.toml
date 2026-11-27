@@ -1,0 +1,4 @@
+# O runtime do C (VCRUNTIME140.dll) vai dentro do mundo-de-blocos.exe: o jogo abre em qualquer Windows
+# sem precisar instalar o "Visual C++ Redistributable".
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
