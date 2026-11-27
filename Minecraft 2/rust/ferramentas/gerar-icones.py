@@ -135,7 +135,10 @@ def build(name):
 
 
 if __name__ == "__main__":
-    names = sys.argv[1:] or sorted(f[:-4] for f in os.listdir(SRC) if f.endswith(".png"))
+    # as ferramentas são desenhadas pelo desenhar-ferramentas.py (só a pá e a picareta de diamante, o modelo, vêm daqui)
+    tools = {f"{t}_de_{m}" for t in ("picareta", "pa", "machado", "espada", "enxada") for m in ("madeira", "pedra", "ferro", "diamante")}
+    tools -= {"picareta_de_diamante", "pa_de_diamante"}
+    names = sys.argv[1:] or sorted(f[:-4] for f in os.listdir(SRC) if f.endswith(".png") and f[:-4] not in tools)
     for n in names:
         build(n)
     print(f"{len(names)} ícones refeitos em {N}x{N}")

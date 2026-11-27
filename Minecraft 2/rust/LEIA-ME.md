@@ -128,6 +128,8 @@ soltos no chão não são gravados (no Java também não).
   Rode `python rust/ferramentas/gerar-texturas.py` (ou com os nomes de algumas texturas) na pasta do jogo.
 - `ferramentas/gerar-icones.py`: refaz os ícones dos itens em 32 x 32 (volume, luz, veio na madeira, brilho no
   metal, facetas nas gemas), a partir dos desenhos de 16 px guardados em `textures/itens/originais-16px`.
+- `ferramentas/desenhar-ferramentas.py`: desenha as ferramentas (picareta, pá, machado, espada e enxada de cada
+  material) em 32 x 32, no estilo da pá e da picareta de diamante.
 - `exportar-blocos.bat`: depois de criar ou mudar blocos, itens ou receitas no Java, atualiza os arquivos de `dados/`.
 - `comparar-geracao.bat`: gera pedaços com o Java e com o Rust e confere se saíram iguais (rode depois de
   mexer na geração do mundo em qualquer um dos dois).
