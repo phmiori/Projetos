@@ -90,7 +90,7 @@ final class Block {
         def(COAL_ORE, "Minério de carvão", 3.0, CUBE, M_ROCK, 0, Items.COAL, 0);
         def(IRON_ORE, "Minério de ferro", 3.5, CUBE, M_ROCK, 1, IRON_ORE, 0);
         def(GOLD_ORE, "Minério de ouro", 3.5, CUBE, M_ROCK, 2, GOLD_ORE, 0);
-        def(CRYSTAL_ORE, "Minério de cristal", 4.0, CUBE, M_ROCK, 2, Items.CRYSTAL, 0);
+        def(CRYSTAL_ORE, "Minério de diamante", 4.0, CUBE, M_ROCK, 2, Items.CRYSTAL, 0);
         def(GRAVEL, "Cascalho", 0.7, CUBE, M_SOIL, -1, GRAVEL, 0);
         def(SANDSTONE, "Arenito", 1.6, CUBE, M_ROCK, 0, SANDSTONE, 0);
         def(GLASS, "Vidro", 0.4, CUTOUT, M_NONE, -1, GLASS, 0);

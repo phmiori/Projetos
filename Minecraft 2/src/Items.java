@@ -27,7 +27,7 @@ final class Items {
     static final int ARROW = 251, BOW = 264;
     /** Pederneira: acende a dinamite (gasta com o uso). */
     static final int FLINT_STEEL = 250;
-    /** Armadura: id = ARMOR_BASE + peça*3 + material (couro, ferro, cristal). */
+    /** Armadura: id = ARMOR_BASE + peça*3 + material (couro, ferro, diamante). */
     static final int ARMOR_BASE = 252;
     static final int HELMET = 0, CHESTPLATE = 1, LEGGINGS = 2, BOOTS = 3;
     static final int LAST_ARMOR = 263;
@@ -62,16 +62,16 @@ final class Items {
     static int eggMob(int id) { return id - SPAWN_EGG; }
 
     private static final String[] ITEM_NAMES = {
-            "Graveto", "Carvão", "Lingote de ferro", "Lingote de ouro", "Cristal", "Maçã", "Bife cru", "Bife assado", "Peixe cru", "Peixe assado", "Pólvora" };
+            "Graveto", "Carvão", "Lingote de ferro", "Lingote de ouro", "Diamante", "Maçã", "Bife cru", "Bife assado", "Peixe cru", "Peixe assado", "Pólvora" };
     private static final String[] EXTRA_NAMES = {
             "Sílex", "Sementes de trigo", "Trigo", "Pão", "Couro", "Carne de porco crua", "Carne de porco assada",
             "Carneiro cru", "Carneiro assado", "Frango cru", "Frango assado", "Fio", "Pena", "Osso" };
     private static final String[] TOOL_KIND = { "Picareta", "Machado", "Pá", "Espada", "Enxada" };
-    private static final String[] TOOL_MAT = { "de madeira", "de pedra", "de ferro", "de cristal" };
+    private static final String[] TOOL_MAT = { "de madeira", "de pedra", "de ferro", "de diamante" };
     private static final int[] DURABILITY = { 60, 132, 250, 1200 };
     private static final double[] SPEED = { 2.0, 4.0, 6.0, 9.0 };
     private static final String[] ARMOR_PIECE = { "Capacete", "Peitoral", "Calças", "Botas" };
-    private static final String[] ARMOR_MAT = { "de couro", "de ferro", "de cristal" };
+    private static final String[] ARMOR_MAT = { "de couro", "de ferro", "de diamante" };
     private static final int[] ARMOR_DURABILITY = { 70, 220, 500 };
     /** Pontos de defesa [material][peça]; cada ponto tira 4% do dano. */
     private static final int[][] ARMOR_POINTS = { { 1, 3, 2, 1 }, { 2, 6, 5, 2 }, { 3, 8, 6, 3 } };

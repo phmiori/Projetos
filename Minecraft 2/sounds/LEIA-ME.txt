@@ -39,6 +39,8 @@ raposa.wav         raposa
 domar.wav          lobo domesticado (alegre)
 rugido.wav         tigre rugindo
 miau.wav           gato miando
+pinguim.wav        pinguim grasnando
+boi.wav            boi-almiscarado bufando
 arco_tensao.wav    puxar a corda do arco
 arco_disparo.wav   soltar a flecha
 flecha_madeira.wav flecha prendendo em madeira, terra ou planta

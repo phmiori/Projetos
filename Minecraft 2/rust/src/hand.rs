@@ -5,6 +5,96 @@
 use crate::block::{self, AIR};
 use crate::ui::Ui;
 use crate::Game;
+use std::collections::HashMap;
+use std::sync::OnceLock;
+
+/// Os desenhos dos itens (o mesmo itens.png do atlas da interface), para saber quais pixels são cheios.
+static ICONS: OnceLock<Option<image::RgbaImage>> = OnceLock::new();
+/// Plantas, tochas e afins (blocos em X): a face da frente de cada textura, só cheio/vazio, por número da textura.
+static CROSS_MASKS: OnceLock<HashMap<u16, (u32, Vec<bool>)>> = OnceLock::new();
+
+/// Guarda o recorte das texturas em X (chamado uma vez, quando as texturas carregam).
+pub fn keep_cross_masks(a: &crate::textures::Atlas) {
+    let mut out = HashMap::new();
+    let layer = (a.size * a.size * 4) as usize;
+    // no máximo 32 x 32 "pixels" de espessura: as texturas de 64 px ficariam com bordas demais
+    let n = a.size.min(32);
+    for b in 1..block::count() {
+        let b = b as u8;
+        if block::shape(b) != block::CROSS {
+            continue;
+        }
+        let t = block::texture(b);
+        if out.contains_key(&t) {
+            continue;
+        }
+        let o = (t as usize * 6 + 4) * layer;
+        if o + layer > a.pixels.len() {
+            continue;
+        }
+        let mut m = vec![false; (n * n) as usize];
+        for y in 0..n {
+            for x in 0..n {
+                let (sx, sy) = ((x * a.size + a.size / 2) / n, (y * a.size + a.size / 2) / n);
+                m[(y * n + x) as usize] = a.pixels[o + ((sy * a.size + sx) * 4 + 3) as usize] >= 128;
+            }
+        }
+        out.insert(t, (n, m));
+    }
+    let _ = CROSS_MASKS.set(out);
+}
+
+fn icon_mask(icon: i32) -> Option<(u32, Vec<bool>)> {
+    let img = ICONS.get_or_init(|| image::load_from_memory(include_bytes!("../dados/itens.png")).ok().map(|i| i.to_rgba8())).as_ref()?;
+    let (ix, iy) = ((icon % 32) as u32 * 16, (icon / 32) as u32 * 16);
+    if ix + 16 > img.width() || iy + 16 > img.height() {
+        return None;
+    }
+    let mut m = vec![false; 256];
+    for y in 0..16 {
+        for x in 0..16 {
+            m[(y * 16 + x) as usize] = img.get_pixel(ix + x, iy + y).0[3] >= 128;
+        }
+    }
+    Some((16, m))
+}
+
+/// O desenho com espessura (como nos jogos de blocos): a frente e as costas com a figura e, em volta de cada
+/// pixel cheio que encosta no vazio, uma lateral da cor dele. `uv(x, y)` dá a coordenada da textura do ponto
+/// (x, y) do desenho, em pixels (0..n).
+fn extruded(ui: &mut Ui, t: &Tf, n: u32, mask: &[bool], uv: &dyn Fn(f32, f32) -> [f32; 2], layer: f32, light: f32) {
+    let nf = n as f32;
+    let h = 0.5 / 16.0; // metade da espessura: um pixel de um desenho de 16
+    let px = |x: f32, y: f32, z: f32| apply(t, [-0.5 + x / nf, 0.5 - y / nf, z]);
+    let full = [uv(0.0, 0.0), uv(nf, 0.0), uv(nf, nf), uv(0.0, nf)];
+    ui.quad([px(0.0, 0.0, h), px(nf, 0.0, h), px(nf, nf, h), px(0.0, nf, h)], full, layer, [light, light, light, 1.0]);
+    let back = light * 0.8;
+    ui.quad([px(nf, 0.0, -h), px(0.0, 0.0, -h), px(0.0, nf, -h), px(nf, nf, -h)], [full[1], full[0], full[3], full[2]], layer, [back, back, back, 1.0]);
+    let filled = |x: i32, y: i32| x >= 0 && y >= 0 && x < n as i32 && y < n as i32 && mask[(y as u32 * n + x as u32) as usize];
+    for y in 0..n as i32 {
+        for x in 0..n as i32 {
+            if !filled(x, y) {
+                continue;
+            }
+            let c = uv(x as f32 + 0.5, y as f32 + 0.5);
+            let cs = [c; 4];
+            let (x0, x1, y0, y1) = (x as f32, x as f32 + 1.0, y as f32, y as f32 + 1.0);
+            // em cima, embaixo, à esquerda e à direita (a luz vem de cima)
+            let sides: [(bool, [[f32; 2]; 2], f32); 4] = [
+                (!filled(x, y - 1), [[x0, y0], [x1, y0]], 1.0),
+                (!filled(x, y + 1), [[x1, y1], [x0, y1]], 0.55),
+                (!filled(x - 1, y), [[x0, y1], [x0, y0]], 0.75),
+                (!filled(x + 1, y), [[x1, y0], [x1, y1]], 0.7),
+            ];
+            for (open, [a, b], sh) in sides {
+                if open {
+                    let l = light * sh;
+                    ui.quad([px(a[0], a[1], h), px(b[0], b[1], h), px(b[0], b[1], -h), px(a[0], a[1], -h)], cs, layer, [l, l, l, 1.0]);
+                }
+            }
+        }
+    }
+}
 
 /// Cores da pele e da camisa do personagem (Persona.java).
 pub const SKIN: [u32; 6] = [0xFFDBAC, 0xF1C27D, 0xE0AC69, 0xC68642, 0x8D5524, 0x5C3A1E];
@@ -138,19 +228,34 @@ impl Game {
                 let l = item_light * shade;
                 ui.quad(pts.map(|p| apply(&t, p)), full, tex * 6.0 + face, [l, l, l, 1.0]);
             }
+        } else if b != AIR {
+            // planta, tocha...: a figura da textura com espessura
+            let tex = block::texture(b);
+            match CROSS_MASKS.get().and_then(|m| m.get(&tex)) {
+                Some((n, mask)) => {
+                    let nf = *n as f32;
+                    extruded(ui, &t, *n, mask, &|x, y| [x / nf, y / nf], tex as f32 * 6.0 + 4.0, item_light);
+                }
+                None => {
+                    let r = 0.5;
+                    let pts = [[-r, r, 0.0], [r, r, 0.0], [r, -r, 0.0], [-r, -r, 0.0]];
+                    ui.quad(pts.map(|p| apply(&t, p)), full, tex as f32 * 6.0 + 4.0, [item_light, item_light, item_light, 1.0]);
+                }
+            }
         } else {
-            // figura plana (dos dois lados)
-            let (layer, uv) = if b != AIR {
-                (block::texture(b) as f32 * 6.0 + 4.0, full)
-            } else {
-                let icon = crate::items::info(item).map_or(0, |i| i.icon);
-                let (u0, v0) = crate::ui::item_uv(icon);
-                let s = 16.0 / 1024.0;
-                (-1.0, [[u0, v0], [u0 + s, v0], [u0 + s, v0 + s], [u0, v0 + s]])
-            };
-            let r = 0.5;
-            let pts = [[-r, r, 0.0], [r, r, 0.0], [r, -r, 0.0], [-r, -r, 0.0]];
-            ui.quad(pts.map(|p| apply(&t, p)), uv, layer, [item_light, item_light, item_light, 1.0]);
+            // ferramentas, comida, arco...: o ícone com espessura (o ícone da barra continua plano)
+            let icon = crate::items::info(item).map_or(0, |i| i.icon);
+            let (u0, v0) = crate::ui::item_uv(icon);
+            let px = 1.0 / 1024.0;
+            match icon_mask(icon) {
+                Some((n, mask)) => extruded(ui, &t, n, &mask, &|x, y| [u0 + x * px, v0 + y * px], -1.0, item_light),
+                None => {
+                    let s = 16.0 * px;
+                    let r = 0.5;
+                    let pts = [[-r, r, 0.0], [r, r, 0.0], [r, -r, 0.0], [-r, -r, 0.0]];
+                    ui.quad(pts.map(|p| apply(&t, p)), [[u0, v0], [u0 + s, v0], [u0 + s, v0 + s], [u0, v0 + s]], -1.0, [item_light, item_light, item_light, 1.0]);
+                }
+            }
         }
     }
 }

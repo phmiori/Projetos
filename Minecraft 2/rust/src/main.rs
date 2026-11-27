@@ -1470,6 +1470,7 @@ fn main() {
         g
     };
     particles::set_palette(&atlas);
+    hand::keep_cross_masks(&atlas);
     drop(atlas);
 
     let mut game = load_game(info, seed_arg, settings, read_only || !direct);
