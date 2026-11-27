@@ -59,6 +59,9 @@ os mundos, as texturas, os sons e as configurações são os mesmos, e as duas v
   segundo clique para confirmar); na sobrevivência, armadura e a grade de criação 2x2 (3x3 na
   bancada, com o botão direito nela), com as receitas do Java. Clique pega/coloca/troca, botão direito pega metade ou
   coloca um, Shift+clique passa entre a barra e a mochila, **1-9** com o mouse em cima manda para a barra.
+  No inventário de sobrevivência: o **boneco do personagem** olha para o mouse e mostra a armadura vestida;
+  **Shift+clique** numa peça de armadura ou no escudo veste no espaço certo; o **espaço do escudo** deixa o escudo
+  na mão esquerda (defende com o botão direito quando a mão está vazia ou com arma ou ferramenta).
 - **Sobrevivência**: o bloco vai rachando enquanto você segura o botão (mais rápido com a ferramenta certa, e só dá
   item com a picareta certa), o que ele solta cai no chão girando e é puxado para você, as ferramentas gastam e
   quebram, colocar gasta da mão, **Q** joga fora. Vida, fome, fôlego embaixo d'água, dano de queda, lava e cacto,
@@ -133,6 +136,6 @@ soltos no chão não são gravados (no Java também não).
 - `exportar-blocos.bat`: depois de criar ou mudar blocos, itens ou receitas no Java, atualiza os arquivos de `dados/`.
 - `comparar-geracao.bat`: gera pedaços com o Java e com o Rust e confere se saíram iguais (rode depois de
   mexer na geração do mundo em qualquer um dos dois).
-- Linha de comando: sem nada abre o menu; `mundo-de-blocos.exe [--mundo worlds\nome] [--semente N] [--posicao x y z yaw pitch] [--voando] [--hora 0..1] [--so-ler] [--abrir-lan] [--entrar IP [nome]] [--dizer quadro texto] [--foto-chat quadro arquivo] [--amigo-teste] [--excluir-teste quadro] [--limpar-teste quadro] [--zoologico] [--sem-vsync]`
+- Linha de comando: sem nada abre o menu; `mundo-de-blocos.exe [--mundo worlds\nome] [--semente N] [--posicao x y z yaw pitch] [--voando] [--hora 0..1] [--so-ler] [--abrir-lan] [--entrar IP [nome]] [--dizer quadro texto] [--foto-chat quadro arquivo] [--amigo-teste] [--excluir-teste quadro] [--limpar-teste quadro] [--vestir-teste quadro] [--zoologico] [--sem-vsync]`
   (`--so-ler`: abre sem gravar nada)
   (`--hora`: 0 = nascer do sol, 0,25 = meio-dia, 0,5 = pôr do sol, 0,75 = meia-noite).

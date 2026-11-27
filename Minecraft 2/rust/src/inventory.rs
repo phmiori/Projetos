@@ -1,11 +1,15 @@
 //! Inventário igual ao do Java: 36 espaços (0-8 = barra) mais 4 de armadura (36 capacete .. 39 botas), cada um
-//! com id, quantidade e desgaste. Lê e grava no mesmo texto do meta.properties ("id:qtd:desgaste,...").
+//! com id, quantidade e desgaste, e o espaço do escudo (40, só nesta versão: o Java ignora o 41º campo).
+//! Lê e grava no mesmo texto do meta.properties ("id:qtd:desgaste,...").
 
 use crate::items;
 
 pub const SIZE: usize = 36;
 pub const HOTBAR: usize = 9;
-pub const TOTAL: usize = 40;
+/// Fim da armadura (36..40) e o espaço do escudo, na mão esquerda.
+pub const ARMOR_END: usize = SIZE + 4;
+pub const SHIELD_SLOT: usize = ARMOR_END;
+pub const TOTAL: usize = SHIELD_SLOT + 1;
 
 #[derive(Clone, Copy, Default, PartialEq, Debug)]
 pub struct Stack {
@@ -122,13 +126,13 @@ impl Inventory {
 
     /// Soma dos pontos de defesa das peças vestidas (0 a 20).
     pub fn armor_points(&self) -> i32 {
-        self.s[SIZE..].iter().filter(|st| !st.empty()).map(|st| items::info(st.id).map_or(0, |i| i.armor_points)).sum()
+        self.s[SIZE..ARMOR_END].iter().filter(|st| !st.empty()).map(|st| items::info(st.id).map_or(0, |i| i.armor_points)).sum()
     }
 
     /// Um golpe gasta um uso de cada peça vestida. Retorna true se alguma quebrou.
     pub fn wear_armor(&mut self) -> bool {
         let mut broke = false;
-        for i in SIZE..TOTAL {
+        for i in SIZE..ARMOR_END {
             broke |= self.use_tool(i);
         }
         broke

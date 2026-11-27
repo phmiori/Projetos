@@ -14,6 +14,7 @@
 //! Uso: mundo-de-blocos [--mundo pasta] [--semente N] [--posicao x y z yaw pitch] [--hora 0..1] [--comparar arquivo]
 
 mod amigo_teste;
+mod avatar;
 mod block;
 mod book;
 mod breeding;
@@ -1580,6 +1581,8 @@ fn main() {
     let mut friend_test = args.iter().any(|a| a == "--amigo-teste").then(amigo_teste::FriendTest::default);
     // --limpar-teste quadro: clica em "Limpar inventário" (criativo) nesse quadro e de novo 30 quadros depois
     let clear_test = arg("--limpar-teste").and_then(|f| f.parse::<u32>().ok());
+    // --vestir-teste quadro: Shift+clique nos 9 espaços da barra, com o inventário aberto; 100 quadros depois fecha (testes)
+    let wear_test = arg("--vestir-teste").and_then(|f| f.parse::<u32>().ok());
     let delete_test = arg("--excluir-teste").and_then(|f| f.parse::<u32>().ok());
     let say_photo = arg("--foto-chat").and_then(|f| f.parse::<u32>().ok()).zip(arg2("--foto-chat"));
     let zoo = args.iter().any(|a| a == "--zoologico");
@@ -1897,6 +1900,19 @@ fn main() {
                         let (fw, fh) = (size.width as f32, size.height as f32);
                         if let Some(c) = game.clear_rect(fw, fh) {
                             game.inv_click(fw, fh, c[0] + c[2] / 2.0, c[1] + c[3] / 2.0, false, false);
+                        }
+                    }
+                    if wear_test.map_or(false, |f| frame_no == f + 100) && game.screen == Screen::Inventory {
+                        game.close_inventory(); // e depois fecha, para ver a mão
+                    }
+                    if wear_test == Some(frame_no) {
+                        let size = window.inner_size();
+                        let (fw, fh) = (size.width as f32, size.height as f32);
+                        let (_, slots, sz) = game.inv_layout(fw, fh);
+                        for i in 0..9 {
+                            if let Some(&(_, x, y)) = slots.iter().find(|q| q.0 == screens::SlotRef::Inv(i)) {
+                                game.inv_click(fw, fh, x + sz / 2.0, y + sz / 2.0, false, true);
+                            }
                         }
                     }
                     if delete_test.map_or(false, |f| frame_no == f || frame_no == f + 60) {

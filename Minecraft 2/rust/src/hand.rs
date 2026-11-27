@@ -177,6 +177,21 @@ impl Game {
         solid_box(ui, &arm, [-0.1, -0.1, -0.48], [0.1, 0.1, 0.0], shirt, light); // manga
         solid_box(ui, &arm, [-0.095, -0.095, -0.72], [0.095, 0.095, -0.48], skin, light); // mão
 
+        // o escudo do espaço do escudo, na mão esquerda; ao defender ele sobe para a frente
+        let off = self.inv.s[crate::inventory::SHIELD_SLOT];
+        if off.id == crate::combat::SHIELD && self.inv.s[self.slot].id != crate::combat::SHIELD {
+            let up = if self.blocking() { 1.0 } else { 0.0 };
+            let mut t = translate(-0.5 + up * 0.22 + bob_x, -0.38 + up * 0.14 + bob_y, -0.95 + up * 0.12);
+            t = mul(&t, &rot_y(0.3 - up * 0.2));
+            t = mul(&t, &scale(0.46));
+            let icon = crate::items::info(off.id).map_or(0, |i| i.icon);
+            if let Some((n, mask)) = icon_mask(icon) {
+                let (u0, v0) = crate::ui::item_uv(icon);
+                let px = crate::ui::atlas_px();
+                extruded(ui, &t, n, &mask, &|x, y| [u0 + x * px, v0 + y * px], -1.0, light);
+            }
+        }
+
         let st = self.inv.s[self.slot];
         if st.empty() {
             return;

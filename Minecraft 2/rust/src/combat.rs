@@ -96,7 +96,19 @@ impl Game {
 
     /// Segurando o botão direito com o escudo na mão.
     pub fn blocking(&self) -> bool {
-        self.r_held && self.screen == crate::Screen::Play && self.inv.s[self.slot].id == SHIELD
+        self.r_held && self.screen == crate::Screen::Play && self.shield_slot().is_some()
+    }
+
+    /// O escudo que defende agora: o da mão (se estiver segurando um) ou o do espaço do escudo, quando a mão está
+    /// vazia ou com uma arma ou ferramenta (com bloco, comida etc. o botão direito continua fazendo o de sempre).
+    pub fn shield_slot(&self) -> Option<usize> {
+        let held = self.inv.s[self.slot];
+        if held.id == SHIELD {
+            return Some(self.slot);
+        }
+        let off = crate::inventory::SHIELD_SLOT;
+        let free_hand = held.empty() || crate::items::info(held.id).map_or(false, |i| (0..=3).contains(&i.tool_kind));
+        (self.inv.s[off].id == SHIELD && free_hand).then_some(off)
     }
 
     /// O escudo apara um golpe que vem de (x, z)? Só os que vêm da frente.
@@ -110,7 +122,8 @@ impl Game {
             return false;
         }
         crate::sound::play("quebrar_madeira", 0.9);
-        if !self.creative && self.inv.use_tool(self.slot) {
+        let used = self.shield_slot().unwrap_or(self.slot);
+        if !self.creative && self.inv.use_tool(used) {
             self.notice("Seu escudo quebrou!".into());
         }
         true

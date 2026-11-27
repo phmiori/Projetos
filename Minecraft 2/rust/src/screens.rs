@@ -378,12 +378,17 @@ impl Game {
                 }
             }
         } else {
-            // armadura à esquerda, grade de criação no meio, resultado à direita
+            // armadura à esquerda, o boneco e o escudo, grade de criação e resultado à direita
+            // (na bancada a grade é 3x3 e não sobra lugar para o boneco: fica como antes)
             for i in 0..4 {
                 slots.push((SlotRef::Inv(SIZE + i), x0, y + i as f32 * pitch));
             }
             let n = self.craft_size();
-            let gx = x0 + 2.5 * pitch;
+            let avatar = self.avatar_shown();
+            if avatar {
+                slots.push((SlotRef::Inv(crate::inventory::SHIELD_SLOT), x0 + 3.1 * pitch, y + 3.0 * pitch));
+            }
+            let gx = x0 + if avatar { 4.3 } else { 2.5 } * pitch;
             for r in 0..n {
                 for c in 0..n {
                     slots.push((SlotRef::Craft(r * 3 + c), gx + c as f32 * pitch, y + r as f32 * pitch));
@@ -446,9 +451,35 @@ impl Game {
         }
     }
 
+    /// O boneco do personagem aparece no inventário (sem baú, fornalha ou bancada abertos).
+    pub fn avatar_shown(&self) -> bool {
+        self.open.is_none() && !self.at_table && !self.creative
+    }
+
+    /// Onde fica o boneco: entre a armadura e a grade de criação.
+    pub fn avatar_rect(&self, w: f32, h: f32) -> Option<[f32; 4]> {
+        if !self.avatar_shown() {
+            return None;
+        }
+        let k = Self::ui_scale(h as u32);
+        let (_, slots, s) = self.inv_layout(w, h);
+        let (_, x, y) = *slots.iter().find(|q| q.0 == SlotRef::Inv(SIZE))?;
+        let pitch = 48.0 * k;
+        Some([x + 1.05 * pitch, y, 1.95 * pitch - 4.0 * k, 3.0 * pitch + s])
+    }
+
+    /// O espaço certo para vestir esse item (armadura no da peça, escudo no do escudo), se for de vestir.
+    fn wear_slot(id: i32) -> Option<usize> {
+        if id == crate::combat::SHIELD {
+            return Some(crate::inventory::SHIELD_SLOT);
+        }
+        items::info(id).filter(|i| i.armor_piece >= 0).map(|i| SIZE + i.armor_piece as usize)
+    }
+
     /// Esse item pode ir nesse espaço? (armadura só no espaço da sua peça; o resultado da fornalha só sai)
     fn accepts(r: SlotRef, id: i32) -> bool {
         match r {
+            SlotRef::Inv(crate::inventory::SHIELD_SLOT) => id == crate::combat::SHIELD,
             SlotRef::Inv(i) if i >= SIZE => items::info(id).map_or(false, |inf| inf.armor_piece == (i - SIZE) as i32),
             SlotRef::Furnace(2) => false,
             _ => true,
@@ -525,6 +556,19 @@ impl Game {
             _ => {
                 let st = self.get_slot(r);
                 if shift && !st.empty() {
+                    // armadura e escudo: Shift+clique veste no espaço certo (se estiver vazio)
+                    if let SlotRef::Inv(i) = r {
+                        if i < SIZE && self.open.is_none() {
+                            if let Some(to) = Self::wear_slot(st.id) {
+                                if self.inv.s[to].empty() {
+                                    self.inv.s[to] = st;
+                                    self.set_slot(r, Stack::default());
+                                    crate::sound::play("coletar", 0.5);
+                                    return;
+                                }
+                            }
+                        }
+                    }
                     // passa direto entre a barra e a mochila (ou da grade para a mochila)
                     let rest = match r {
                         SlotRef::Inv(_) if self.open.is_some() => self.add_to_open(st),
@@ -734,7 +778,7 @@ impl Game {
             };
             if let SlotRef::Inv(i) = r {
                 if i >= SIZE && st.empty() {
-                    let names = ["capacete", "peitoral", "calças", "botas"];
+                    let names = ["capacete", "peitoral", "calças", "botas", "escudo"];
                     let t = names[i - SIZE];
                     let tw = ui.text_width(9.0 * k, t);
                     ui.text(9.0 * k, x + s / 2.0 - tw / 2.0, y + s / 2.0 + 3.0 * k, t, rgba(255, 255, 255, 60));
@@ -762,6 +806,7 @@ impl Game {
             let label = if confirming { "Clique de novo para apagar" } else { "Limpar inventário" };
             ui.centered(11.0 * k, c[0] + c[2] / 2.0, c[1] + 15.0 * k, label, if confirming || hot { rgba(255, 255, 255, 255) } else { rgba(200, 200, 205, 230) });
         }
+        self.draw_avatar(ui, w, h);
         // nome do item embaixo do mouse
         if let Some(r) = hover {
             let st = match r {
