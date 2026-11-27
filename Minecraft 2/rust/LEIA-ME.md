@@ -126,6 +126,8 @@ soltos no chão não são gravados (no Java também não).
 - `ferramentas/gerar-texturas.py` (Python com numpy e Pillow): refaz as texturas dos blocos em 64 px por face, no estilo
   realista da pedra e dos minérios, tirando as cores das texturas antigas guardadas em `textures/originais-16px`.
   Rode `python rust/ferramentas/gerar-texturas.py` (ou com os nomes de algumas texturas) na pasta do jogo.
+- `ferramentas/gerar-icones.py`: refaz os ícones dos itens em 32 x 32 (volume, luz, veio na madeira, brilho no
+  metal, facetas nas gemas), a partir dos desenhos de 16 px guardados em `textures/itens/originais-16px`.
 - `exportar-blocos.bat`: depois de criar ou mudar blocos, itens ou receitas no Java, atualiza os arquivos de `dados/`.
 - `comparar-geracao.bat`: gera pedaços com o Java e com o Rust e confere se saíram iguais (rode depois de
   mexer na geração do mundo em qualquer um dos dois).

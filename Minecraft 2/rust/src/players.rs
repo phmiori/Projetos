@@ -112,7 +112,7 @@ fn draw_one(ui: &mut Ui, r: &Remote, light: f32) {
             } else {
                 let icon = crate::items::info(r.held).map_or(0, |i| i.icon);
                 let (u0, v0) = crate::ui::item_uv(icon);
-                let s = 16.0 / 1024.0;
+                let s = crate::ui::icon_span();
                 (-1.0, [[u0, v0], [u0 + s, v0], [u0 + s, v0 + s], [u0, v0 + s]])
             };
             let s = 0.5;

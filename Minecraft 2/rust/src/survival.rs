@@ -451,7 +451,7 @@ impl Game {
                     } else {
                         let icon = crate::items::info(d.st.id).map_or(0, |i| i.icon);
                         let (u0, v0) = crate::ui::item_uv(icon);
-                        let s = 16.0 / 1024.0;
+                        let s = crate::ui::icon_span();
                         (-1.0, [[u0, v0], [u0 + s, v0], [u0 + s, v0 + s], [u0, v0 + s]])
                     };
                     ui.quad(p, uv, layer, c);

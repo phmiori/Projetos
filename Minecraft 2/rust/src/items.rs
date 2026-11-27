@@ -226,24 +226,28 @@ pub fn icon_file(name: &str) -> String {
 
 /// Os desenhos dos itens que o jogador pode trocar: um PNG de 16x16 por item na pasta `dir`. O que faltar é criado
 /// com o desenho padrão (da folha embutida, 32 por linha); depois a folha recebe o que está nos arquivos.
-pub fn load_item_art(dir: &std::path::Path, sheet: &mut image::RgbaImage) {
+/// A folha final dos desenhos dos itens (células de `ui::ICON` px), a mesma do atlas: a mão usa para dar espessura.
+pub static ICON_SHEET: std::sync::OnceLock<image::RgbaImage> = std::sync::OnceLock::new();
+
+/// Põe na folha (células de `cell` px, 32 por linha) os desenhos de `dir/<nome>.png`; os que faltam são criados.
+pub fn load_item_art(dir: &std::path::Path, sheet: &mut image::RgbaImage, cell: u32) {
     let _ = std::fs::create_dir_all(dir);
     for id in &tables().order {
         let info = &tables().items[id];
-        let (x0, y0) = ((info.icon % 32) as u32 * 16, (info.icon / 32) as u32 * 16);
-        if x0 + 16 > sheet.width() || y0 + 16 > sheet.height() {
+        let (x0, y0) = ((info.icon % 32) as u32 * cell, (info.icon / 32) as u32 * cell);
+        if x0 + cell > sheet.width() || y0 + cell > sheet.height() {
             continue;
         }
         let path = dir.join(icon_file(&info.name));
         if !path.exists() {
-            let _ = image::imageops::crop_imm(sheet, x0, y0, 16, 16).to_image().save(&path);
+            let _ = image::imageops::crop_imm(sheet, x0, y0, cell, cell).to_image().save(&path);
             continue;
         }
         match image::open(&path) {
             Ok(img) => {
                 let mut img = img.to_rgba8();
-                if img.dimensions() != (16, 16) {
-                    img = image::imageops::resize(&img, 16, 16, image::imageops::FilterType::Nearest);
+                if img.dimensions() != (cell, cell) {
+                    img = image::imageops::resize(&img, cell, cell, image::imageops::FilterType::Nearest);
                 }
                 image::imageops::replace(sheet, &img, x0 as i64, y0 as i64);
             }
@@ -360,12 +364,12 @@ mod tests {
         let original = image::load_from_memory(include_bytes!("../dados/itens.png")).unwrap().to_rgba8();
         // na primeira vez os arquivos são criados e a folha não muda
         let mut sheet = original.clone();
-        load_item_art(&dir, &mut sheet);
+        load_item_art(&dir, &mut sheet, 16);
         assert!(sheet == original);
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), n);
         // um desenho trocado (aqui maior, 32x32) entra no lugar dele e não é sobrescrito
         image::RgbaImage::from_pixel(32, 32, image::Rgba([1, 2, 3, 255])).save(dir.join("graveto.png")).unwrap();
-        load_item_art(&dir, &mut sheet);
+        load_item_art(&dir, &mut sheet, 16);
         let cell = t.items[&STICK].icon;
         assert_eq!(sheet.get_pixel((cell % 32) as u32 * 16 + 5, (cell / 32) as u32 * 16 + 5).0, [1, 2, 3, 255]);
         assert_eq!(image::open(dir.join("graveto.png")).unwrap().to_rgba8().dimensions(), (32, 32));

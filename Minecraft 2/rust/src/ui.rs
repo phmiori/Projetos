@@ -7,8 +7,10 @@ use crate::items;
 use glow::HasContext;
 use std::collections::HashMap;
 
-const ATLAS: u32 = 1024;
-const ITEMS_Y: u32 = 960; // onde ficam os desenhos dos itens no atlas
+const ATLAS: u32 = 2048;
+/// Tamanho de cada desenho de item no atlas (os arquivos de textures/itens são de 32 x 32; 32 por linha).
+pub const ICON: u32 = 32;
+const ITEMS_Y: u32 = ATLAS - 4 * ICON; // onde ficam os desenhos dos itens no atlas (4 linhas)
 const SIZES: [u32; 5] = [11, 13, 16, 20, 30];
 /// fotos do chat: cada uma numa camada de PHOTO x PHOTO (o maior lado tem no máximo 640, como no Java)
 pub const PHOTO: u32 = 640;
@@ -149,9 +151,12 @@ impl Ui {
             }
         }
         if let Ok(img) = image::load_from_memory(include_bytes!("../dados/itens.png")) {
-            let mut img = img.to_rgba8();
-            // cada item pode ser redesenhado em textures/itens/<nome>.png
-            items::load_item_art(std::path::Path::new("textures/itens"), &mut img);
+            // a folha do Java tem desenhos de 16 px: dobra para 32 e põe por cima os de textures/itens/<nome>.png
+            let small = img.to_rgba8();
+            let k = ICON / 16;
+            let mut img = image::imageops::resize(&small, small.width() * k, small.height() * k, image::imageops::FilterType::Nearest);
+            items::load_item_art(std::path::Path::new("textures/itens"), &mut img, ICON);
+            let _ = items::ICON_SHEET.set(img.clone());
             for y in 0..img.height().min(ATLAS - ITEMS_Y) {
                 for x in 0..img.width().min(ATLAS) {
                     let i = (((ITEMS_Y + y) * ATLAS + x) * 4) as usize;
@@ -412,10 +417,9 @@ impl Ui {
             return;
         }
         if let Some(i) = items::info(id) {
-            let (col, row) = ((i.icon % 32) as f32, (i.icon / 32) as f32);
-            let a = ATLAS as f32;
-            let (u0, v0) = (col * 16.0 / a, (ITEMS_Y as f32 + row * 16.0) / a);
-            self.quad2(x, y, x + s, y + s, [u0, v0, u0 + 16.0 / a, v0 + 16.0 / a], -1.0, [1.0; 4]);
+            let (u0, v0) = item_uv(i.icon);
+            let d = icon_span();
+            self.quad2(x, y, x + s, y + s, [u0, v0, u0 + d, v0 + d], -1.0, [1.0; 4]);
         }
     }
 
@@ -498,8 +502,18 @@ fn round_points(x: f32, y: f32, w: f32, h: f32, r: f32) -> Vec<[f32; 3]> {
 
 /// Canto de cima à esquerda (u, v) do desenho do item no atlas.
 pub fn item_uv(icon: i32) -> (f32, f32) {
-    let a = ATLAS as f32;
-    (((icon % 32) * 16) as f32 / a, (ITEMS_Y as f32 + ((icon / 32) * 16) as f32) / a)
+    let (a, c) = (ATLAS as f32, ICON as f32);
+    ((icon % 32) as f32 * c / a, (ITEMS_Y as f32 + (icon / 32) as f32 * c) / a)
+}
+
+/// Largura de um desenho de item no atlas (coordenada de textura).
+pub fn icon_span() -> f32 {
+    ICON as f32 / ATLAS as f32
+}
+
+/// Um pixel do atlas (coordenada de textura).
+pub fn atlas_px() -> f32 {
+    1.0 / ATLAS as f32
 }
 
 /// Projeção da tela: (0,0) no canto de cima à esquerda, em pixels.

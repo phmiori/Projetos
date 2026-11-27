@@ -8,8 +8,6 @@ use crate::Game;
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-/// Os desenhos dos itens (o mesmo itens.png do atlas da interface), para saber quais pixels são cheios.
-static ICONS: OnceLock<Option<image::RgbaImage>> = OnceLock::new();
 /// Plantas, tochas e afins (blocos em X): a face da frente de cada textura, só cheio/vazio, por número da textura.
 static CROSS_MASKS: OnceLock<HashMap<u16, (u32, Vec<bool>)>> = OnceLock::new();
 
@@ -45,18 +43,20 @@ pub fn keep_cross_masks(a: &crate::textures::Atlas) {
 }
 
 fn icon_mask(icon: i32) -> Option<(u32, Vec<bool>)> {
-    let img = ICONS.get_or_init(|| image::load_from_memory(include_bytes!("../dados/itens.png")).ok().map(|i| i.to_rgba8())).as_ref()?;
-    let (ix, iy) = ((icon % 32) as u32 * 16, (icon / 32) as u32 * 16);
-    if ix + 16 > img.width() || iy + 16 > img.height() {
+    // a mesma folha que foi para o atlas (com os desenhos de textures/itens)
+    let img = crate::items::ICON_SHEET.get()?;
+    let c = crate::ui::ICON;
+    let (ix, iy) = ((icon % 32) as u32 * c, (icon / 32) as u32 * c);
+    if ix + c > img.width() || iy + c > img.height() {
         return None;
     }
-    let mut m = vec![false; 256];
-    for y in 0..16 {
-        for x in 0..16 {
-            m[(y * 16 + x) as usize] = img.get_pixel(ix + x, iy + y).0[3] >= 128;
+    let mut m = vec![false; (c * c) as usize];
+    for y in 0..c {
+        for x in 0..c {
+            m[(y * c + x) as usize] = img.get_pixel(ix + x, iy + y).0[3] >= 128;
         }
     }
-    Some((16, m))
+    Some((c, m))
 }
 
 /// O desenho com espessura (como nos jogos de blocos): a frente e as costas com a figura e, em volta de cada
@@ -246,11 +246,11 @@ impl Game {
             // ferramentas, comida, arco...: o ícone com espessura (o ícone da barra continua plano)
             let icon = crate::items::info(item).map_or(0, |i| i.icon);
             let (u0, v0) = crate::ui::item_uv(icon);
-            let px = 1.0 / 1024.0;
+            let px = crate::ui::atlas_px();
             match icon_mask(icon) {
                 Some((n, mask)) => extruded(ui, &t, n, &mask, &|x, y| [u0 + x * px, v0 + y * px], -1.0, item_light),
                 None => {
-                    let s = 16.0 * px;
+                    let s = crate::ui::icon_span();
                     let r = 0.5;
                     let pts = [[-r, r, 0.0], [r, r, 0.0], [r, -r, 0.0], [-r, -r, 0.0]];
                     ui.quad(pts.map(|p| apply(&t, p)), [[u0, v0], [u0 + s, v0], [u0 + s, v0 + s], [u0, v0 + s]], -1.0, [item_light, item_light, item_light, 1.0]);
