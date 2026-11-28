@@ -580,7 +580,12 @@ ORES = {
     "minerio_cobre": C(0.9, 0.52, 0.32),
     "minerio_cristal": C(0.42, 0.93, 0.92),
     "minerio_esmeralda": C(0.28, 0.86, 0.45),
+    "minerio_rubi": C(0.92, 0.16, 0.24),
+    "minerio_safira": C(0.2, 0.42, 0.96),
+    "minerio_ametista": C(0.7, 0.4, 0.95),
 }
+# blocos de gemas (sem textura antiga de 16 px): a cor da gema
+GEM_BLOCKS = {"bloco_rubi": C(0.86, 0.16, 0.24), "bloco_safira": C(0.2, 0.4, 0.92), "bloco_ametista": C(0.66, 0.38, 0.9)}
 PLANTS = {"flor_amarela", "flor_vermelha", "grama_alta", "muda", "muda_betula", "muda_cerejeira", "cana", "tocha",
           "pingente_gelo", "escada_mao"} | {f"{c}_{i}" for c in ("trigo", "batata", "cenoura", "beterraba") for i in (1, 2, 3)}
 
@@ -599,6 +604,8 @@ def faces_for(name):
         return each(lambda r, f: rgba(stone(r, b)))
     if name in ORES:
         return each(lambda r, f: rgba(ore(r, STONES["pedra"], ORES[name], C(0.05, 0.05, 0.06) if name == "minerio_carvao" else None)))
+    if name in GEM_BLOCKS:
+        return each(lambda r, f: rgba(metal(r, GEM_BLOCKS[name], gem=True)))
     old = Old(name)
     m = old.mean
     if name in ("terra", "caminho", "terra_arada"):

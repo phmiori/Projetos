@@ -442,6 +442,17 @@ impl Generator {
         if biome == MOUNTAINS && hash3(x, y, z, self.sd(323)) < 0.004 {
             return EMERALD_ORE;
         }
+        // gemas em veios pequenos: rubi e safira no meio do subsolo, ametista lá no fundo (junto da ardósia)
+        let gem = hash3(x >> 1, y >> 1, z >> 1, self.sd(330));
+        if (8..=56).contains(&y) && gem < 0.001 && hash3(x, y, z, self.sd(331)) < 0.6 {
+            return RUBY_ORE;
+        }
+        if (8..=56).contains(&y) && gem > 0.999 && hash3(x, y, z, self.sd(332)) < 0.6 {
+            return SAPPHIRE_ORE;
+        }
+        if y < 36 && hash3(x >> 1, y >> 1, z >> 1, self.sd(333)) < 0.0017 && hash3(x, y, z, self.sd(334)) < 0.6 {
+            return AMETHYST_ORE;
+        }
         if y < 30 || (y < 36 && hash3(x, y, z, self.sd(324)) < (36 - y) as f64 / 6.0) {
             return DEEPSLATE;
         }
@@ -822,6 +833,26 @@ mod tests {
         println!("% de ar por faixa de 10 blocos, de baixo para cima: {share:.1?}");
         assert!(share[1..6].iter().all(|&s| s > 3.0 && s < 35.0), "{share:?}");
         assert!(lava_top <= 10 && crystal_top <= 24 && iron_top > 80 && iron_top <= 96, "{lava_top} {crystal_top} {iron_top}");
+    }
+
+    #[test]
+    fn mundo_novo_tem_rubi_safira_e_ametista() {
+        let g = Generator { seed: 2024, biome_scale: 2.0, lift: DEEP, modern: true };
+        let mut n = [0usize; 3];
+        for cx in -6..6 {
+            for cz in -6..6 {
+                for &b in g.generate(cx, cz).blocks.iter() {
+                    match b {
+                        RUBY_ORE => n[0] += 1,
+                        SAPPHIRE_ORE => n[1] += 1,
+                        AMETHYST_ORE => n[2] += 1,
+                        _ => {}
+                    }
+                }
+            }
+        }
+        println!("rubi {}, safira {}, ametista {} em 144 pedaços", n[0], n[1], n[2]);
+        assert!(n.iter().all(|&k| k > 10), "{n:?}");
     }
 
     #[test]

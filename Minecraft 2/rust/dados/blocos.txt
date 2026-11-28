@@ -219,6 +219,12 @@
 216|0|216|0|1|gelo_compacto|Gelo compacto||0|0|0|0|0|0|0|0|1.0|3|-1
 217|0|217|0|1|gelo_azul|Gelo azul||0|0|0|0|0|0|0|0|1.2|3|-1
 218|2|218|0|0|pingente_gelo|Pingente de gelo||0|0|0|0|0|0|0|0|0.1|0|-1
+250|0|250|0|0|minerio_rubi|Minério de rubi||0|0|0|0|0|0|1|317|3.8|3|2
+251|0|251|0|0|minerio_safira|Minério de safira||0|0|0|0|0|0|1|318|3.8|3|2
+252|0|252|0|0|minerio_ametista|Minério de ametista||0|0|0|0|0|0|1|319|3.5|3|2
+253|0|253|0|0|bloco_rubi|Bloco de rubi||0|0|0|0|0|0|1|434|4.0|3|2
+254|0|254|0|0|bloco_safira|Bloco de safira||0|0|0|0|0|0|1|435|4.0|3|2
+255|0|255|0|0|bloco_ametista|Bloco de ametista||0|0|0|0|0|0|1|436|4.0|3|2
 @item|400|216
 @item|401|217
 @item|402|218
@@ -273,3 +279,9 @@
 @item|431|247
 @item|432|248
 @item|433|249
+@item|434|253
+@item|435|254
+@item|436|255
+@item|437|250
+@item|438|251
+@item|439|252

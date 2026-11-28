@@ -10,7 +10,7 @@ use std::collections::HashMap;
 const ATLAS: u32 = 2048;
 /// Tamanho de cada desenho de item no atlas (os arquivos de textures/itens são de 32 x 32; 32 por linha).
 pub const ICON: u32 = 32;
-const ITEMS_Y: u32 = ATLAS - 4 * ICON; // onde ficam os desenhos dos itens no atlas (4 linhas)
+const ITEMS_Y: u32 = ATLAS - 6 * ICON; // onde ficam os desenhos dos itens no atlas (6 linhas de 32)
 const SIZES: [u32; 5] = [11, 13, 16, 20, 30];
 /// fotos do chat: cada uma numa camada de PHOTO x PHOTO (o maior lado tem no máximo 640, como no Java)
 pub const PHOTO: u32 = 640;
@@ -154,7 +154,10 @@ impl Ui {
             // a folha do Java tem desenhos de 16 px: dobra para 32 e põe por cima os de textures/itens/<nome>.png
             let small = img.to_rgba8();
             let k = ICON / 16;
-            let mut img = image::imageops::resize(&small, small.width() * k, small.height() * k, image::imageops::FilterType::Nearest);
+            let big = image::imageops::resize(&small, small.width() * k, small.height() * k, image::imageops::FilterType::Nearest);
+            // espaço para 6 linhas de desenhos (as 2 de baixo são os itens novos, só da versão Rust)
+            let mut img = image::RgbaImage::new(big.width(), 6 * ICON);
+            image::imageops::replace(&mut img, &big, 0, 0);
             items::load_item_art(std::path::Path::new("textures/itens"), &mut img, ICON);
             let _ = items::ICON_SHEET.set(img.clone());
             for y in 0..img.height().min(ATLAS - ITEMS_Y) {

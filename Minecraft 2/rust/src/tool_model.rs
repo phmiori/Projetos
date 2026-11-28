@@ -16,12 +16,14 @@ const MAT_X: u32 = 1024;
 pub(crate) const HANDLE: usize = 0;
 pub(crate) const GRIP: usize = 1;
 pub(crate) const DARK_METAL: usize = 2;
-/// corpo e fio de cada material: madeira, pedra, ferro, diamante
-pub(crate) const BODY: [usize; 4] = [3, 5, 7, 9];
-pub(crate) const EDGE: [usize; 4] = [4, 6, 8, 10];
+/// corpo e fio de cada material: madeira, pedra, ferro, diamante, ouro, esmeralda, cobre
+pub(crate) const BODY: [usize; 7] = [3, 5, 7, 9, 12, 14, 16];
+pub(crate) const EDGE: [usize; 7] = [4, 6, 8, 10, 13, 15, 17];
+/// quantas texturas cabem numa linha (a faixa do atlas tem 1024 px de largura)
+const PER_ROW: usize = 16;
 /// cinza claro com manchas suaves: tingido com a cor de cada parte (itens)
 pub(crate) const NOISE: usize = 11;
-const COUNT: usize = 12;
+const COUNT: usize = 18;
 
 // ------------------------------------------------------------------ ruído
 pub(crate) fn hash(x: i32, y: i32, seed: u32) -> f32 {
@@ -122,6 +124,28 @@ fn paint(idx: usize, u: f32, v: f32) -> [f32; 3] {
             let g = 0.8 + 0.2 * n;
             [g, g, g]
         }
+        12 | 13 | 16 | 17 => {
+            // ouro e cobre: metal escovado como o ferro, nas suas cores (o cobre com umas manchas verdes)
+            let copper = idx >= 16;
+            let n = fbm(u, v, 32, 2, 91) * 0.7 + fbm(u, v, 4, 4, 92) * 0.3;
+            let (lo, hi) = if copper { ([0.62, 0.3, 0.16], [0.95, 0.6, 0.38]) } else { ([0.9, 0.68, 0.16], [1.0, 0.95, 0.55]) };
+            let mut c = mix(lo, hi, n);
+            if copper && fbm(u, v, 6, 6, 93) > 0.7 {
+                c = mix(c, [0.32, 0.68, 0.56], 0.55);
+            }
+            if idx == 13 || idx == 17 { mix(c, [1.0, 0.97, 0.85], 0.35) } else { c }
+        }
+        14 | 15 => {
+            // esmeralda: facetas verdes
+            let (cu, cv) = ((u / 8.0) as i32, (v / 8.0) as i32);
+            let facet = hash(cu, cv, 95);
+            let n = fbm(u, v, 8, 8, 96);
+            let mut c = mix([0.08, 0.5, 0.25], [0.45, 0.95, 0.6], facet * 0.7 + n * 0.3);
+            if hash(u as i32, v as i32, 97) > 0.985 {
+                c = [0.9, 1.0, 0.92];
+            }
+            if idx == 15 { mix(c, [0.85, 1.0, 0.9], 0.4) } else { c }
+        }
         _ => {
             // diamante: facetas (células de brilho diferente) e faíscas
             let (cu, cv) = ((u / 8.0) as i32, (v / 8.0) as i32);
@@ -142,7 +166,8 @@ pub fn paint_textures(px: &mut [u8], atlas: u32, y0: u32) {
         for y in 0..TEX {
             for x in 0..TEX {
                 let c = paint(idx, x as f32 + 0.5, y as f32 + 0.5);
-                let i = (((y0 + y) * atlas + MAT_X + idx as u32 * TEX + x) * 4) as usize;
+                let (col, row) = ((idx % PER_ROW) as u32, (idx / PER_ROW) as u32);
+                let i = (((y0 + row * TEX + y) * atlas + MAT_X + col * TEX + x) * 4) as usize;
                 if i + 4 > px.len() {
                     return;
                 }
@@ -263,7 +288,13 @@ fn parts(kind: i32, mat: usize) -> Vec<Part> {
 /// É uma ferramenta que tem modelo 3D? Devolve (tipo, material).
 pub fn model_of(item: i32) -> Option<(i32, usize)> {
     let i = crate::items::info(item)?;
-    ((0..=4).contains(&i.tool_kind) && (0..=3).contains(&i.tool_mat)).then(|| (i.tool_kind, i.tool_mat as usize))
+    if !(0..=4).contains(&i.tool_kind) {
+        return None;
+    }
+    // o material pelo nome (o tool_mat é o nível da picareta: o ouro e o cobre são nível 1, a esmeralda 3)
+    let n = i.name.to_lowercase();
+    let mat = ["madeira", "pedra", "ferro", "diamante", "ouro", "esmeralda", "cobre"].iter().position(|m| n.ends_with(m))?;
+    Some((i.tool_kind, mat))
 }
 
 /// Desenha a ferramenta com a transformação `t` do ícone (o desenho de -0,5 a 0,5 no plano x-y, cabo embaixo à
@@ -309,7 +340,8 @@ pub(crate) fn render(ui: &mut Ui, m: &Tf, parts: &[Part], light: f32, ao: bool) 
             ([4, 5, 7, 6], [0.0, 0.0, 1.0], 0, 1),
             ([0, 2, 3, 1], [0.0, 0.0, -1.0], 0, 1),
         ];
-        let rx = (MAT_X + part.tex as u32 * TEX) as f32;
+        let rx = (MAT_X + (part.tex % PER_ROW) as u32 * TEX) as f32;
+        let y0 = y0 + ((part.tex / PER_ROW) as u32 * TEX) as f32;
         for (f, (q, n, ua, va)) in faces.iter().enumerate() {
             let nw = apply(&m, *n);
             let nw = [nw[0] - o[0], nw[1] - o[1], nw[2] - o[2]];

@@ -16,7 +16,7 @@ from PIL import Image
 DIR = os.path.join("textures", "itens")
 N = 32
 TOOLS = ["picareta", "pa", "machado", "espada", "enxada"]
-MATERIALS = ["madeira", "pedra", "ferro", "diamante"]
+MATERIALS = ["madeira", "pedra", "ferro", "diamante", "ouro", "esmeralda", "cobre"]
 KEEP = {"picareta_de_diamante", "pa_de_diamante"}  # o modelo: ficam como estão
 
 # (claro, médio, escuro) de cada material da cabeça
@@ -25,7 +25,12 @@ PALETTE = {
     "pedra": ((0.70, 0.70, 0.70), (0.50, 0.50, 0.51), (0.30, 0.30, 0.32)),
     "ferro": ((0.96, 0.96, 0.98), (0.78, 0.79, 0.82), (0.50, 0.52, 0.56)),
     "diamante": ((0.80, 0.99, 0.98), (0.38, 0.86, 0.84), (0.12, 0.52, 0.53)),
+    "ouro": ((1.00, 0.96, 0.60), (0.96, 0.78, 0.22), (0.62, 0.42, 0.08)),
+    "esmeralda": ((0.70, 1.00, 0.78), (0.25, 0.82, 0.45), (0.06, 0.45, 0.22)),
+    "cobre": ((0.98, 0.72, 0.52), (0.86, 0.48, 0.28), (0.52, 0.25, 0.12)),
 }
+# o desenho dos detalhes (riscos do metal, faíscas da gema) de cada material
+LOOK = {"ouro": "ferro", "cobre": "ferro", "esmeralda": "diamante"}
 HANDLE = ((0.60, 0.42, 0.23), (0.44, 0.29, 0.14), (0.24, 0.15, 0.07))
 
 yy, xx = np.mgrid[0:N, 0:N].astype(float) + 0.5
@@ -109,7 +114,7 @@ def draw(tool, mat):
         blade = (u >= 0) & (u <= 23.5) & (np.abs(v) <= np.where(u > 20.0, (23.5 - u) * 0.75 + 0.2, 2.7))
         guard_c = coords((9.8, 22.2))
         guard = (np.abs(guard_c[0]) <= 1.1) & (np.abs(guard_c[1]) <= 5.2)
-        col = shade(blade, pal, rng, mat)
+        col = shade(blade, pal, rng, LOOK.get(mat, mat))
         ridge = blade & (np.abs(v) <= 0.55) & (u < 22)
         col[ridge] = np.minimum(1, col[ridge] * 0.6 + np.array(pal[0]) * 0.5)
         img[blade] = np.dstack([col, np.ones((N, N))])[blade]
@@ -147,7 +152,7 @@ def draw(tool, mat):
         bar = (u >= -1.6) & (u <= 2.0) & (v <= 2.0) & (v >= -8.5)
         tip = (v >= -8.5) & (v <= -5.2) & (u >= -5.5) & (u <= 2.0)
         head = bar | tip
-    col = shade(head, pal, rng, mat)
+    col = shade(head, pal, rng, LOOK.get(mat, mat))
     img[head] = np.dstack([col, np.ones((N, N))])[head]
     pommel(img, (2, 28), pal)
     return img

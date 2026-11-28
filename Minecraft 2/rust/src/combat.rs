@@ -75,6 +75,7 @@ impl Game {
             crate::block::COAL_ORE => 1,
             crate::block::CRYSTAL_ORE => 5,
             crate::block::EMERALD_ORE => 5,
+            crate::block::RUBY_ORE | crate::block::SAPPHIRE_ORE | crate::block::AMETHYST_ORE => 4,
             _ => 0,
         };
         self.add_xp(n);

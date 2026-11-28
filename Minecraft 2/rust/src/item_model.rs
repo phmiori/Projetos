@@ -196,13 +196,13 @@ fn parts(id: i32, name: &str, a: C3, b: C3) -> Option<Vec<Part>> {
             v.push(cbox([0.0, 0.115, 0.0], [0.2, 0.012, 0.08], shade(c, 1.2)));
         }
         // gemas: diamante e esmeralda (a esmeralda mais alta)
-        204 | 296 => {
-            let tall = if id == 296 { 1.25 } else { 1.0 };
+        204 | 296 | 317 | 318 | 319 => {
+            let tall = if id == 296 || id == 319 { 1.25 } else { 1.0 };
             let ws = [0.08, 0.17, 0.25, 0.29, 0.27, 0.2, 0.1];
             for (i, w) in ws.iter().enumerate() {
                 let y = (-0.3 + i as f32 * 0.075) * tall;
                 let col = if i >= 4 { shade(a, 1.2) } else { shade(a, 0.9 + i as f32 * 0.04) };
-                v.push(cbox([0.0, y, 0.0], [*w * if id == 296 { 0.75 } else { 1.0 }, 0.04 * tall, *w * 0.5], col));
+                v.push(cbox([0.0, y, 0.0], [*w * if id == 296 || id == 319 { 0.75 } else { 1.0 }, 0.04 * tall, *w * 0.5], col));
             }
             v.push(cbox([-0.08, 0.02 * tall, 0.13], [0.03, 0.03, 0.01], [1.0, 1.0, 1.0]));
         }

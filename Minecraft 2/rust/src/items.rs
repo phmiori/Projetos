@@ -361,7 +361,10 @@ mod tests {
         assert_eq!(icon_file("Ovo de tigre-de-bengala"), "ovo_de_tigre_de_bengala.png");
 
         let dir = std::env::temp_dir().join(format!("mb-itens-{}", std::process::id()));
-        let original = image::load_from_memory(include_bytes!("../dados/itens.png")).unwrap().to_rgba8();
+        let small = image::load_from_memory(include_bytes!("../dados/itens.png")).unwrap().to_rgba8();
+        // como no jogo: a folha tem 6 linhas (as 2 de baixo são dos itens novos)
+        let mut original = image::RgbaImage::new(small.width(), 6 * 16);
+        image::imageops::replace(&mut original, &small, 0, 0);
         // na primeira vez os arquivos são criados e a folha não muda
         let mut sheet = original.clone();
         load_item_art(&dir, &mut sheet, 16);

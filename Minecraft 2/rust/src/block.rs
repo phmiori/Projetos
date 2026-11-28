@@ -47,6 +47,10 @@ pub const PUMPKIN: u8 = 229;
 pub const MELON: u8 = 230;
 pub const COPPER_ORE: u8 = 231;
 pub const EMERALD_ORE: u8 = 232;
+// minérios de gemas (rubi, safira e ametista) e os blocos delas
+pub const RUBY_ORE: u8 = 250;
+pub const SAPPHIRE_ORE: u8 = 251;
+pub const AMETHYST_ORE: u8 = 252;
 pub const DEEPSLATE: u8 = 233;
 pub const GRANITE: u8 = 234;
 pub const DIORITE: u8 = 235;

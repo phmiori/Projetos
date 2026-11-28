@@ -96,6 +96,14 @@ os mundos, as texturas, os sons e as configurações são os mesmos, e as duas v
   LAN) são modelos de caixas — cabo de seção quadrada, cabeça maciça, lâmina que afina até o fio, guarda e pomo —
   com texturas de madeira, couro, pedra, ferro escovado e diamante desenhadas pelo próprio jogo, luz de cima e a
   sombra perto da mão. Os ícones do inventário continuam planos.
+- **Ferramentas de ouro, esmeralda e cobre** (só na versão Rust, ids 320–334 = 320 + tipo×3 + material): picareta,
+  machado, pá, espada e enxada de cada uma, feitas na bancada como as outras (lingote de ouro, esmeralda, lingote de
+  cobre). Ouro: rápida (11) mas dura pouco (90 usos) e minera como pedra; cobre: 190 usos, velocidade 5, nível de
+  pedra; esmeralda: 1500 usos, velocidade 9,5, minera tudo como o diamante.
+- **Minérios de gemas** (só na versão Rust, nos mundos novos): rubi e safira entre y 8 e 56, ametista lá no fundo
+  (abaixo de y 36, junto da ardósia-abismo). Precisam de picareta de ferro ou melhor, soltam a gema (Rubi 317, Safira
+  318, Ametista 319) e dão experiência; 9 gemas fazem o bloco (bloco de rubi/safira/ametista) e o bloco volta a dar
+  9 gemas. Blocos 250–255; os itens que os colocam são 434–439.
 - **Itens em 3D** (`src/item_model.rs`): os outros itens na mão também são modelos de caixas — graveto, lingotes,
   gemas, pedaços de carvão/sílex/cobre, maçã, cenoura, batata, beterraba, carnes, frango, peixe, pão, torta, melancia,
   sopa, grãos, trigo, couro, fio, pena, osso, pederneira, flecha, arco, ovos de criatura com pintas, armaduras
