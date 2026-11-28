@@ -203,6 +203,16 @@ fn same(id: i32) -> i32 {
 }
 
 /// Nome do arquivo do desenho do item: "Lingote de ferro" vira "lingote_de_ferro.png".
+/// Cor de cada material de armadura (0xRRGGBB), pelo nome da peça: couro, ferro, diamante, ouro, cobre, esmeralda,
+/// rubi, safira e ametista.
+pub fn armor_color(name: &str) -> u32 {
+    let n = name.to_lowercase();
+    [("couro", 0x8B5A2B), ("ferro", 0xD2D5DB), ("diamante", 0x4FD8D0), ("ouro", 0xF2C230), ("cobre", 0xD97A45), ("esmeralda", 0x3CCB6A), ("rubi", 0xD42A3C), ("safira", 0x3466E0), ("ametista", 0xA466E6)]
+        .iter()
+        .find(|(m, _)| n.ends_with(m))
+        .map_or(0xA0A0A0, |(_, c)| *c)
+}
+
 pub fn icon_file(name: &str) -> String {
     let mut s = String::new();
     for c in name.to_lowercase().chars() {

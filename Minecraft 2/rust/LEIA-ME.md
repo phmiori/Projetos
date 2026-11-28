@@ -100,6 +100,16 @@ os mundos, as texturas, os sons e as configurações são os mesmos, e as duas v
   machado, pá, espada e enxada de cada uma, feitas na bancada como as outras (lingote de ouro, esmeralda, lingote de
   cobre). Ouro: rápida (11) mas dura pouco (90 usos) e minera como pedra; cobre: 190 usos, velocidade 5, nível de
   pedra; esmeralda: 1500 usos, velocidade 9,5, minera tudo como o diamante.
+- **Ferramentas de rubi, safira e ametista** (ids 335–349 = 335 + tipo×3 + material): rubi 1000 usos e velocidade
+  10; safira 1400 usos e velocidade 9; ametista 650 usos, velocidade 10,5 e nível de ferro.
+- **Armaduras de ouro, cobre, esmeralda, rubi, safira e ametista** (ids 350–373 = 350 + peça×6 + material), feitas
+  como as outras com lingote de ouro, lingote de cobre ou a gema; aparecem com a cor do material no boneco do
+  inventário e na mão.
+- **Cada material com o seu desenho 3D** (`tool_model.rs`, `style`): madeira é simples (cabeça grossa amarrada com
+  couro, pontas cegas); pedra e cobre são rústicos (pedaços tortos, amarrados); ferro e ouro são forjados (o ouro com
+  anéis brilhantes no cabo); diamante, esmeralda, rubi, safira e ametista são lendários (crista e coroa na picareta,
+  pontas e lâmina em meia-lua no machado, pá em lança, espada mais longa com abas na guarda, gemas embutidas, anéis
+  de metal no cabo e uma gema no pomo).
 - **Minérios de gemas** (só na versão Rust, nos mundos novos): rubi e safira entre y 8 e 56, ametista lá no fundo
   (abaixo de y 36, junto da ardósia-abismo). Precisam de picareta de ferro ou melhor, soltam a gema (Rubi 317, Safira
   318, Ametista 319) e dão experiência; 9 gemas fazem o bloco (bloco de rubi/safira/ametista) e o bloco volta a dar

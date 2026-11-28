@@ -174,7 +174,6 @@ fn diag(q: Part) -> Part {
     turned(q, 0.0, 0.0, -FRAC_PI_4)
 }
 
-const LEATHER: C3 = [0.55, 0.36, 0.2];
 
 /// As caixas do item (ou None: fica o ícone engrossado). `a`, `b` = cores do ícone.
 fn parts(id: i32, name: &str, a: C3, b: C3) -> Option<Vec<Part>> {
@@ -464,12 +463,9 @@ fn parts(id: i32, name: &str, a: C3, b: C3) -> Option<Vec<Part>> {
         _ => {
             // armaduras: pela peça
             let piece = crate::items::info(id).map_or(-1, |i| i.armor_piece);
-            let c = if n.contains("couro") {
-                LEATHER
-            } else if n.contains("diamante") {
-                [0.32, 0.85, 0.82]
-            } else {
-                [0.82, 0.83, 0.86]
+            let c = {
+                let h = crate::items::armor_color(n);
+                [((h >> 16) & 255) as f32 / 255.0, ((h >> 8) & 255) as f32 / 255.0, (h & 255) as f32 / 255.0]
             };
             let dark = shade(c, 0.72);
             match piece {

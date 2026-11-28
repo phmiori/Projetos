@@ -16,14 +16,14 @@ const MAT_X: u32 = 1024;
 pub(crate) const HANDLE: usize = 0;
 pub(crate) const GRIP: usize = 1;
 pub(crate) const DARK_METAL: usize = 2;
-/// corpo e fio de cada material: madeira, pedra, ferro, diamante, ouro, esmeralda, cobre
-pub(crate) const BODY: [usize; 7] = [3, 5, 7, 9, 12, 14, 16];
-pub(crate) const EDGE: [usize; 7] = [4, 6, 8, 10, 13, 15, 17];
+/// corpo e fio de cada material: madeira, pedra, ferro, diamante, ouro, esmeralda, cobre, rubi, safira, ametista
+pub(crate) const BODY: [usize; 10] = [3, 5, 7, 9, 12, 14, 16, 18, 20, 22];
+pub(crate) const EDGE: [usize; 10] = [4, 6, 8, 10, 13, 15, 17, 19, 21, 23];
 /// quantas texturas cabem numa linha (a faixa do atlas tem 1024 px de largura)
 const PER_ROW: usize = 16;
 /// cinza claro com manchas suaves: tingido com a cor de cada parte (itens)
 pub(crate) const NOISE: usize = 11;
-const COUNT: usize = 18;
+const COUNT: usize = 24;
 
 // ------------------------------------------------------------------ ruído
 pub(crate) fn hash(x: i32, y: i32, seed: u32) -> f32 {
@@ -135,16 +135,22 @@ fn paint(idx: usize, u: f32, v: f32) -> [f32; 3] {
             }
             if idx == 13 || idx == 17 { mix(c, [1.0, 0.97, 0.85], 0.35) } else { c }
         }
-        14 | 15 => {
-            // esmeralda: facetas verdes
+        14 | 15 | 18..=23 => {
+            // gemas: facetas (células de brilho diferente) e faíscas, cada uma na sua cor
+            let (lo, hi, spark) = match idx {
+                14 | 15 => ([0.08, 0.5, 0.25], [0.45, 0.95, 0.6], [0.9, 1.0, 0.92]),
+                18 | 19 => ([0.45, 0.03, 0.08], [0.98, 0.3, 0.38], [1.0, 0.85, 0.88]),
+                20 | 21 => ([0.06, 0.15, 0.5], [0.35, 0.6, 1.0], [0.85, 0.92, 1.0]),
+                _ => ([0.3, 0.12, 0.48], [0.8, 0.55, 1.0], [0.97, 0.9, 1.0]),
+            };
             let (cu, cv) = ((u / 8.0) as i32, (v / 8.0) as i32);
-            let facet = hash(cu, cv, 95);
-            let n = fbm(u, v, 8, 8, 96);
-            let mut c = mix([0.08, 0.5, 0.25], [0.45, 0.95, 0.6], facet * 0.7 + n * 0.3);
-            if hash(u as i32, v as i32, 97) > 0.985 {
-                c = [0.9, 1.0, 0.92];
+            let facet = hash(cu, cv, 95 + idx as u32);
+            let n = fbm(u, v, 8, 8, 96 + idx as u32);
+            let mut c = mix(lo, hi, facet * 0.7 + n * 0.3);
+            if hash(u as i32, v as i32, 97 + idx as u32) > 0.985 {
+                c = spark;
             }
-            if idx == 15 { mix(c, [0.85, 1.0, 0.9], 0.4) } else { c }
+            if idx % 2 == 1 { mix(c, spark, 0.4) } else { c }
         }
         _ => {
             // diamante: facetas (células de brilho diferente) e faíscas
@@ -197,89 +203,305 @@ fn c(w: f32, d: f32, y0: f32, y1: f32, tex: usize) -> Part {
     p([-w, y0, -d], [w, y1, d], tex)
 }
 
-/// As caixas da ferramenta (`kind`: 0 picareta, 1 machado, 2 pá, 3 espada, 4 enxada; `mat`: 0 madeira .. 3
-/// diamante), com o cabo ao longo de +y a partir do 0 e a cabeça no plano x-y (a lâmina do machado em -x).
+/// Nível do desenho de cada material: 0 madeira (simples, amarrada), 1 pedra e cobre (rústico), 2 ferro e ouro
+/// (forjado), 3 diamante, esmeralda, rubi, safira e ametista (lendário: pontas, anéis de metal e gemas embutidas).
+fn style(mat: usize) -> u8 {
+    match mat {
+        0 => 0,
+        1 | 6 => 1,
+        2 | 4 => 2,
+        _ => 3,
+    }
+}
+
+/// Os dois lados de um braço (x0..x1 à direita, ou espelhado à esquerda).
+fn side(s: f32, x0: f32, x1: f32) -> (f32, f32) {
+    if s < 0.0 {
+        (-x1, -x0)
+    } else {
+        (x0, x1)
+    }
+}
+
+/// As caixas da ferramenta (`kind`: 0 picareta, 1 machado, 2 pá, 3 espada, 4 enxada; `mat`: 0 madeira .. 9
+/// ametista), com o cabo ao longo de +y a partir do 0 e a cabeça no plano x-y (a lâmina do machado em -x).
 fn parts(kind: i32, mat: usize) -> Vec<Part> {
     let (body, edge) = (BODY[mat], EDGE[mat]);
-    let collar = if mat >= 2 { DARK_METAL } else { GRIP };
-    let mut v = Vec::with_capacity(24);
-    let handle = |v: &mut Vec<Part>, len: f32| {
-        v.push(c(0.036, 0.036, 0.0, len, HANDLE));
-        v.push(c(0.043, 0.043, 0.05, 0.30, GRIP)); // couro na pega
-        v.push(c(0.044, 0.044, -0.025, 0.03, collar)); // ponteira
+    let st = style(mat);
+    let collar = if st >= 2 { DARK_METAL } else { GRIP };
+    let jit = |i: i32, k: u32| hash(i, mat as i32 * 7 + kind, k) - 0.5; // torto, nas ferramentas rústicas
+    let mut v = Vec::with_capacity(40);
+    let handle = |v: &mut Vec<Part>, len: f32| match st {
+        // galho simples, sem pega
+        0 => v.push(c(0.041, 0.041, -0.01, len, HANDLE)),
+        1 => {
+            v.push(c(0.037, 0.037, 0.0, len, HANDLE));
+            v.push(c(0.044, 0.044, 0.06, 0.28, GRIP));
+        }
+        2 => {
+            v.push(c(0.036, 0.036, 0.0, len, HANDLE));
+            v.push(c(0.043, 0.043, 0.05, 0.30, GRIP));
+            v.push(c(0.044, 0.044, -0.025, 0.03, collar));
+            if mat == 4 {
+                // o ouro ganha dois anéis brilhantes no cabo
+                for y in [0.34, 0.6] {
+                    v.push(c(0.044, 0.044, y, y + 0.025, edge));
+                }
+            }
+        }
+        _ => {
+            v.push(c(0.034, 0.034, 0.0, len, HANDLE));
+            v.push(c(0.042, 0.042, 0.05, 0.30, GRIP));
+            for y in [0.31, len - 0.24] {
+                v.push(c(0.047, 0.047, y, y + 0.035, DARK_METAL)); // anéis de metal
+            }
+            v.push(c(0.052, 0.052, -0.05, 0.0, DARK_METAL)); // pomo
+            v.push(c(0.032, 0.032, -0.088, -0.05, edge)); // com uma gema na ponta
+        }
+    };
+    // amarra de couro em volta da junção (madeira, pedra e cobre)
+    let strap = |v: &mut Vec<Part>, y0: f32, y1: f32| {
+        v.push(c(0.052, 0.052, y0, y1, GRIP));
+        v.push(c(0.05, 0.05, y0 - 0.035, y0 - 0.012, GRIP));
+    };
+    // gema embutida dos dois lados (lendário)
+    let inlay = |v: &mut Vec<Part>, x: f32, y: f32| {
+        v.push(p([x - 0.03, y - 0.03, -0.074], [x + 0.03, y + 0.03, 0.074], edge));
+        v.push(p([x - 0.018, y - 0.018, -0.082], [x + 0.018, y + 0.018, 0.082], edge));
     };
     match kind {
         0 => {
-            // picareta: colar no topo do cabo e os dois braços curvos que afinam até a ponta
+            // picareta
             let l = 1.0;
             handle(&mut v, l);
-            v.push(c(0.072, 0.064, l - 0.13, l + 0.02, collar));
-            for s in [-1.0f32, 1.0] {
-                // segmentos curtos e encostados num arco suave (a ponta desce um pouco)
-                for i in 0..7 {
-                    let f = i as f32;
-                    let (x0, x1) = (0.066 + f * 0.044, 0.066 + (f + 1.0) * 0.044 + 0.008);
-                    let xc = (x0 + x1) / 2.0;
-                    let yc = l - 0.05 - xc * xc * 0.75;
-                    let hh = 0.056 - f * 0.0055;
-                    let d = 0.05 - f * 0.0045;
-                    let (a, b) = if s < 0.0 { (-x1, -x0) } else { (x0, x1) };
-                    v.push(p([a, yc - hh, -d], [b, yc + hh, d], if i >= 5 { edge } else { body }));
+            match st {
+                0 => {
+                    // barra reta e grossa, pontas cegas
+                    v.push(c(0.07, 0.062, l - 0.12, l + 0.02, body));
+                    for s in [-1.0f32, 1.0] {
+                        let (a, b) = side(s, 0.07, 0.29);
+                        v.push(p([a, l - 0.1, -0.05], [b, l - 0.005, 0.05], body));
+                        let (a, b) = side(s, 0.29, 0.34);
+                        v.push(p([a, l - 0.088, -0.04], [b, l - 0.02, 0.04], body));
+                    }
+                    strap(&mut v, l - 0.17, l - 0.12);
+                }
+                1 => {
+                    // pedra lascada: pedaços tortos, sem curva certinha
+                    v.push(c(0.07, 0.062, l - 0.12, l + 0.02, body));
+                    for s in [-1.0f32, 1.0] {
+                        for i in 0..4 {
+                            let f = i as f32;
+                            let k = i + if s < 0.0 { 10 } else { 0 };
+                            let (a, b) = side(s, 0.066 + f * 0.072, 0.066 + (f + 1.0) * 0.072 + 0.01);
+                            let yc = l - 0.05 - f * 0.022 + jit(k, 1) * 0.028;
+                            let hh = 0.056 - f * 0.009 + jit(k, 2) * 0.012;
+                            let d = 0.05 - f * 0.006 + jit(k, 3) * 0.01;
+                            v.push(p([a, yc - hh, -d], [b, yc + hh, d], if i == 3 { edge } else { body }));
+                        }
+                    }
+                    strap(&mut v, l - 0.17, l - 0.12);
+                }
+                _ => {
+                    // forjada: arco suave que afina até a ponta; lendária: mais longa, com crista brilhante e coroa
+                    let legend = st == 3;
+                    v.push(c(0.072, 0.064, l - 0.13, l + 0.02, collar));
+                    let n = if legend { 8 } else { 7 };
+                    for s in [-1.0f32, 1.0] {
+                        for i in 0..n {
+                            let f = i as f32;
+                            let (x0, x1) = (0.066 + f * 0.044, 0.066 + (f + 1.0) * 0.044 + 0.008);
+                            let xc = (x0 + x1) / 2.0;
+                            let yc = l - 0.05 - xc * xc * if legend { 0.6 } else { 0.75 };
+                            let hh = (0.056 - f * 0.0055).max(0.014) + if legend { 0.006 } else { 0.0 };
+                            let d = (0.05 - f * 0.0045).max(0.016);
+                            let (a, b) = side(s, x0, x1);
+                            v.push(p([a, yc - hh, -d], [b, yc + hh, d], if i >= n - 2 { edge } else { body }));
+                            if legend && i < n - 1 {
+                                v.push(p([a, yc + hh - 0.004, -d * 0.45], [b, yc + hh + 0.016, d * 0.45], edge));
+                            }
+                        }
+                    }
+                    if legend {
+                        inlay(&mut v, 0.0, l - 0.055);
+                        v.push(c(0.034, 0.034, l + 0.02, l + 0.065, body));
+                        v.push(c(0.018, 0.018, l + 0.065, l + 0.1, edge));
+                    }
                 }
             }
         }
         1 => {
-            // machado: cabeça abraçando o cabo, contrapeso atrás e a lâmina que alarga e afina até o fio
+            // machado
             let l = 1.0;
             handle(&mut v, l);
-            v.push(c(0.058, 0.054, l - 0.2, l + 0.02, body));
-            v.push(p([0.058, l - 0.17, -0.046], [0.125, l - 0.03, 0.046], body));
-            v.push(p([0.125, l - 0.15, -0.04], [0.14, l - 0.05, 0.04], collar));
-            v.push(p([-0.16, l - 0.19, -0.04], [-0.058, l + 0.005, 0.04], body));
-            v.push(p([-0.25, l - 0.225, -0.028], [-0.16, l + 0.04, 0.028], body));
-            v.push(p([-0.3, l - 0.26, -0.016], [-0.25, l + 0.075, 0.016], edge));
+            match st {
+                0 => {
+                    v.push(c(0.056, 0.052, l - 0.16, l + 0.02, body));
+                    v.push(p([-0.2, l - 0.15, -0.042], [-0.056, l + 0.0, 0.042], body));
+                    v.push(p([-0.235, l - 0.165, -0.026], [-0.2, l + 0.015, 0.026], body));
+                    strap(&mut v, l - 0.2, l - 0.16);
+                }
+                1 => {
+                    v.push(c(0.058, 0.054, l - 0.18, l + 0.02, body));
+                    v.push(p([-0.15, l - 0.17, -0.04], [-0.058, l + 0.0, 0.04], body));
+                    v.push(p([-0.23, l - 0.2 + jit(1, 4) * 0.02, -0.03], [-0.15, l + 0.02, 0.03], body));
+                    v.push(p([-0.27, l - 0.185, -0.018], [-0.23, l + 0.005, 0.018], edge));
+                    v.push(p([-0.25, l - 0.215, -0.016], [-0.2, l - 0.19, 0.016], edge));
+                    strap(&mut v, l - 0.23, l - 0.18);
+                }
+                _ => {
+                    let legend = st == 3;
+                    v.push(c(0.058, 0.054, l - 0.2, l + 0.02, body));
+                    if legend {
+                        // ponta de trás e ponta de cima no lugar do contrapeso
+                        v.push(p([0.058, l - 0.14, -0.042], [0.12, l - 0.05, 0.042], body));
+                        v.push(p([0.12, l - 0.12, -0.03], [0.18, l - 0.07, 0.03], edge));
+                        v.push(p([0.18, l - 0.104, -0.018], [0.225, l - 0.086, 0.018], edge));
+                        v.push(c(0.032, 0.032, l + 0.02, l + 0.075, body));
+                        v.push(c(0.016, 0.016, l + 0.075, l + 0.11, edge));
+                    } else {
+                        v.push(p([0.058, l - 0.17, -0.046], [0.125, l - 0.03, 0.046], body));
+                        v.push(p([0.125, l - 0.15, -0.04], [0.14, l - 0.05, 0.04], collar));
+                    }
+                    v.push(p([-0.16, l - 0.19, -0.04], [-0.058, l + 0.005, 0.04], body));
+                    v.push(p([-0.25, l - 0.225, -0.028], [-0.16, l + 0.04, 0.028], body));
+                    v.push(p([-0.3, l - 0.26, -0.016], [-0.25, l + 0.075, 0.016], edge));
+                    if legend {
+                        // lâmina maior em meia-lua
+                        v.push(p([-0.335, l - 0.3, -0.012], [-0.3, l + 0.115, 0.012], edge));
+                        v.push(p([-0.3, l - 0.3, -0.014], [-0.25, l - 0.26, 0.014], edge));
+                        v.push(p([-0.3, l + 0.075, -0.014], [-0.25, l + 0.115, 0.014], edge));
+                        inlay(&mut v, 0.0, l - 0.09);
+                    }
+                }
+            }
         }
         2 => {
-            // pá: encaixe no cabo, lâmina larga e fina com uma nervura no meio e a ponta arredondada
+            // pá
             let l = 0.9;
             handle(&mut v, l);
-            v.push(c(0.05, 0.046, l - 0.12, l + 0.03, collar));
-            v.push(c(0.15, 0.021, l + 0.02, l + 0.29, body));
-            v.push(c(0.032, 0.034, l + 0.02, l + 0.22, body));
-            v.push(c(0.15, 0.017, l + 0.29, l + 0.32, edge));
-            v.push(c(0.11, 0.015, l + 0.32, l + 0.355, edge));
-            v.push(c(0.06, 0.012, l + 0.355, l + 0.375, edge));
+            match st {
+                0 => {
+                    v.push(c(0.125, 0.026, l, l + 0.26, body));
+                    v.push(c(0.09, 0.022, l + 0.26, l + 0.3, body));
+                    strap(&mut v, l - 0.06, l);
+                }
+                1 => {
+                    v.push(c(0.045, 0.045, l - 0.1, l + 0.02, body));
+                    v.push(c(0.14, 0.023, l + 0.01, l + 0.27, body));
+                    v.push(c(0.12, 0.02, l + 0.27, l + 0.31, edge));
+                    v.push(c(0.07, 0.016, l + 0.31, l + 0.335, edge));
+                    strap(&mut v, l - 0.15, l - 0.1);
+                }
+                _ => {
+                    let legend = st == 3;
+                    v.push(c(0.05, 0.046, l - 0.12, l + 0.03, collar));
+                    v.push(c(0.15, 0.021, l + 0.02, l + 0.29, body));
+                    v.push(c(0.032, 0.034, l + 0.02, l + 0.22, body));
+                    v.push(c(0.15, 0.017, l + 0.29, l + 0.32, edge));
+                    v.push(c(0.11, 0.015, l + 0.32, l + 0.355, edge));
+                    if legend {
+                        // ponta em lança, bordas brilhantes e as asas do encaixe
+                        v.push(c(0.07, 0.013, l + 0.355, l + 0.39, edge));
+                        v.push(c(0.03, 0.01, l + 0.39, l + 0.425, edge));
+                        for s in [-1.0f32, 1.0] {
+                            let (a, b) = side(s, 0.15, 0.168);
+                            v.push(p([a, l + 0.02, -0.024], [b, l + 0.3, 0.024], edge));
+                        }
+                        v.push(c(0.095, 0.032, l - 0.01, l + 0.04, DARK_METAL));
+                        inlay(&mut v, 0.0, l - 0.05);
+                    } else {
+                        v.push(c(0.06, 0.012, l + 0.355, l + 0.375, edge));
+                    }
+                }
+            }
         }
         3 => {
-            // espada: pomo, cabo de couro, guarda atravessada, lâmina com fio dos dois lados e nervura, ponta
-            let guard = match mat {
-                0 => HANDLE,
-                1 => body,
-                _ => DARK_METAL,
-            };
-            v.push(c(0.054, 0.05, -0.06, 0.0, guard));
-            v.push(c(0.034, 0.034, 0.0, 0.24, GRIP));
-            v.push(c(0.036, 0.036, 0.0, 0.03, guard));
-            v.push(c(0.17, 0.055, 0.24, 0.3, guard));
-            v.push(c(0.1, 0.045, 0.235, 0.305, guard));
-            v.push(c(0.062, 0.02, 0.3, 1.0, body));
-            for s in [-1.0f32, 1.0] {
-                let (a, b) = if s < 0.0 { (-0.076, -0.062) } else { (0.062, 0.076) };
-                v.push(p([a, 0.3, -0.011], [b, 0.98, 0.011], edge));
+            // espada
+            match st {
+                0 => {
+                    v.push(c(0.036, 0.036, 0.0, 0.24, HANDLE));
+                    v.push(c(0.11, 0.045, 0.24, 0.29, HANDLE));
+                    v.push(c(0.056, 0.024, 0.29, 0.88, body));
+                    v.push(c(0.036, 0.02, 0.88, 0.93, body));
+                    v.push(c(0.016, 0.014, 0.93, 0.96, body));
+                }
+                1 => {
+                    v.push(c(0.046, 0.046, -0.05, 0.0, body));
+                    v.push(c(0.034, 0.034, 0.0, 0.24, GRIP));
+                    v.push(c(0.14, 0.05, 0.24, 0.3, body));
+                    v.push(c(0.06, 0.02, 0.3, 0.95, body));
+                    for s in [-1.0f32, 1.0] {
+                        let (a, b) = side(s, 0.06, 0.072);
+                        v.push(p([a, 0.3, -0.011], [b, 0.93, 0.011], edge));
+                    }
+                    v.push(c(0.04, 0.016, 0.95, 0.99, edge));
+                    v.push(c(0.016, 0.01, 0.99, 1.02, edge));
+                }
+                _ => {
+                    let legend = st == 3;
+                    let guard = if mat == 4 { body } else { DARK_METAL };
+                    let len = if legend { 1.08 } else { 1.0 };
+                    v.push(c(0.054, 0.05, -0.06, 0.0, guard));
+                    v.push(c(0.034, 0.034, 0.0, 0.24, GRIP));
+                    v.push(c(0.036, 0.036, 0.0, 0.03, guard));
+                    v.push(c(0.17, 0.055, 0.24, 0.3, guard));
+                    v.push(c(0.1, 0.045, 0.235, 0.305, guard));
+                    v.push(c(0.062, 0.02, 0.3, len, body));
+                    for s in [-1.0f32, 1.0] {
+                        let (a, b) = side(s, 0.062, 0.076);
+                        v.push(p([a, 0.3, -0.011], [b, len - 0.02, 0.011], edge));
+                    }
+                    v.push(c(0.017, 0.027, 0.3, len - 0.07, edge));
+                    v.push(c(0.05, 0.016, len, len + 0.045, edge));
+                    v.push(c(0.032, 0.012, len + 0.045, len + 0.085, edge));
+                    v.push(c(0.014, 0.008, len + 0.085, len + 0.115, edge));
+                    if legend {
+                        // guarda com as abas para cima, gema no meio e no pomo, lâmina mais larga na base
+                        for s in [-1.0f32, 1.0] {
+                            let (a, b) = side(s, 0.16, 0.215);
+                            v.push(p([a, 0.27, -0.04], [b, 0.34, 0.04], guard));
+                            let (a, b) = side(s, 0.19, 0.235);
+                            v.push(p([a, 0.33, -0.028], [b, 0.4, 0.028], edge));
+                        }
+                        inlay(&mut v, 0.0, 0.27);
+                        v.push(c(0.03, 0.03, -0.095, -0.06, edge));
+                        v.push(c(0.082, 0.024, 0.3, 0.37, body));
+                    }
+                }
             }
-            v.push(c(0.017, 0.027, 0.3, 0.93, edge));
-            v.push(c(0.05, 0.016, 1.0, 1.045, edge));
-            v.push(c(0.032, 0.012, 1.045, 1.085, edge));
-            v.push(c(0.014, 0.008, 1.085, 1.115, edge));
         }
         _ => {
-            // enxada: colar, barra para o lado e a lâmina caída para baixo com o fio embaixo
+            // enxada
             let l = 1.0;
             handle(&mut v, l);
-            v.push(c(0.052, 0.05, l - 0.1, l + 0.03, collar));
-            v.push(p([-0.23, l - 0.06, -0.036], [-0.052, l + 0.02, 0.036], body));
-            v.push(p([-0.31, l - 0.2, -0.024], [-0.21, l + 0.035, 0.024], body));
-            v.push(p([-0.31, l - 0.245, -0.017], [-0.21, l - 0.2, 0.017], edge));
+            match st {
+                0 => {
+                    v.push(p([-0.2, l - 0.05, -0.036], [0.045, l + 0.03, 0.036], body));
+                    v.push(p([-0.25, l - 0.16, -0.026], [-0.17, l + 0.03, 0.026], body));
+                    strap(&mut v, l - 0.1, l - 0.05);
+                }
+                1 => {
+                    v.push(p([-0.22, l - 0.055, -0.035], [0.05, l + 0.025, 0.035], body));
+                    v.push(p([-0.3, l - 0.19, -0.024], [-0.2, l + 0.03, 0.024], body));
+                    v.push(p([-0.3, l - 0.23, -0.017], [-0.2, l - 0.19, 0.017], edge));
+                    strap(&mut v, l - 0.11, l - 0.055);
+                }
+                _ => {
+                    let legend = st == 3;
+                    v.push(c(0.052, 0.05, l - 0.1, l + 0.03, collar));
+                    v.push(p([-0.23, l - 0.06, -0.036], [-0.052, l + 0.02, 0.036], body));
+                    v.push(p([-0.31, l - 0.2, -0.024], [-0.21, l + 0.035, 0.024], body));
+                    v.push(p([-0.31, l - 0.245, -0.017], [-0.21, l - 0.2, 0.017], edge));
+                    if legend {
+                        // gancho enrolado atrás, fio mais comprido e a gema
+                        v.push(p([0.052, l - 0.04, -0.03], [0.11, l + 0.0, 0.03], body));
+                        v.push(p([0.09, l + 0.0, -0.025], [0.12, l + 0.06, 0.025], edge));
+                        v.push(p([-0.3, l - 0.28, -0.012], [-0.22, l - 0.245, 0.012], edge));
+                        inlay(&mut v, 0.0, l - 0.035);
+                    }
+                }
+            }
         }
     }
     v
@@ -293,7 +515,7 @@ pub fn model_of(item: i32) -> Option<(i32, usize)> {
     }
     // o material pelo nome (o tool_mat é o nível da picareta: o ouro e o cobre são nível 1, a esmeralda 3)
     let n = i.name.to_lowercase();
-    let mat = ["madeira", "pedra", "ferro", "diamante", "ouro", "esmeralda", "cobre"].iter().position(|m| n.ends_with(m))?;
+    let mat = ["madeira", "pedra", "ferro", "diamante", "ouro", "esmeralda", "cobre", "rubi", "safira", "ametista"].iter().position(|m| n.ends_with(m))?;
     Some((i.tool_kind, mat))
 }
 

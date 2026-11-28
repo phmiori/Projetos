@@ -53,16 +53,7 @@ fn armor_color(id: i32) -> Option<u32> {
     if id <= 0 {
         return None;
     }
-    let name = crate::items::name(id);
-    Some(if name.contains("couro") {
-        0x8B5A2B
-    } else if name.contains("ferro") {
-        0xD2D5DB
-    } else if name.contains("diamante") {
-        0x4FD8D0
-    } else {
-        0xA0A0A0
-    })
+    Some(crate::items::armor_color(&crate::items::name(id)))
 }
 
 /// O corpo do personagem (Remote.writeModel do Java) em `base` (pés na origem, de frente para +z), com a armadura

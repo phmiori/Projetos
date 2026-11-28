@@ -16,7 +16,7 @@ from PIL import Image
 DIR = os.path.join("textures", "itens")
 N = 32
 TOOLS = ["picareta", "pa", "machado", "espada", "enxada"]
-MATERIALS = ["madeira", "pedra", "ferro", "diamante", "ouro", "esmeralda", "cobre"]
+MATERIALS = ["madeira", "pedra", "ferro", "diamante", "ouro", "esmeralda", "cobre", "rubi", "safira", "ametista"]
 KEEP = {"picareta_de_diamante", "pa_de_diamante"}  # o modelo: ficam como estão
 
 # (claro, médio, escuro) de cada material da cabeça
@@ -28,9 +28,12 @@ PALETTE = {
     "ouro": ((1.00, 0.96, 0.60), (0.96, 0.78, 0.22), (0.62, 0.42, 0.08)),
     "esmeralda": ((0.70, 1.00, 0.78), (0.25, 0.82, 0.45), (0.06, 0.45, 0.22)),
     "cobre": ((0.98, 0.72, 0.52), (0.86, 0.48, 0.28), (0.52, 0.25, 0.12)),
+    "rubi": ((1.00, 0.62, 0.66), (0.88, 0.14, 0.24), (0.48, 0.04, 0.10)),
+    "safira": ((0.66, 0.80, 1.00), (0.20, 0.42, 0.94), (0.07, 0.16, 0.50)),
+    "ametista": ((0.90, 0.74, 1.00), (0.66, 0.38, 0.92), (0.34, 0.14, 0.52)),
 }
 # o desenho dos detalhes (riscos do metal, faíscas da gema) de cada material
-LOOK = {"ouro": "ferro", "cobre": "ferro", "esmeralda": "diamante"}
+LOOK = {"ouro": "ferro", "cobre": "ferro", "esmeralda": "diamante", "rubi": "diamante", "safira": "diamante", "ametista": "diamante"}
 HANDLE = ((0.60, 0.42, 0.23), (0.44, 0.29, 0.14), (0.24, 0.15, 0.07))
 
 yy, xx = np.mgrid[0:N, 0:N].astype(float) + 0.5
