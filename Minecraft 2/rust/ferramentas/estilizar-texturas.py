@@ -259,28 +259,69 @@ def lava(rng, base):
 
 
 def bark(rng, base, kind="oak"):
+    """Casca: placas compridas na vertical separadas por sulcos fundos (carvalho e cerejeira), cada placa com a borda
+    clara à esquerda e a sombra à direita e uma ou duas rachinhas; a bétula é branca com as marcas pretas."""
+    base = np.asarray(base)
     if kind == "birch":
-        col = paint(base, steps(1 + 0.05 * (noise(rng, 2, 4) - 0.5), 0.04))
+        t = 1 + 0.05 * (noise(rng, 2, 3) - 0.5)
+        col = paint(base * 1.05, steps(t, 0.04))
+        # manchas cinza-claro suaves
+        col[noise(rng, 3, 5) > 0.68] *= 0.9
+        for _ in range(13):
+            x, y = rng.integers(N), rng.integers(N)
+            w = int(rng.integers(5, 15))
+            th = 2 if rng.random() < 0.5 else 1
+            for i in range(w):
+                # a marca afina nas pontas
+                thick = th if 1 < i < w - 2 else 1
+                for j in range(thick):
+                    col[(y + j) % N, (x + i) % N] = C(0.16, 0.15, 0.14)
+                col[(y + thick) % N, (x + i) % N] = base * 0.82
+        return col
+    # colunas de placas com larguras diferentes; as divisas ondulam um pouco (sempre emendando em cima e embaixo)
+    widths = []
+    while sum(widths) < N - 12:
+        widths.append(int(rng.integers(7, 12)))
+    widths.append(N - sum(widths))
+    bounds = np.cumsum([0] + widths)  # de 0 a 64
+    k = len(widths)
+    amp = rng.random(k + 1) * 1.6 + 0.6
+    freq = rng.integers(1, 3, k + 1)
+    ph = rng.random(k + 1) * 6.3
+    edge_x = [bounds[i] + amp[i] * np.sin(yy * 2 * np.pi / N * freq[i] + ph[i]) for i in range(k + 1)]
+    edge_x[k] = edge_x[0] + N  # a última divisa é a primeira (emenda nos lados)
+    col_i = np.zeros((N, N), int)
+    for i in range(1, k):
+        col_i += (xx >= edge_x[i]).astype(int)
+    col_i = np.where(xx < edge_x[0], k - 1, col_i)
+    left = np.choose(col_i, [edge_x[i] for i in range(k)])
+    right = np.choose(col_i, [edge_x[i + 1] for i in range(k)])
+    xs = np.where(xx < edge_x[0], xx + N, xx)
+    dl, dr = xs - left, right - xs
+    # cada coluna partida em pedaços (16 ou 32 px), com a quebra numa altura diferente
+    seg_h = np.array([16 if rng.random() < 0.6 else 32 for _ in range(k)])[col_i]
+    seg_o = (rng.random(k) * 32).astype(int)[col_i]
+    seg = ((yy + seg_o) // seg_h).astype(int)
+    tone = 1 + 0.08 * (rng.random((k, 8)) * 2 - 1)
+    t = tone[col_i, seg % 8]
+    t = np.where(dl < 3.0, t * 1.13, t)
+    t = np.where(dr < 3.0, t * 0.8, t)
+    # rachinha no meio de algumas placas
+    mid = (left + right) / 2 + 0.8 * np.sin(yy * 2 * np.pi / 32 + col_i)
+    has = (rng.random(k) < 0.55)[col_i]
+    t = np.where(has & (np.abs(xs - mid) < 0.55) & (dl > 3) & (dr > 3), t * 0.78, t)
+    col = paint(base, steps(t, 0.04))
+    brk = ((yy + seg_o) % seg_h) < 1.0
+    col[brk] = base * 0.55
+    groove = (dl < 1.0) | (dr < 1.0)
+    col[groove] = base * 0.42
+    if kind == "cherry":
+        # lenticelas: risquinhos horizontais claros
         for _ in range(16):
             x, y = rng.integers(N), rng.integers(N)
-            w = rng.integers(4, 12)
-            for i in range(w):
-                col[y % N, (x + i) % N] = C(0.18, 0.17, 0.16)
-                if i % 3 != 0:
-                    col[(y + 1) % N, (x + i) % N] = C(0.3, 0.28, 0.26)
-        return col
-    shift = 3 * (noise(rng, 1, 3) - 0.5) * 2
-    u = xx + shift
-    prof = noise(rng, 9, 1)  # largura e altura de cada veio
-    ridge = 0.5 + 0.5 * np.sin(u * 2 * np.pi / (64 / 9) + 4 * (prof[0][np.clip(u.astype(int) % N, 0, N - 1)] - 0.5))
-    t = np.where(ridge < 0.22, 0.6, np.where(ridge < 0.45, 0.85, np.where(ridge > 0.85, 1.15, 1.0)))
-    t = t * (1 + 0.06 * (noise(rng, 2, 4) - 0.5))
-    col = paint(base, steps(t, 0.05))
-    if kind == "cherry":
-        for _ in range(14):
-            x, y = rng.integers(N), rng.integers(N)
-            for i in range(rng.integers(3, 6)):
-                col[y % N, (x + i) % N] = np.asarray(base) * 0.55
+            for i in range(int(rng.integers(3, 7))):
+                if not groove[y % N, (x + i) % N]:
+                    col[y % N, (x + i) % N] = np.minimum(1, base * 1.35)
     return col
 
 
