@@ -164,6 +164,8 @@ impl Ui {
                 }
             }
         }
+        // texturas das ferramentas em 3D, ao lado dos desenhos dos itens
+        crate::tool_model::paint_textures(&mut px, ATLAS, ITEMS_Y);
         let atlas = gl.create_texture().unwrap();
         gl.bind_texture(glow::TEXTURE_2D, Some(atlas));
         gl.tex_image_2d(glow::TEXTURE_2D, 0, glow::RGBA8 as i32, ATLAS as i32, ATLAS as i32, 0, glow::RGBA, glow::UNSIGNED_BYTE, Some(&px));
@@ -295,6 +297,13 @@ impl Ui {
     pub fn quad(&mut self, p: [[f32; 3]; 4], uv: [[f32; 2]; 4], layer: f32, c: Color) {
         for i in [0, 1, 2, 0, 2, 3] {
             self.vert(p[i][0], p[i][1], p[i][2], uv[i][0], uv[i][1], layer, c);
+        }
+    }
+
+    /// Quadrilátero com uma cor em cada canto (luz que muda ao longo da face).
+    pub fn quad_colors(&mut self, p: [[f32; 3]; 4], uv: [[f32; 2]; 4], layer: f32, c: [Color; 4]) {
+        for i in [0, 1, 2, 0, 2, 3] {
+            self.vert(p[i][0], p[i][1], p[i][2], uv[i][0], uv[i][1], layer, c[i]);
         }
     }
 
@@ -504,6 +513,11 @@ fn round_points(x: f32, y: f32, w: f32, h: f32, r: f32) -> Vec<[f32; 3]> {
 pub fn item_uv(icon: i32) -> (f32, f32) {
     let (a, c) = (ATLAS as f32, ICON as f32);
     ((icon % 32) as f32 * c / a, (ITEMS_Y as f32 + (icon / 32) as f32 * c) / a)
+}
+
+/// Linha do atlas onde começam os desenhos dos itens (em pixels).
+pub fn items_y() -> u32 {
+    ITEMS_Y
 }
 
 /// Largura de um desenho de item no atlas (coordenada de textura).

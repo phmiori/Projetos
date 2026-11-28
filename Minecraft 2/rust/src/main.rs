@@ -50,6 +50,7 @@ mod shadow;
 mod sound;
 mod survival;
 mod textures;
+mod tool_model;
 mod tools;
 mod ui;
 mod world;

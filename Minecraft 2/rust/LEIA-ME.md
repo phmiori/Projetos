@@ -92,6 +92,10 @@ os mundos, as texturas, os sons e as configurações são os mesmos, e as duas v
 - **Mão em primeira pessoa** (`Hand.java`): o braço com a cor da pele e da camisa do personagem e o item na mão (bloco
   como cubinho com as texturas, ferramentas empunhadas, o resto em pé), balançando ao andar e dando o golpe ao bater,
   quebrar ou colocar; o arco vem para o meio da tela ao puxar a corda.
+- **Ferramentas em 3D** (`src/tool_model.rs`): picareta, pá, machado, enxada e espada na mão (sua e dos amigos na
+  LAN) são modelos de caixas — cabo de seção quadrada, cabeça maciça, lâmina que afina até o fio, guarda e pomo —
+  com texturas de madeira, couro, pedra, ferro escovado e diamante desenhadas pelo próprio jogo, luz de cima e a
+  sombra perto da mão. Os ícones do inventário continuam planos; os outros itens ficam com o ícone engrossado.
 - **Partículas** (`Particles.java`): pedacinhos com as cores da textura saltando do bloco batido ou quebrado,
   respingos ao acertar criaturas com flecha, sangue da mordida do tubarão, fumaça e fagulhas das explosões e a
   fumacinha do pavio da dinamite.

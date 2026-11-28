@@ -185,6 +185,9 @@ fn draw_one(ui: &mut Ui, r: &Remote, light: f32) {
             }
         } else {
             let t = mul(&mul(&mul(&t, &rot_y(-std::f32::consts::FRAC_PI_2 + 0.5)), &scale(0.85)), &translate(0.3, 0.3, 0.0));
+            if crate::tool_model::draw(ui, &t, r.held, light) {
+                return;
+            }
             let (layer, uv) = if b != crate::block::AIR {
                 (crate::block::texture(b) as f32 * 6.0 + 4.0, full)
             } else {

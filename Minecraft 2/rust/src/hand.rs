@@ -257,8 +257,10 @@ impl Game {
                     ui.quad(pts.map(|p| apply(&t, p)), full, tex as f32 * 6.0 + 4.0, [item_light, item_light, item_light, 1.0]);
                 }
             }
+        } else if crate::tool_model::draw(ui, &t, item, item_light) {
+            // picareta, pá, machado, enxada e espada: o modelo 3D
         } else {
-            // ferramentas, comida, arco...: o ícone com espessura (o ícone da barra continua plano)
+            // comida, arco, lingotes...: o ícone com espessura (o ícone da barra continua plano)
             let icon = crate::items::info(item).map_or(0, |i| i.icon);
             let (u0, v0) = crate::ui::item_uv(icon);
             let px = crate::ui::atlas_px();
