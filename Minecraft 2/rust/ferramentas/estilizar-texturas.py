@@ -132,15 +132,16 @@ def stone(rng, base):
 def ore(rng, base, gem, dark=None):
     col = stone(rng, base)
     dark = np.asarray(gem) * 0.5 if dark is None else dark
-    for _ in range(5):
+    # pedras do minério grandes (uns 8 a 12 px), em 4 grupos de 2 a 4
+    for _ in range(4):
         cx, cy = rng.random() * N, rng.random() * N
         for _ in range(rng.integers(2, 5)):
-            gx, gy = cx + rng.normal() * 4.5, cy + rng.normal() * 4.5
-            r = 2.0 + rng.random() * 1.6
+            gx, gy = cx + rng.normal() * 6.5, cy + rng.normal() * 6.5
+            r = 3.8 + rng.random() * 2.4
             for ox in (-N, 0, N):
                 for oy in (-N, 0, N):
                     d = np.abs(xx - gx - ox) + np.abs(yy - gy - oy)
-                    col[d <= r + 1.0] = dark
+                    col[d <= r + 1.3] = dark
                     col[d <= r] = gem
                     col[(d <= r) & ((xx - gx - ox) + (yy - gy - oy) > 0.5)] = np.asarray(gem) * 0.78
                     col[(d <= r * 0.5) & ((xx - gx - ox) < 0) & ((yy - gy - oy) < 0)] = np.minimum(1, np.asarray(gem) * 1.35 + 0.1)
