@@ -135,9 +135,12 @@ soltos no chão não são gravados (no Java também não).
 
 ## Ferramentas
 
-- `ferramentas/gerar-texturas.py` (Python com numpy e Pillow): refaz as texturas dos blocos em 64 px por face, no estilo
-  realista da pedra e dos minérios, tirando as cores das texturas antigas guardadas em `textures/originais-16px`.
-  Rode `python rust/ferramentas/gerar-texturas.py` (ou com os nomes de algumas texturas) na pasta do jogo.
+- `ferramentas/estilizar-texturas.py` (Python com numpy e Pillow): **o estilo atual** das texturas dos blocos, em
+  64 px por face, "desenhado": formas limpas (pedras com contorno, tábuas com emendas, veios da casca, folhas), poucos
+  tons com luz e sombra em degraus e quase nenhum chuvisco. As cores vêm de `textures/originais-16px`; os blocos com
+  desenho (baú, porta, fornalha, plantas...) são ampliados com bordas suaves. Rode
+  `python rust/ferramentas/estilizar-texturas.py` (ou com os nomes de algumas texturas) na pasta do jogo.
+- `ferramentas/gerar-texturas.py`: o estilo anterior, realista (não rode por cima sem querer voltar a ele).
 - `ferramentas/gerar-icones.py`: refaz os ícones dos itens em 32 x 32 (volume, luz, veio na madeira, brilho no
   metal, facetas nas gemas), a partir dos desenhos de 16 px guardados em `textures/itens/originais-16px`.
 - `ferramentas/desenhar-ferramentas.py`: desenha as ferramentas (picareta, pá, machado, espada e enxada de cada
