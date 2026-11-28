@@ -13,16 +13,18 @@ const TEX: u32 = 64;
 const MAT_X: u32 = 1024;
 
 // texturas (na ordem em que ficam no atlas)
-const HANDLE: usize = 0;
-const GRIP: usize = 1;
-const DARK_METAL: usize = 2;
+pub(crate) const HANDLE: usize = 0;
+pub(crate) const GRIP: usize = 1;
+pub(crate) const DARK_METAL: usize = 2;
 /// corpo e fio de cada material: madeira, pedra, ferro, diamante
-const BODY: [usize; 4] = [3, 5, 7, 9];
-const EDGE: [usize; 4] = [4, 6, 8, 10];
-const COUNT: usize = 11;
+pub(crate) const BODY: [usize; 4] = [3, 5, 7, 9];
+pub(crate) const EDGE: [usize; 4] = [4, 6, 8, 10];
+/// cinza claro com manchas suaves: tingido com a cor de cada parte (itens)
+pub(crate) const NOISE: usize = 11;
+const COUNT: usize = 12;
 
 // ------------------------------------------------------------------ ruído
-fn hash(x: i32, y: i32, seed: u32) -> f32 {
+pub(crate) fn hash(x: i32, y: i32, seed: u32) -> f32 {
     let mut h = (x as u32).wrapping_mul(0x8da6_b343) ^ (y as u32).wrapping_mul(0xd816_3841) ^ seed.wrapping_mul(0xcb1a_b31f);
     h ^= h >> 13;
     h = h.wrapping_mul(0x5bd1_e995);
@@ -115,6 +117,11 @@ fn paint(idx: usize, u: f32, v: f32) -> [f32; 3] {
             let c = mix([0.62, 0.64, 0.68], [0.90, 0.91, 0.94], n);
             if idx == 8 { mix(c, [1.0, 1.0, 1.0], 0.35) } else { c }
         }
+        NOISE => {
+            let n = fbm(u, v, 6, 6, 81) * 0.6 + fbm(u, v, 20, 20, 82) * 0.4;
+            let g = 0.8 + 0.2 * n;
+            [g, g, g]
+        }
         _ => {
             // diamante: facetas (células de brilho diferente) e faíscas
             let (cu, cv) = ((u / 8.0) as i32, (v / 8.0) as i32);
@@ -146,14 +153,18 @@ pub fn paint_textures(px: &mut [u8], atlas: u32, y0: u32) {
 }
 
 // ------------------------------------------------------------------ modelos
-struct Part {
-    lo: [f32; 3],
-    hi: [f32; 3],
-    tex: usize,
+pub(crate) struct Part {
+    pub lo: [f32; 3],
+    pub hi: [f32; 3],
+    pub tex: usize,
+    /// cor multiplicada na textura
+    pub tint: [f32; 3],
+    /// caixa girada/deslocada (antes da transformação do modelo)
+    pub tf: Option<Tf>,
 }
 
-fn p(lo: [f32; 3], hi: [f32; 3], tex: usize) -> Part {
-    Part { lo, hi, tex }
+pub(crate) fn p(lo: [f32; 3], hi: [f32; 3], tex: usize) -> Part {
+    Part { lo, hi, tex, tint: [1.0; 3], tf: None }
 }
 
 /// Caixa centrada em x e z: meia-largura `w`, meia-espessura `d`, de y0 a y1.
@@ -267,6 +278,12 @@ pub fn draw(ui: &mut Ui, t: &Tf, item: i32, light: f32) -> bool {
     m = mul(&m, &scale(0.93));
     // girada um pouco em volta do cabo, para aparecer a lateral da cabeça (a espessura de verdade)
     m = mul(&m, &rot_y(TWIST));
+    render(ui, &m, &parts(kind, mat), light, true);
+    true
+}
+
+/// Desenha as caixas com a transformação `m`: luz de cima e (`ao`) um pouco mais escuro perto da mão (y baixo).
+pub(crate) fn render(ui: &mut Ui, m: &Tf, parts: &[Part], light: f32, ao: bool) {
     let (a, span) = (crate::ui::atlas_px(), TEX as f32);
     let y0 = crate::ui::items_y() as f32;
     // a luz vem de cima, um pouco da frente e da esquerda (no espaço de quem desenha: câmera ou mundo)
@@ -275,8 +292,12 @@ pub fn draw(ui: &mut Ui, t: &Tf, item: i32, light: f32) -> bool {
         let n = (l[0] * l[0] + l[1] * l[1] + l[2] * l[2]).sqrt();
         [l[0] / n, l[1] / n, l[2] / n]
     };
-    let o = apply(&m, [0.0; 3]);
-    for (k, part) in parts(kind, mat).iter().enumerate() {
+    for (k, part) in parts.iter().enumerate() {
+        let m = match &part.tf {
+            Some(tf) => mul(m, tf),
+            None => *m,
+        };
+        let o = apply(&m, [0.0; 3]);
         let (lo, hi) = (part.lo, part.hi);
         let corner = |i: usize| [if i & 1 == 0 { lo[0] } else { hi[0] }, if i & 2 == 0 { lo[1] } else { hi[1] }, if i & 4 == 0 { lo[2] } else { hi[2] }];
         // (cantos, normal, eixo u, eixo v)
@@ -311,12 +332,11 @@ pub fn draw(ui: &mut Ui, t: &Tf, item: i32, light: f32) -> bool {
                 let pv = (hi[*va] - pl[*va]) * k_tex * sv + ov;
                 uv[j] = [(rx + pu) * a, (y0 + pv) * a];
                 // um pouco mais escuro perto da mão (sombra dos dedos e do braço)
-                let ao = 0.8 + 0.2 * ((pl[1] + 0.1) / 0.6).clamp(0.0, 1.0);
-                let l = (light * shade * ao).min(1.0);
-                col[j] = [l, l, l, 1.0];
+                let ao = if ao { 0.8 + 0.2 * ((pl[1] + 0.1) / 0.6).clamp(0.0, 1.0) } else { 1.0 };
+                let l = light * shade * ao;
+                col[j] = [(l * part.tint[0]).min(1.0), (l * part.tint[1]).min(1.0), (l * part.tint[2]).min(1.0), 1.0];
             }
             ui.quad_colors(pts, uv, -1.0, col);
         }
     }
-    true
 }

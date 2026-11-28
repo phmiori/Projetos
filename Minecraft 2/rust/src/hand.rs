@@ -185,7 +185,9 @@ impl Game {
             t = mul(&t, &rot_y(0.3 - up * 0.2));
             t = mul(&t, &scale(0.46));
             let icon = crate::items::info(off.id).map_or(0, |i| i.icon);
-            if let Some((n, mask)) = icon_mask(icon) {
+            if crate::item_model::draw(ui, &t, off.id, light) {
+                // o escudo em 3D
+            } else if let Some((n, mask)) = icon_mask(icon) {
                 let (u0, v0) = crate::ui::item_uv(icon);
                 let px = crate::ui::atlas_px();
                 extruded(ui, &t, n, &mask, &|x, y| [u0 + x * px, v0 + y * px], -1.0, light);
@@ -259,6 +261,8 @@ impl Game {
             }
         } else if crate::tool_model::draw(ui, &t, item, item_light) {
             // picareta, pá, machado, enxada e espada: o modelo 3D
+        } else if crate::item_model::draw(ui, &t, item, item_light) {
+            // comida, lingotes, ovos, armaduras, arco...: o modelo 3D
         } else {
             // comida, arco, lingotes...: o ícone com espessura (o ícone da barra continua plano)
             let icon = crate::items::info(item).map_or(0, |i| i.icon);

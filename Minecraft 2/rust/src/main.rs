@@ -29,6 +29,7 @@ mod containers;
 mod edit;
 mod fluid;
 mod inventory;
+mod item_model;
 mod items;
 mod join;
 mod light;

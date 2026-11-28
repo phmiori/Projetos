@@ -95,7 +95,12 @@ os mundos, as texturas, os sons e as configurações são os mesmos, e as duas v
 - **Ferramentas em 3D** (`src/tool_model.rs`): picareta, pá, machado, enxada e espada na mão (sua e dos amigos na
   LAN) são modelos de caixas — cabo de seção quadrada, cabeça maciça, lâmina que afina até o fio, guarda e pomo —
   com texturas de madeira, couro, pedra, ferro escovado e diamante desenhadas pelo próprio jogo, luz de cima e a
-  sombra perto da mão. Os ícones do inventário continuam planos; os outros itens ficam com o ícone engrossado.
+  sombra perto da mão. Os ícones do inventário continuam planos.
+- **Itens em 3D** (`src/item_model.rs`): os outros itens na mão também são modelos de caixas — graveto, lingotes,
+  gemas, pedaços de carvão/sílex/cobre, maçã, cenoura, batata, beterraba, carnes, frango, peixe, pão, torta, melancia,
+  sopa, grãos, trigo, couro, fio, pena, osso, pederneira, flecha, arco, ovos de criatura com pintas, armaduras
+  (capacete, peitoral, calças, botas), baldes (vazio, água, lava), vara de pescar, barco, escudo (também na mão
+  esquerda) e pérola do End. As cores saem do próprio ícone (as duas cores principais do desenho, sem o contorno).
 - **Partículas** (`Particles.java`): pedacinhos com as cores da textura saltando do bloco batido ou quebrado,
   respingos ao acertar criaturas com flecha, sangue da mordida do tubarão, fumaça e fagulhas das explosões e a
   fumacinha do pavio da dinamite.
